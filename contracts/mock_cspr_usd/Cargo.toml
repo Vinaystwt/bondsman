@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 odra = { workspace = true }
+odra-modules = { workspace = true }
 
 [dev-dependencies]
 odra-test = { workspace = true }
@@ -24,4 +25,3 @@ test = false
 name = "mock_cspr_usd_build_schema"
 path = "bin/build_schema.rs"
 test = false
-

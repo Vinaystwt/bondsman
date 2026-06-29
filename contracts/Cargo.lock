@@ -1875,6 +1875,7 @@ version = "0.1.0"
 dependencies = [
  "odra",
  "odra-build",
+ "odra-modules",
  "odra-test",
 ]
 
@@ -2173,6 +2174,17 @@ dependencies = [
  "quote",
  "syn 2.0.118",
  "syn_derive",
+]
+
+[[package]]
+name = "odra-modules"
+version = "2.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d39195d9dc3d3557687dacc881103529c62d92a7ad7d108ebff29bef050d453"
+dependencies = [
+ "base64 0.22.1",
+ "odra",
+ "odra-build",
 ]
 
 [[package]]

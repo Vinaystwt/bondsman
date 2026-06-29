@@ -2,5 +2,4 @@
 #![cfg_attr(not(test), no_main)]
 extern crate alloc;
 
-pub mod toolchain_probe;
-
+pub mod mock_cspr_usd;

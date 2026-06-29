@@ -1,3 +1,2 @@
 [[contracts]]
-fqn = "mock_cspr_usd::toolchain_probe::ToolchainProbe"
-
+fqn = "mock_cspr_usd::mock_cspr_usd::MockCsprUSD"
