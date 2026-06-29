@@ -240,6 +240,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bond_vault"
+version = "0.1.0"
+dependencies = [
+ "mock_cspr_usd",
+ "odra",
+ "odra-build",
+ "odra-modules",
+ "odra-test",
+]
+
+[[package]]
 name = "bondsman_cli"
 version = "0.1.0"
 dependencies = [
