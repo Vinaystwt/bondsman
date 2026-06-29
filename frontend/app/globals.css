@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ink: #0e0d0b;
+    --surface: #16140f;
+    --bone: #ece6d8;
+    --muted: #8c8473;
+    --copper: #b7791f;
+    --sage: #5a7d6f;
+    --void: #e0231c;
+    --rule: #2a2620;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--ink);
+    color: var(--bone);
+    font-feature-settings: 'kern', 'liga';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Faint ledger grid, the document texture. */
+  .ledger-grid {
+    background-image:
+      linear-gradient(var(--rule) 1px, transparent 1px),
+      linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    background-size: 100% 2rem, 2rem 100%;
+    background-position: center top;
+    opacity: 0.35;
+  }
+
+  /* Numbers and serial-styled figures lock to tabular widths. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  ::selection {
+    background: var(--copper);
+    color: var(--ink);
+  }
+
+  /* Visible, consistent keyboard focus across the product. */
+  :focus-visible {
+    outline: 2px solid var(--copper);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+@layer components {
+  .serial {
+    font-family: var(--font-mono), monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Perforated edge, used only where it carries meaning (certificate objects). */
+  .perforated-top {
+    -webkit-mask-image: radial-gradient(
+      circle at 6px 0,
+      transparent 0 4px,
+      black 4.5px
+    );
+    -webkit-mask-size: 12px 100%;
+    -webkit-mask-repeat: repeat-x;
+    mask-image: radial-gradient(
+      circle at 6px 0,
+      transparent 0 4px,
+      black 4.5px
+    );
+    mask-size: 12px 100%;
+    mask-repeat: repeat-x;
+  }
+}
+
+/* Skeleton shimmer for loading states. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(236, 230, 216, 0.06),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Calm fallback: kill every non-essential animation when asked. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton::after {
+    animation: none;
+  }
+}
