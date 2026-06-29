@@ -9,6 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "deploy": "tsx ../scripts/deploy.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {
@@ -26,4 +27,3 @@
     "vitest": "4.1.9"
   }
 }
-

@@ -254,7 +254,10 @@ dependencies = [
 name = "bondsman_cli"
 version = "0.1.0"
 dependencies = [
+ "bond_vault",
+ "bondsman_controller",
  "casper-client",
+ "invoice_pool",
  "mock_cspr_usd",
  "odra",
  "odra-cli",

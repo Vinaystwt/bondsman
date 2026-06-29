@@ -1,0 +1,37 @@
+{
+  "network": "casper-test",
+  "chainName": "casper-test",
+  "nodeRpcUrl": "https://node.testnet.casper.network/rpc",
+  "contracts": {
+    "mockCsprUsd": {
+      "packageHash": "hash-03b78eb6e36799af9c9d5f892140e61dc6432b9fd165246b8cdca5f68fda2e1f",
+      "contractHash": "hash-410af53a3a93196081eb3b8c7dafab120efeed826b30b23cbed3873203709668"
+    },
+    "bondVault": {
+      "packageHash": "hash-c186fafb66c07d16185d845098ce44022f5e41ec658b44632047f242be58fe9e",
+      "contractHash": "hash-256d38d33de00d86915c163c7458a9d0ce9ce2a087b31a457984cfe2ca423e42"
+    },
+    "controller": {
+      "packageHash": "hash-2ed52e6c3a8709e7322f64011d563669483d96f5ac1816f395794dcaacc8f599",
+      "contractHash": "hash-d5bac55b8ce24a69ba78a11a95c13c708f28adaac1982bf7041af8784607ca44"
+    },
+    "invoicePool": {
+      "packageHash": "hash-a9320ae95af3e12c8d43c8d7d810bf81144d7b76c9102030bb3c55577caed77c",
+      "contractHash": "hash-f3d6302f339b2de20ee1fbf92a5041cef10dc78df4ae20e38d33886573fc3297"
+    }
+  },
+  "accounts": {
+    "deployer": {
+      "publicKey": "020361c2bf51132ea0a9226e6a82e9f9c77fde345a834868f54ade9c63d53cc941a4",
+      "accountHash": "2cfb8f00d21230301310fc0d7633350ad7326d80b7f61561f77529dff71e918f"
+    },
+    "agent": {
+      "publicKey": "01446ccd2fadc606bfa2f0c5387fe804c3b0c966634c99d8a9f3ded570ca4e363d",
+      "accountHash": "ea2a1d98965a16b0e1234a3c3d251732cfb831bcf21ee060ecbae471bdf42fdf"
+    },
+    "challenger": {
+      "publicKey": "0118b3ca611c6bb2746a2fa679143549789a42c16f166c9c0166376c847818d0c4",
+      "accountHash": "49d3c32b9e2c38a5b377387882e0926ca9d9d542da1cc739d1572e0a513aeab8"
+    }
+  }
+}

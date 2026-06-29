@@ -4,6 +4,9 @@ name = "bondsman_cli"
 version = "0.1.0"
 
 [dependencies]
+bond_vault = { path = "../bond_vault" }
+bondsman_controller = { path = "../bondsman_controller" }
+invoice_pool = { path = "../invoice_pool" }
 mock_cspr_usd = { path = "../mock_cspr_usd" }
 odra = { workspace = true }
 odra-cli = { workspace = true }
@@ -12,4 +15,3 @@ casper-client = { workspace = true }
 [[bin]]
 name = "bondsman_cli"
 path = "src/main.rs"
-

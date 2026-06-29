@@ -1,0 +1,21 @@
+last_updated = "2026-06-29T10:13:32Z"
+
+[[contracts]]
+name = "MockCsprUSD"
+package_name = "MockCsprUSD"
+package_hash = "hash-03b78eb6e36799af9c9d5f892140e61dc6432b9fd165246b8cdca5f68fda2e1f"
+
+[[contracts]]
+name = "BondVault"
+package_name = "BondVault"
+package_hash = "hash-c186fafb66c07d16185d845098ce44022f5e41ec658b44632047f242be58fe9e"
+
+[[contracts]]
+name = "BondsmanController"
+package_name = "BondsmanController"
+package_hash = "hash-2ed52e6c3a8709e7322f64011d563669483d96f5ac1816f395794dcaacc8f599"
+
+[[contracts]]
+name = "InvoicePool"
+package_name = "InvoicePool"
+package_hash = "hash-a9320ae95af3e12c8d43c8d7d810bf81144d7b76c9102030bb3c55577caed77c"
