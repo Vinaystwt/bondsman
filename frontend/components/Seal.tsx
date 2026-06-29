@@ -148,7 +148,7 @@ export function Seal({
   const color = COLOR[state];
 
   // Render a static, identical mark on the server and first client paint, then
-  // hand over to the animated version after mount. This keeps hydration clean.
+  // hand over to the animated form after mount. This keeps hydration clean.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 

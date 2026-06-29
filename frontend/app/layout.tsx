@@ -6,8 +6,8 @@ import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Bondsman — No bond, no action',
-    template: '%s — Bondsman',
+    default: 'Bondsman · No bond, no action',
+    template: '%s · Bondsman',
   },
   description:
     'Bondsman makes an autonomous agent stake real capital before it can move your money, and takes it when the agent is wrong.',

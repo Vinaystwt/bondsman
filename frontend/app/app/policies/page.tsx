@@ -104,7 +104,7 @@ export default async function PoliciesPage() {
           <Panel className="px-5 py-4">
             <Label>Current agent score</Label>
             <p className="mt-2 font-mono text-2xl text-bone tabular">
-              {score ?? '—'}
+              {score ?? '·'}
             </p>
             <p className="mt-1 text-xs text-muted">
               adds {penaltyBps} bps to bonds
