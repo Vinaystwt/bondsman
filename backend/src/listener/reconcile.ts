@@ -1,0 +1,238 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { BondsmanConfig } from '../config/env.js';
+import type { Deployment } from '../shared/deployment.js';
+import {
+  callContract,
+  readContract,
+  readEvents,
+} from '../casper/odra-cli.js';
+import type { AgentRun } from '../agent/runner.js';
+import { claimHash } from '../agent/hashing.js';
+import type { DecisionInvoice } from '../agent/prompt.js';
+import {
+  Repository,
+  type ActionRecord,
+} from '../db/repositories.js';
+import { parseOdraEvent } from './events.js';
+
+interface ReconcileOptions {
+  repositoryPath: string;
+  config: BondsmanConfig;
+  deployment: Deployment;
+  repository: Repository;
+}
+
+interface ChainAction {
+  agent: string;
+  invoice_id: string;
+  claim_hash: string;
+  amount: string;
+  reasoning_hash: string;
+  bond_required: string;
+  bond_posted: string;
+  window_end: string;
+  status: string;
+  challenger: string;
+}
+
+function normalizeAddress(value: string): string {
+  const account = value.match(/Key::Account\(([0-9a-f]{64})\)/)?.[1];
+  if (account) return `account-hash-${account}`;
+  const contract = value.match(/Key::Hash\(([0-9a-f]{64})\)/)?.[1];
+  if (contract) return `hash-${contract}`;
+  return value;
+}
+
+function bytesHex(value: string): string {
+  const values = value.match(/\d+/g)?.map(Number) ?? [];
+  return Buffer.from(values).toString('hex');
+}
+
+async function optionalJson<T>(path: string): Promise<T | undefined> {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as T;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function transactionForEvent(
+  run: AgentRun | undefined,
+  type: string,
+): string | null {
+  const key = {
+    ActionInitiated: 'initiate',
+    BondPosted: 'postBond',
+    ActionExecuted: 'execute',
+  }[type] as keyof AgentRun['transactions'] | undefined;
+  return key ? run?.transactions[key] ?? null : null;
+}
+
+async function importPendingInvoice(
+  options: ReconcileOptions,
+): Promise<void> {
+  const invoice = await optionalJson<DecisionInvoice>(
+    join(options.repositoryPath, '.data/pending-invoice.json'),
+  );
+  if (!invoice) return;
+  options.repository.upsertInvoice({
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    debtor: invoice.debtor,
+    amount: invoice.amount,
+    vendor: invoice.vendor,
+    dueDate: invoice.dueDate,
+    delivered: invoice.delivered,
+    claimHash: claimHash(
+      invoice.debtor,
+      invoice.invoiceNumber,
+    ).toString('hex'),
+    paid: false,
+  });
+}
+
+export async function reconcileChain(
+  options: ReconcileOptions,
+): Promise<void> {
+  const signerPath = join(options.repositoryPath, '.keys/agent.pem');
+  const runs =
+    (await optionalJson<AgentRun[]>(
+      join(options.repositoryPath, '.data/agent-runs.json'),
+    )) ?? [];
+  await importPendingInvoice(options);
+
+  const actionIds = new Set<number>();
+  for (const contract of [
+    'MockCsprUSD',
+    'BondVault',
+    'BondsmanController',
+    'InvoicePool',
+  ]) {
+    for (const event of await readEvents({
+      repository: options.repositoryPath,
+      config: options.config,
+      signerPath,
+      contract,
+    })) {
+      const parsed = parseOdraEvent(event.data);
+      const actionId = parsed.fields.action_id
+        ? Number(parsed.fields.action_id)
+        : null;
+      if (actionId !== null) actionIds.add(actionId);
+      const run = runs.find((candidate) => candidate.actionId === actionId);
+      options.repository.upsertEvent({
+        contract,
+        eventIndex: event.index,
+        eventType: parsed.type,
+        actionId,
+        data: JSON.stringify(parsed.fields),
+        transactionHash: transactionForEvent(run, parsed.type),
+      });
+    }
+  }
+
+  for (const actionId of actionIds) {
+    const serialized = await readContract<string>({
+      repository: options.repositoryPath,
+      config: options.config,
+      signerPath,
+      contract: 'BondsmanController',
+      entrypoint: 'get_action',
+      arguments: ['--action_id', String(actionId)],
+    });
+    const action = JSON.parse(serialized) as ChainAction;
+    const run = runs.find((candidate) => candidate.actionId === actionId);
+    const record: ActionRecord = {
+      actionId,
+      invoiceId: Number(action.invoice_id),
+      agent: normalizeAddress(action.agent),
+      amount: action.amount,
+      claimHash: bytesHex(action.claim_hash),
+      reasoning: run?.reasoning ?? '',
+      reasoningHash: bytesHex(action.reasoning_hash),
+      bondRequired: action.bond_required,
+      bondPosted: action.bond_posted,
+      windowEnd: Number(action.window_end),
+      status: action.status,
+      challenger:
+        action.challenger === 'None'
+          ? null
+          : normalizeAddress(action.challenger),
+      transactions: Object.fromEntries(
+        Object.entries(run?.transactions ?? {}).filter(
+          (entry): entry is [string, string] => !!entry[1],
+        ),
+      ),
+    };
+    options.repository.upsertAction(record);
+    const reputationJson = await readContract<string>({
+      repository: options.repositoryPath,
+      config: options.config,
+      signerPath,
+      contract: 'BondsmanController',
+      entrypoint: 'get_reputation',
+      arguments: ['--agent', record.agent],
+    });
+    const reputation = JSON.parse(reputationJson) as {
+      clean: string;
+      slashed: string;
+      score: string;
+    };
+    options.repository.setReputation(
+      record.agent,
+      Number(reputation.clean),
+      Number(reputation.slashed),
+      Number(reputation.score),
+    );
+    const invoice = options.repository
+      .listInvoices()
+      .find((candidate) => candidate.id === record.invoiceId);
+    if (invoice) {
+      options.repository.upsertInvoice({
+        ...invoice,
+        paid: !['Initiated', 'Bonded'].includes(record.status),
+      });
+    }
+  }
+
+  const reserve = await readContract<string>({
+    repository: options.repositoryPath,
+    config: options.config,
+    signerPath,
+    contract: 'InvoicePool',
+    entrypoint: 'reserve_balance',
+    arguments: [],
+  });
+  options.repository.setReserve(reserve);
+}
+
+export async function resolveExpiredClean(
+  options: ReconcileOptions,
+): Promise<string[]> {
+  const hashes: string[] = [];
+  const signerPath = join(options.repositoryPath, '.keys/agent.pem');
+  for (const actionId of options.repository.expiredCleanActions(
+    Date.now(),
+  )) {
+    hashes.push(
+      await callContract({
+        repository: options.repositoryPath,
+        config: options.config,
+        signerPath,
+        contract: 'BondsmanController',
+        entrypoint: 'resolve_action',
+        arguments: ['--action_id', String(actionId)],
+      }),
+    );
+  }
+  if (hashes.length) await reconcileChain(options);
+  return hashes;
+}

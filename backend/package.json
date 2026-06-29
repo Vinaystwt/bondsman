@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "deploy": "tsx ../scripts/deploy.ts",
     "agent": "tsx src/agent/main.ts",
+    "listener": "tsx src/listener/main.ts",
+    "api": "tsx src/api/main.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {
@@ -23,6 +25,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.10.4",
     "tsx": "4.21.0",
     "typescript": "6.0.3",

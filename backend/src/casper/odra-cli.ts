@@ -125,3 +125,30 @@ export async function readContract<T>(
   const parsed = JSON.parse(output) as { result: T };
   return parsed.result;
 }
+
+export interface OdraEvent {
+  index: number;
+  data: string;
+}
+
+export async function readEvents(
+  options: Omit<OdraCommandOptions, 'arguments' | 'json'> & {
+    contract: string;
+    count?: number;
+  },
+): Promise<OdraEvent[]> {
+  const output = await runOdraCommand({
+    repository: options.repository,
+    config: options.config,
+    signerPath: options.signerPath,
+    json: true,
+    arguments: [
+      'print-events',
+      options.contract,
+      '--number',
+      String(options.count ?? 49),
+    ],
+  });
+  const parsed = JSON.parse(output) as { events: OdraEvent[] };
+  return parsed.events;
+}
