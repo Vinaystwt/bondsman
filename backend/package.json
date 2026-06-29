@@ -10,10 +10,12 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deploy": "tsx ../scripts/deploy.ts",
+    "agent": "tsx src/agent/main.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.106.0",
+    "@noble/hashes": "1.8.0",
     "better-sqlite3": "12.11.1",
     "casper-js-sdk": "5.0.12",
     "dotenv": "17.4.2",

@@ -1,0 +1,178 @@
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { BondsmanConfig } from '../config/env.js';
+import type { Deployment } from '../shared/deployment.js';
+import {
+  bytesArgument,
+  callContract,
+  readContract,
+} from '../casper/odra-cli.js';
+import { blake2b256, claimHash } from './hashing.js';
+import { requestDecision } from './anthropic.js';
+import type { DecisionInvoice } from './prompt.js';
+
+export interface AgentRun {
+  invoiceId: number;
+  actionId?: number;
+  decision: 'approve' | 'reject';
+  reasoning: string;
+  reasoningHash: string;
+  confidence: number;
+  transactions: {
+    initiate?: string;
+    approve?: string;
+    postBond?: string;
+    execute?: string;
+  };
+}
+
+interface RunnerOptions {
+  repository: string;
+  config: BondsmanConfig;
+  deployment: Deployment;
+  apiKey: string;
+  model: string;
+}
+
+async function nextActionId(
+  options: RunnerOptions,
+  signerPath: string,
+): Promise<number> {
+  for (let actionId = 0; actionId < 10_000; actionId += 1) {
+    try {
+      await readContract({
+        repository: options.repository,
+        config: options.config,
+        signerPath,
+        contract: 'BondsmanController',
+        entrypoint: 'get_action',
+        arguments: ['--action_id', String(actionId)],
+      });
+    } catch {
+      return actionId;
+    }
+  }
+  throw new Error('unable to find the next action identifier');
+}
+
+async function persistRun(
+  repository: string,
+  run: AgentRun,
+): Promise<void> {
+  const directory = join(repository, '.data');
+  const path = join(directory, 'agent-runs.json');
+  await mkdir(directory, { recursive: true });
+  let runs: AgentRun[] = [];
+  try {
+    runs = JSON.parse(await readFile(path, 'utf8')) as AgentRun[];
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'ENOENT'
+    ) {
+      throw error;
+    }
+  }
+  runs.push(run);
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(runs, null, 2)}\n`, {
+    mode: 0o600,
+  });
+  await rename(temporary, path);
+}
+
+export async function runAgent(
+  invoice: DecisionInvoice,
+  options: RunnerOptions,
+): Promise<AgentRun> {
+  const signerPath = join(options.repository, '.keys/agent.pem');
+  const decision = await requestDecision(
+    invoice,
+    options.apiKey,
+    options.model,
+  );
+  const reasoningDigest = blake2b256(decision.reasoning);
+  const base: AgentRun = {
+    invoiceId: invoice.id,
+    decision: decision.decision,
+    reasoning: decision.reasoning,
+    reasoningHash: reasoningDigest.toString('hex'),
+    confidence: decision.confidence,
+    transactions: {},
+  };
+  if (decision.decision === 'reject') {
+    await persistRun(options.repository, base);
+    return base;
+  }
+
+  const actionId = await nextActionId(options, signerPath);
+  const amount = invoice.amount;
+  const transactions: AgentRun['transactions'] = {};
+  transactions.initiate = await callContract({
+    repository: options.repository,
+    config: options.config,
+    signerPath,
+    contract: 'BondsmanController',
+    entrypoint: 'initiate_action',
+    arguments: [
+      '--invoice_id',
+      String(invoice.id),
+      '--claim_hash',
+      bytesArgument(claimHash(invoice.debtor, invoice.invoiceNumber)),
+      '--amount',
+      amount,
+      '--reasoning_hash',
+      bytesArgument(reasoningDigest),
+    ],
+  });
+  const bond = await readContract<string>({
+    repository: options.repository,
+    config: options.config,
+    signerPath,
+    contract: 'BondsmanController',
+    entrypoint: 'get_bond_required',
+    arguments: [
+      '--amount',
+      amount,
+      '--agent',
+      `account-hash-${options.deployment.accounts.agent.accountHash}`,
+    ],
+  });
+  transactions.approve = await callContract({
+    repository: options.repository,
+    config: options.config,
+    signerPath,
+    contract: 'MockCsprUSD',
+    entrypoint: 'approve',
+    arguments: [
+      '--spender',
+      options.deployment.contracts.bondVault.packageHash,
+      '--amount',
+      bond,
+    ],
+  });
+  transactions.postBond = await callContract({
+    repository: options.repository,
+    config: options.config,
+    signerPath,
+    contract: 'BondsmanController',
+    entrypoint: 'post_bond',
+    arguments: ['--action_id', String(actionId)],
+  });
+  transactions.execute = await callContract({
+    repository: options.repository,
+    config: options.config,
+    signerPath,
+    contract: 'BondsmanController',
+    entrypoint: 'execute_action',
+    arguments: ['--action_id', String(actionId)],
+  });
+  const run = {
+    ...base,
+    actionId,
+    transactions,
+  };
+  await persistRun(options.repository, run);
+  return run;
+}

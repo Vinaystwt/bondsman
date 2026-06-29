@@ -8,6 +8,7 @@
   "scripts": {
     "build:contracts": "cd contracts && cargo odra build",
     "deploy": "npm --workspace backend run deploy",
+    "agent": "npm --workspace backend run agent",
     "test": "npm --workspace backend test",
     "typecheck": "npm --workspace backend run typecheck",
     "demo": "npm --workspace backend run demo"

@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .keys/
+.data/
 node_modules/
 target/
 wasm/
