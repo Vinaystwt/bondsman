@@ -13,6 +13,7 @@
     "agent": "tsx src/agent/main.ts",
     "listener": "tsx src/listener/main.ts",
     "api": "tsx src/api/main.ts",
+    "seed": "tsx ../scripts/seed.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {

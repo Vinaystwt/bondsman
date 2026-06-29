@@ -11,6 +11,7 @@
     "agent": "npm --workspace backend run agent",
     "listener": "npm --workspace backend run listener",
     "api": "npm --workspace backend run api",
+    "seed": "npm --workspace backend run seed",
     "test": "npm --workspace backend test",
     "typecheck": "npm --workspace backend run typecheck",
     "demo": "npm --workspace backend run demo"

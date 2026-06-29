@@ -65,38 +65,114 @@ async function optionalJson<T>(path: string): Promise<T | undefined> {
 }
 
 function transactionForEvent(
-  run: AgentRun | undefined,
+  transactions: Record<string, string> | undefined,
   type: string,
 ): string | null {
   const key = {
     ActionInitiated: 'initiate',
     BondPosted: 'postBond',
     ActionExecuted: 'execute',
+    ActionChallenged: 'challenge',
+    ResolvedSlash: 'resolve',
+    ResolvedRefund: 'resolve',
+    BondLocked: 'postBond',
+    BondReleased: 'resolve',
+    BondSlashed: 'resolve',
+    PayoutApproved: 'execute',
+    DuplicateDetected: 'execute',
   }[type] as keyof AgentRun['transactions'] | undefined;
-  return key ? run?.transactions[key] ?? null : null;
+  return key ? transactions?.[key] ?? null : null;
+}
+
+async function localTransactions(
+  repositoryPath: string,
+  runs: AgentRun[],
+): Promise<Map<number, Record<string, string>>> {
+  const result = new Map<number, Record<string, string>>();
+  for (const run of runs) {
+    if (run.actionId !== undefined) {
+      result.set(
+        run.actionId,
+        Object.fromEntries(
+          Object.entries(run.transactions).filter(
+            (entry): entry is [string, string] => !!entry[1],
+          ),
+        ),
+      );
+    }
+  }
+  const seed = await optionalJson<{
+    baseline: {
+      actionId: number;
+      transactions: Record<string, string>;
+    };
+    duplicate: {
+      actionId: number;
+      transactions: Record<string, string>;
+      challenge: string;
+    };
+  }>(join(repositoryPath, '.data/seed-state.json'));
+  if (seed) {
+    result.set(seed.baseline.actionId, seed.baseline.transactions);
+    result.set(seed.duplicate.actionId, {
+      ...seed.duplicate.transactions,
+      challenge: seed.duplicate.challenge,
+    });
+  }
+  const demo = await optionalJson<{
+    duplicate: {
+      actionId: number;
+      challenge: string;
+      resolve: string;
+    };
+    clean: {
+      actionId: number;
+      execute: string;
+      resolve: string;
+    };
+    cleanTransactions?: Record<string, string>;
+  }>(join(repositoryPath, '.data/demo-state.json'));
+  if (demo) {
+    result.set(demo.duplicate.actionId, {
+      ...(result.get(demo.duplicate.actionId) ?? {}),
+      challenge: demo.duplicate.challenge,
+      resolve: demo.duplicate.resolve,
+    });
+    result.set(demo.clean.actionId, {
+      ...(demo.cleanTransactions ?? {}),
+      execute: demo.clean.execute,
+      resolve: demo.clean.resolve,
+    });
+  }
+  return result;
 }
 
 async function importPendingInvoice(
   options: ReconcileOptions,
 ): Promise<void> {
-  const invoice = await optionalJson<DecisionInvoice>(
+  const pending = await optionalJson<DecisionInvoice>(
     join(options.repositoryPath, '.data/pending-invoice.json'),
   );
-  if (!invoice) return;
-  options.repository.upsertInvoice({
-    id: invoice.id,
-    invoiceNumber: invoice.invoiceNumber,
-    debtor: invoice.debtor,
-    amount: invoice.amount,
-    vendor: invoice.vendor,
-    dueDate: invoice.dueDate,
-    delivered: invoice.delivered,
-    claimHash: claimHash(
-      invoice.debtor,
-      invoice.invoiceNumber,
-    ).toString('hex'),
-    paid: false,
-  });
+  const seeded =
+    (await optionalJson<DecisionInvoice[]>(
+      join(options.repositoryPath, '.data/seed-invoices.json'),
+    )) ?? [];
+  for (const invoice of [...(pending ? [pending] : []), ...seeded]) {
+    options.repository.upsertInvoice({
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      debtor: invoice.debtor,
+      amount: invoice.amount,
+      vendor: invoice.vendor,
+      dueDate: invoice.dueDate,
+      delivered: invoice.delivered,
+      claimHash: claimHash(
+        invoice.debtor,
+        invoice.invoiceNumber,
+      ).toString('hex'),
+      paid: false,
+    });
+  }
 }
 
 export async function reconcileChain(
@@ -107,6 +183,10 @@ export async function reconcileChain(
     (await optionalJson<AgentRun[]>(
       join(options.repositoryPath, '.data/agent-runs.json'),
     )) ?? [];
+  const transactionEvidence = await localTransactions(
+    options.repositoryPath,
+    runs,
+  );
   await importPendingInvoice(options);
 
   const actionIds = new Set<number>();
@@ -127,14 +207,18 @@ export async function reconcileChain(
         ? Number(parsed.fields.action_id)
         : null;
       if (actionId !== null) actionIds.add(actionId);
-      const run = runs.find((candidate) => candidate.actionId === actionId);
       options.repository.upsertEvent({
         contract,
         eventIndex: event.index,
         eventType: parsed.type,
         actionId,
         data: JSON.stringify(parsed.fields),
-        transactionHash: transactionForEvent(run, parsed.type),
+        transactionHash: transactionForEvent(
+          actionId === null
+            ? undefined
+            : transactionEvidence.get(actionId),
+          parsed.type,
+        ),
       });
     }
   }
@@ -166,11 +250,13 @@ export async function reconcileChain(
         action.challenger === 'None'
           ? null
           : normalizeAddress(action.challenger),
-      transactions: Object.fromEntries(
-        Object.entries(run?.transactions ?? {}).filter(
-          (entry): entry is [string, string] => !!entry[1],
+      transactions:
+        transactionEvidence.get(actionId) ??
+        Object.fromEntries(
+          Object.entries(run?.transactions ?? {}).filter(
+            (entry): entry is [string, string] => !!entry[1],
+          ),
         ),
-      ),
     };
     options.repository.upsertAction(record);
     const reputationJson = await readContract<string>({
