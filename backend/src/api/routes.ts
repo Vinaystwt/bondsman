@@ -31,10 +31,9 @@ export function registerRoutes(
           : null,
       })),
       explorerLinks: Object.fromEntries(
-        Object.entries(action.transactions).map(([key, hash]) => [
-          key,
-          explorer(hash),
-        ]),
+        Object.entries(action.transactions)
+          .filter(([, hash]) => hash.length === 64)
+          .map(([key, hash]) => [key, explorer(hash)]),
       ),
     };
   });

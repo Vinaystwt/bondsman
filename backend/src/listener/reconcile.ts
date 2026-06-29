@@ -89,16 +89,15 @@ async function localTransactions(
   runs: AgentRun[],
 ): Promise<Map<number, Record<string, string>>> {
   const result = new Map<number, Record<string, string>>();
+  const confirmed = (
+    values: Record<string, string>,
+  ): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(values).filter(([, value]) => value.length === 64),
+    );
   for (const run of runs) {
     if (run.actionId !== undefined) {
-      result.set(
-        run.actionId,
-        Object.fromEntries(
-          Object.entries(run.transactions).filter(
-            (entry): entry is [string, string] => !!entry[1],
-          ),
-        ),
-      );
+      result.set(run.actionId, confirmed(run.transactions));
     }
   }
   const seed = await optionalJson<{
@@ -113,11 +112,14 @@ async function localTransactions(
     };
   }>(join(repositoryPath, '.data/seed-state.json'));
   if (seed) {
-    result.set(seed.baseline.actionId, seed.baseline.transactions);
-    result.set(seed.duplicate.actionId, {
+    result.set(
+      seed.baseline.actionId,
+      confirmed(seed.baseline.transactions),
+    );
+    result.set(seed.duplicate.actionId, confirmed({
       ...seed.duplicate.transactions,
       challenge: seed.duplicate.challenge,
-    });
+    }));
   }
   const demo = await optionalJson<{
     duplicate: {
@@ -133,16 +135,16 @@ async function localTransactions(
     cleanTransactions?: Record<string, string>;
   }>(join(repositoryPath, '.data/demo-state.json'));
   if (demo) {
-    result.set(demo.duplicate.actionId, {
+    result.set(demo.duplicate.actionId, confirmed({
       ...(result.get(demo.duplicate.actionId) ?? {}),
       challenge: demo.duplicate.challenge,
       resolve: demo.duplicate.resolve,
-    });
-    result.set(demo.clean.actionId, {
+    }));
+    result.set(demo.clean.actionId, confirmed({
       ...(demo.cleanTransactions ?? {}),
       execute: demo.clean.execute,
       resolve: demo.clean.resolve,
-    });
+    }));
   }
   return result;
 }
