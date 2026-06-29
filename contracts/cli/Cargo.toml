@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name = "bondsman_cli"
+version = "0.1.0"
+
+[dependencies]
+mock_cspr_usd = { path = "../mock_cspr_usd" }
+odra = { workspace = true }
+odra-cli = { workspace = true }
+casper-client = { workspace = true }
+
+[[bin]]
+name = "bondsman_cli"
+path = "src/main.rs"
+

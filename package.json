@@ -1,0 +1,14 @@
+{
+  "name": "bondsman",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "build:contracts": "cd contracts && cargo odra build",
+    "test": "npm --workspace backend test",
+    "typecheck": "npm --workspace backend run typecheck",
+    "demo": "npm --workspace backend run demo"
+  }
+}
+

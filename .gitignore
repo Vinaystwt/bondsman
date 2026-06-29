@@ -5,9 +5,9 @@
 .keys/
 node_modules/
 target/
+wasm/
 dist/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 .DS_Store
-
