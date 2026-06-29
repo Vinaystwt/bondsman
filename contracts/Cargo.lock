@@ -265,6 +265,7 @@ name = "bondsman_controller"
 version = "0.1.0"
 dependencies = [
  "bond_vault",
+ "invoice_pool",
  "mock_cspr_usd",
  "odra",
  "odra-build",
@@ -1662,6 +1663,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ec348ce75d284bc2e698187dc01da416a52dfa2d685e2a57d04e9e580447df0"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "invoice_pool"
+version = "0.1.0"
+dependencies = [
+ "mock_cspr_usd",
+ "odra",
+ "odra-build",
+ "odra-modules",
+ "odra-test",
 ]
 
 [[package]]

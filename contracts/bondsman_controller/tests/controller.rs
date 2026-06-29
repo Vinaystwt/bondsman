@@ -2,6 +2,7 @@ use bond_vault::bond_vault::{BondStatus, BondVault, BondVaultInitArgs};
 use bondsman_controller::bondsman_controller::{
     ActionStatus, BondsmanController, BondsmanControllerInitArgs, Error,
 };
+use invoice_pool::invoice_pool::{InvoicePool, InvoicePoolInitArgs};
 use mock_cspr_usd::mock_cspr_usd::MockCsprUSD;
 use odra::casper_types::{bytesrepr::Bytes, U256};
 use odra::host::{Deployer, NoArgs};
@@ -52,6 +53,7 @@ fn initiates_posts_and_executes_with_a_millisecond_window() {
     let owner = env.get_account(0);
     let agent = env.get_account(2);
     let outsider = env.get_account(3);
+    let vendor = env.get_account(5);
     let mut token = MockCsprUSD::deploy(&env, NoArgs);
     let mut vault = BondVault::deploy(
         &env,
@@ -70,6 +72,13 @@ fn initiates_posts_and_executes_with_a_millisecond_window() {
             challenger_bps: 5_000,
         },
     );
+    let mut pool = InvoicePool::deploy(
+        &env,
+        InvoicePoolInitArgs {
+            controller: controller.address(),
+            token: token.address(),
+        },
+    );
     vault.set_controller(controller.address());
     env.set_caller(outsider);
     assert_eq!(
@@ -85,8 +94,16 @@ fn initiates_posts_and_executes_with_a_millisecond_window() {
             .expect_err("controller wiring closes permanently"),
         bond_vault::bond_vault::Error::ControllerFinalized.into()
     );
+    controller.set_pool(pool.address());
+    pool.submit_invoice(
+        1045,
+        U256::from(1_000 * UNIT),
+        vendor,
+        Bytes::from(vec![1u8; 32]),
+    );
 
     token.mint(agent, U256::from(1_000 * UNIT));
+    token.mint(pool.address(), U256::from(1_000 * UNIT));
     env.set_caller(agent);
     token.approve(&vault.address(), &U256::from(20 * UNIT));
 
@@ -126,4 +143,6 @@ fn initiates_posts_and_executes_with_a_millisecond_window() {
     assert_eq!(executed.status, ActionStatus::Executed);
     assert_eq!(executed.bond_posted, U256::from(20 * UNIT));
     assert_eq!(executed.window_end, 300_000);
+    assert_eq!(token.balance_of(&vendor), U256::from(1_000 * UNIT));
+    assert!(!pool.is_action_duplicate(action_id));
 }

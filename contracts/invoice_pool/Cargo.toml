@@ -1,12 +1,11 @@
 [package]
 edition = "2021"
-name = "bondsman_controller"
+name = "invoice_pool"
 version = "0.1.0"
 
 [dependencies]
-bond_vault = { path = "../bond_vault" }
-invoice_pool = { path = "../invoice_pool" }
 odra = { workspace = true }
+odra-modules = { workspace = true }
 
 [dev-dependencies]
 mock_cspr_usd = { path = "../mock_cspr_usd" }
@@ -19,11 +18,12 @@ odra-build = { workspace = true }
 odra-build = { workspace = true }
 
 [[bin]]
-name = "bondsman_controller_build_contract"
+name = "invoice_pool_build_contract"
 path = "bin/build_contract.rs"
 test = false
 
 [[bin]]
-name = "bondsman_controller_build_schema"
+name = "invoice_pool_build_schema"
 path = "bin/build_schema.rs"
 test = false
+

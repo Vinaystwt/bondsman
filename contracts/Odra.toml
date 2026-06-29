@@ -6,3 +6,6 @@ fqn = "bond_vault::bond_vault::BondVault"
 
 [[contracts]]
 fqn = "bondsman_controller::bondsman_controller::BondsmanController"
+
+[[contracts]]
+fqn = "invoice_pool::invoice_pool::InvoicePool"

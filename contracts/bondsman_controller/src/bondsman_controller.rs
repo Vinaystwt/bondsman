@@ -1,4 +1,5 @@
 use bond_vault::bond_vault::BondVaultContractRef;
+use invoice_pool::invoice_pool::InvoicePoolContractRef;
 use odra::{
     casper_types::{bytesrepr::Bytes, U256},
     prelude::*,
@@ -71,6 +72,8 @@ pub enum Error {
     InvalidStatus = 3,
     InsufficientBond = 4,
     InvalidBasisPoints = 5,
+    NotOwner = 6,
+    PoolFinalized = 7,
 }
 
 #[odra::module(
@@ -78,8 +81,10 @@ pub enum Error {
     errors = Error
 )]
 pub struct BondsmanController {
+    owner: Var<Address>,
     vault: Var<Address>,
     pool: Var<Address>,
+    pool_finalized: Var<bool>,
     token: Var<Address>,
     next_action_id: Var<u64>,
     actions: Mapping<u64, Action>,
@@ -101,12 +106,25 @@ impl BondsmanController {
         if challenger_bps > 10_000 {
             self.env().revert(Error::InvalidBasisPoints);
         }
+        self.owner.set(self.env().caller());
         self.vault.set(vault);
         self.pool.set(pool);
+        self.pool_finalized.set(false);
         self.token.set(token);
         self.next_action_id.set(0);
         self.window_secs.set(window_secs);
         self.challenger_bps.set(challenger_bps);
+    }
+
+    pub fn set_pool(&mut self, pool: Address) {
+        if self.env().caller() != self.owner.get_or_revert_with(Error::NotOwner) {
+            self.env().revert(Error::NotOwner);
+        }
+        if self.pool_finalized.get_or_default() {
+            self.env().revert(Error::PoolFinalized);
+        }
+        self.pool.set(pool);
+        self.pool_finalized.set(true);
     }
 
     pub fn initiate_action(
@@ -173,6 +191,12 @@ impl BondsmanController {
             self.env().revert(Error::InvalidStatus);
         }
 
+        self.pool_ref().payout(
+            action.invoice_id,
+            action_id,
+            action.claim_hash.clone(),
+            action.amount,
+        );
         let window_end = self.env().get_block_time()
             + self.window_secs.get_or_default() * 1_000;
         action.window_end = window_end;
@@ -227,5 +251,10 @@ impl BondsmanController {
     fn vault_ref(&self) -> BondVaultContractRef {
         let address = self.vault.get_or_revert_with(Error::ActionNotFound);
         BondVaultContractRef::new(self.env(), address)
+    }
+
+    fn pool_ref(&self) -> InvoicePoolContractRef {
+        let address = self.pool.get_or_revert_with(Error::ActionNotFound);
+        InvoicePoolContractRef::new(self.env(), address)
     }
 }
