@@ -85,6 +85,64 @@
   }
 }
 
+/* Documentation prose. Calm, readable, document-grade. */
+.prose-docs {
+  color: #c9c2b2;
+  line-height: 1.7;
+  font-size: 0.975rem;
+}
+.prose-docs p {
+  max-width: 68ch;
+}
+.prose-docs strong {
+  color: var(--bone);
+  font-weight: 600;
+}
+.prose-docs a {
+  color: var(--copper);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}
+.prose-docs a:hover {
+  text-decoration-color: var(--copper);
+}
+.prose-docs h3 {
+  color: var(--bone);
+  font-family: var(--font-display), serif;
+  font-size: 1.25rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+.prose-docs ul {
+  max-width: 68ch;
+  list-style: none;
+  padding-left: 1.1rem;
+}
+.prose-docs ul li {
+  position: relative;
+  padding-left: 0.35rem;
+  margin-top: 0.4rem;
+}
+.prose-docs ul li::before {
+  content: '';
+  position: absolute;
+  left: -0.75rem;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--copper);
+  border-radius: 1px;
+}
+.prose-docs code:not(pre code) {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+  color: var(--copper);
+  background: rgba(183, 121, 31, 0.1);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
 /* Skeleton shimmer for loading states. */
 .skeleton {
   position: relative;
