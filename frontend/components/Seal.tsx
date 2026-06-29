@@ -24,13 +24,16 @@ const COLOR: Record<SealState, string> = {
 
 // The toothed outer ring of a notary stamp.
 function teeth(count: number, r: number, color: string) {
+  // Round to fixed precision so the coordinates serialize identically on the
+  // server and the client (float toString otherwise diverges and breaks hydration).
+  const round = (n: number) => Math.round(n * 1000) / 1000;
   const ticks = [];
   for (let i = 0; i < count; i += 1) {
     const angle = (i / count) * Math.PI * 2;
-    const x1 = 50 + Math.cos(angle) * r;
-    const y1 = 50 + Math.sin(angle) * r;
-    const x2 = 50 + Math.cos(angle) * (r + 3.4);
-    const y2 = 50 + Math.sin(angle) * (r + 3.4);
+    const x1 = round(50 + Math.cos(angle) * r);
+    const y1 = round(50 + Math.sin(angle) * r);
+    const x2 = round(50 + Math.cos(angle) * (r + 3.4));
+    const y2 = round(50 + Math.sin(angle) * (r + 3.4));
     ticks.push(
       <line
         key={i}
