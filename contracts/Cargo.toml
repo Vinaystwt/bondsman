@@ -1,5 +1,5 @@
 [workspace]
-members = ["bond_vault", "cli", "mock_cspr_usd"]
+members = ["bond_vault", "bondsman_controller", "cli", "mock_cspr_usd"]
 resolver = "2"
 
 [workspace.dependencies]

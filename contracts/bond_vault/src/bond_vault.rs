@@ -46,6 +46,8 @@ pub enum Error {
     BondNotFound = 3,
     BondNotLocked = 4,
     InvalidBasisPoints = 5,
+    NotOwner = 6,
+    ControllerFinalized = 7,
 }
 
 #[odra::module(
@@ -53,7 +55,9 @@ pub enum Error {
     errors = Error
 )]
 pub struct BondVault {
+    owner: Var<Address>,
     controller: Var<Address>,
+    controller_finalized: Var<bool>,
     token: Var<Address>,
     bonds: Mapping<u64, Bond>,
     total_locked: Var<U256>,
@@ -62,9 +66,22 @@ pub struct BondVault {
 #[odra::module]
 impl BondVault {
     pub fn init(&mut self, controller: Address, token: Address) {
+        self.owner.set(self.env().caller());
         self.controller.set(controller);
+        self.controller_finalized.set(false);
         self.token.set(token);
         self.total_locked.set(U256::zero());
+    }
+
+    pub fn set_controller(&mut self, controller: Address) {
+        if self.env().caller() != self.owner.get_or_revert_with(Error::NotOwner) {
+            self.env().revert(Error::NotOwner);
+        }
+        if self.controller_finalized.get_or_default() {
+            self.env().revert(Error::ControllerFinalized);
+        }
+        self.controller.set(controller);
+        self.controller_finalized.set(true);
     }
 
     pub fn deposit_and_lock(&mut self, action_id: u64, agent: Address, amount: U256) {

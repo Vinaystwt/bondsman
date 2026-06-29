@@ -3,3 +3,6 @@ fqn = "mock_cspr_usd::mock_cspr_usd::MockCsprUSD"
 
 [[contracts]]
 fqn = "bond_vault::bond_vault::BondVault"
+
+[[contracts]]
+fqn = "bondsman_controller::bondsman_controller::BondsmanController"
