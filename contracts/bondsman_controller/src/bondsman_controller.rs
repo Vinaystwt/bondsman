@@ -65,6 +65,27 @@ pub struct ActionExecuted {
     pub window_end: u64,
 }
 
+#[odra::event]
+pub struct ActionChallenged {
+    pub action_id: u64,
+    pub challenger: Address,
+}
+
+#[odra::event]
+pub struct ResolvedSlash {
+    pub action_id: u64,
+    pub challenger: Address,
+    pub challenger_amount: U256,
+    pub reserve_amount: U256,
+}
+
+#[odra::event]
+pub struct ResolvedRefund {
+    pub action_id: u64,
+    pub agent: Address,
+    pub amount: U256,
+}
+
 #[odra::odra_error]
 pub enum Error {
     ActionNotFound = 1,
@@ -74,10 +95,20 @@ pub enum Error {
     InvalidBasisPoints = 5,
     NotOwner = 6,
     PoolFinalized = 7,
+    NotDuplicate = 8,
+    ChallengeWindowClosed = 9,
+    WindowStillOpen = 10,
 }
 
 #[odra::module(
-    events = [ActionInitiated, BondPosted, ActionExecuted],
+    events = [
+        ActionInitiated,
+        BondPosted,
+        ActionExecuted,
+        ActionChallenged,
+        ResolvedSlash,
+        ResolvedRefund
+    ],
     errors = Error
 )]
 pub struct BondsmanController {
@@ -206,6 +237,89 @@ impl BondsmanController {
             action_id,
             window_end,
         });
+    }
+
+    pub fn challenge_action(&mut self, action_id: u64) {
+        let mut action = self
+            .actions
+            .get(&action_id)
+            .unwrap_or_revert_with(self, Error::ActionNotFound);
+        if action.status != ActionStatus::Executed {
+            self.env().revert(Error::InvalidStatus);
+        }
+        if self.env().get_block_time() > action.window_end {
+            self.env().revert(Error::ChallengeWindowClosed);
+        }
+        if !self.pool_ref().is_action_duplicate(action_id) {
+            self.env().revert(Error::NotDuplicate);
+        }
+
+        let challenger = self.env().caller();
+        action.challenger = Some(challenger);
+        action.status = ActionStatus::Challenged;
+        self.actions.set(&action_id, action);
+        self.env().emit_event(ActionChallenged {
+            action_id,
+            challenger,
+        });
+    }
+
+    pub fn resolve_action(&mut self, action_id: u64) {
+        let mut action = self
+            .actions
+            .get(&action_id)
+            .unwrap_or_revert_with(self, Error::ActionNotFound);
+        match action.status {
+            ActionStatus::Challenged => {
+                let challenger = action
+                    .challenger
+                    .unwrap_or_revert_with(self, Error::InvalidStatus);
+                let challenger_bps = self.challenger_bps.get_or_default();
+                let challenger_amount = action.bond_posted
+                    * U256::from(challenger_bps)
+                    / U256::from(10_000u32);
+                let reserve_amount = action.bond_posted - challenger_amount;
+                let pool = self.pool.get_or_revert_with(Error::ActionNotFound);
+
+                self.vault_ref()
+                    .slash(action_id, challenger, pool, challenger_bps);
+                self.pool_ref().add_to_reserve(reserve_amount);
+
+                let mut reputation = self.reputation.get_or_default(&action.agent);
+                reputation.slashed += 1;
+                reputation.score -= 50;
+                self.reputation.set(&action.agent, reputation);
+                action.status = ActionStatus::ResolvedSlash;
+                self.actions.set(&action_id, action);
+                self.env().emit_event(ResolvedSlash {
+                    action_id,
+                    challenger,
+                    challenger_amount,
+                    reserve_amount,
+                });
+            }
+            ActionStatus::Executed => {
+                if self.env().get_block_time() <= action.window_end {
+                    self.env().revert(Error::WindowStillOpen);
+                }
+
+                self.vault_ref().release(action_id);
+                let mut reputation = self.reputation.get_or_default(&action.agent);
+                reputation.clean += 1;
+                reputation.score += 10;
+                self.reputation.set(&action.agent, reputation);
+                let agent = action.agent;
+                let amount = action.bond_posted;
+                action.status = ActionStatus::ResolvedRefund;
+                self.actions.set(&action_id, action);
+                self.env().emit_event(ResolvedRefund {
+                    action_id,
+                    agent,
+                    amount,
+                });
+            }
+            _ => self.env().revert(Error::InvalidStatus),
+        }
     }
 
     pub fn get_action(&self, action_id: u64) -> Action {
