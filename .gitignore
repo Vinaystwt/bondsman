@@ -1,0 +1,13 @@
+*.pem
+.env
+.env.*
+!.env.example
+.keys/
+node_modules/
+target/
+dist/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+
