@@ -71,14 +71,17 @@ export function parseEventData(data: string): Record<string, unknown> {
 }
 
 export function formatWindowEnd(ms: number): string {
+  // Format in UTC so server and client render identically (no hydration drift).
   try {
-    return new Date(ms).toLocaleString('en-US', {
+    const s = new Date(ms).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'UTC',
     });
+    return `${s} UTC`;
   } catch {
     return String(ms);
   }

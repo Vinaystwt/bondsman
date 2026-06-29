@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 export type SealState = 'idle' | 'stamp' | 'lift' | 'strike';
 
@@ -47,64 +47,25 @@ function teeth(count: number, r: number, color: string) {
   return ticks;
 }
 
-export function Seal({
-  state = 'idle',
-  size = 96,
-  withText = true,
-  className,
-  title = 'Bondsman seal',
-}: SealProps) {
-  const reduce = useReducedMotion();
-  const id = useId().replace(/:/g, '');
-  const color = COLOR[state];
-
-  // The weighty press, the quiet lift, the decisive strike.
-  const variants: Variants = {
-    idle: { scale: 1, rotate: 0, opacity: 1 },
-    stamp: reduce
-      ? { scale: 1, rotate: 0, opacity: 1 }
-      : {
-          scale: [1.4, 0.92, 1],
-          rotate: [-9, 1.5, 0],
-          opacity: [0, 1, 1],
-          transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
-        },
-    lift: reduce
-      ? { scale: 1, opacity: 1 }
-      : {
-          scale: [1, 1.12],
-          opacity: [1, 0.85],
-          y: [0, -4],
-          transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
-        },
-    strike: { scale: 1, rotate: 0, opacity: 1 },
-  };
-
+// The crafted mark itself, shared by the static and animated wrappers.
+function SealBody({
+  id,
+  color,
+  withText,
+  strike,
+  animateStrike,
+}: {
+  id: string;
+  color: string;
+  withText: boolean;
+  strike: boolean;
+  animateStrike: boolean;
+}) {
   return (
-    <motion.svg
-      key={state}
-      role="img"
-      aria-label={title}
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      className={className}
-      initial={state === 'stamp' ? 'idle' : false}
-      animate={state}
-      variants={variants}
-    >
-      <title>{title}</title>
+    <>
       <defs>
-        <path
-          id={`${id}-top`}
-          d="M 16 50 A 34 34 0 0 1 84 50"
-          fill="none"
-        />
-        <path
-          id={`${id}-bottom`}
-          d="M 84 50 A 34 34 0 0 1 16 50"
-          fill="none"
-        />
+        <path id={`${id}-top`} d="M 16 50 A 34 34 0 0 1 84 50" fill="none" />
+        <path id={`${id}-bottom`} d="M 84 50 A 34 34 0 0 1 16 50" fill="none" />
         <radialGradient id={`${id}-wax`} cx="42%" cy="38%" r="70%">
           <stop offset="0%" stopColor={color} stopOpacity="0.22" />
           <stop offset="70%" stopColor={color} stopOpacity="0.06" />
@@ -112,11 +73,8 @@ export function Seal({
         </radialGradient>
       </defs>
 
-      {/* Wax impression behind the mark. */}
       <circle cx="50" cy="50" r="46" fill={`url(#${id}-wax)`} />
-
       {teeth(40, 44, color)}
-
       <circle cx="50" cy="50" r="41" fill="none" stroke={color} strokeWidth="1" opacity="0.7" />
       <circle cx="50" cy="50" r="33.5" fill="none" stroke={color} strokeWidth="2" />
       <circle cx="50" cy="50" r="24" fill="none" stroke={color} strokeWidth="1" opacity="0.7" />
@@ -137,11 +95,7 @@ export function Seal({
             </textPath>
           </text>
           <text>
-            <textPath
-              href={`#${id}-bottom`}
-              startOffset="50%"
-              textAnchor="middle"
-            >
+            <textPath href={`#${id}-bottom`} startOffset="50%" textAnchor="middle">
               NOTARY OF MONEY
             </textPath>
           </text>
@@ -158,20 +112,88 @@ export function Seal({
       </g>
 
       {/* The strike: a decisive line through the seal. Slash only. */}
-      {state === 'strike' && (
-        <motion.line
-          x1="20"
-          y1="80"
-          x2="80"
-          y2="20"
-          stroke="#E0231C"
-          strokeWidth="4"
-          strokeLinecap="round"
-          initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        />
-      )}
+      {strike &&
+        (animateStrike ? (
+          <motion.line
+            x1="20"
+            y1="80"
+            x2="80"
+            y2="20"
+            stroke="#E0231C"
+            strokeWidth="4"
+            strokeLinecap="round"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+          />
+        ) : (
+          <line x1="20" y1="80" x2="80" y2="20" stroke="#E0231C" strokeWidth="4" strokeLinecap="round" />
+        ))}
+    </>
+  );
+}
+
+export function Seal({
+  state = 'idle',
+  size = 96,
+  withText = true,
+  className,
+  title = 'Bondsman seal',
+}: SealProps) {
+  const reduce = useReducedMotion();
+  const id = useId().replace(/:/g, '');
+  const color = COLOR[state];
+
+  // Render a static, identical mark on the server and first client paint, then
+  // hand over to the animated version after mount. This keeps hydration clean.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const shared = {
+    role: 'img' as const,
+    'aria-label': title,
+    width: size,
+    height: size,
+    viewBox: '0 0 100 100',
+    className,
+  };
+
+  if (!mounted || reduce) {
+    return (
+      <svg {...shared}>
+        <title>{title}</title>
+        <SealBody id={id} color={color} withText={withText} strike={state === 'strike'} animateStrike={false} />
+      </svg>
+    );
+  }
+
+  const variants: Variants = {
+    idle: { scale: 1, rotate: 0, opacity: 1, y: 0 },
+    stamp: {
+      scale: [1.4, 0.92, 1],
+      rotate: [-9, 1.5, 0],
+      opacity: [0, 1, 1],
+      transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
+    },
+    lift: {
+      scale: [1, 1.12],
+      opacity: [1, 0.88],
+      y: [0, -4],
+      transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+    },
+    strike: { scale: 1, rotate: 0, opacity: 1, y: 0 },
+  };
+
+  return (
+    <motion.svg
+      key={state}
+      {...shared}
+      initial="idle"
+      animate={state}
+      variants={variants}
+    >
+      <title>{title}</title>
+      <SealBody id={id} color={color} withText={withText} strike={state === 'strike'} animateStrike />
     </motion.svg>
   );
 }
