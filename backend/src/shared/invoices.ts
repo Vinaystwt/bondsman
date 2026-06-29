@@ -17,7 +17,7 @@ function invoice(
     id,
     invoiceNumber,
     debtor,
-    amount: '1000000000000',
+    amount: '50000000000000',
     vendor,
     dueDate: '2020-01-01',
     delivered: true,
@@ -26,7 +26,7 @@ function invoice(
 }
 
 export const demoInvoices: SeedInvoice[] = [
-  invoice(1045, 'GBX-7781'),
-  invoice(1046, 'GBX-7781'),
-  invoice(1047, 'GBX-7782'),
+  invoice(2045, 'GBX-8871'),
+  invoice(2046, 'GBX-8871'),
+  invoice(2047, 'GBX-8872'),
 ];

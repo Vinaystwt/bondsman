@@ -75,11 +75,11 @@ npm run demo
 
 ## Seed data
 
-- Invoice `1045`: debtor `Globex Manufacturing`, invoice number `GBX-7781`
-- Invoice `1046`: the same debtor and invoice number, therefore the same Blake2b-256 claim digest
-- Invoice `1047`: invoice number `GBX-7782`, therefore a clean claim
+- Invoice `2045`: debtor `Globex Manufacturing`, invoice number `GBX-8871`, amount 50,000 csprUSD
+- Invoice `2046`: the same debtor and invoice number, therefore the same Blake2b-256 claim digest and amount
+- Invoice `2047`: invoice number `GBX-8872`, therefore a clean 50,000 csprUSD claim
 
-The claim digest input is length-delimited debtor plus invoice number and is computed by the runner. Seed pays `1045` first, executes `1046`, and pre-challenges that second action as the deterministic fallback.
+The claim digest input is length-delimited debtor plus invoice number and is computed by the runner. Seed pays `2045` first, executes `2046`, and pre-challenges that second action as the deterministic fallback. A fresh demo agent starts at zero reputation, placing the first two actions in the 5% tier with 2,500 csprUSD bonds. Haiku evaluates all three invoices independently without paid-claim context, and its genuine reasoning sentences are persisted with their on-chain digests.
 
 ## REST API
 
@@ -92,9 +92,9 @@ Returns seeded pending and paid invoices.
 ```json
 [
   {
-    "id": 1045,
+    "id": 2045,
     "invoiceNumber": "GBX-7781",
-    "amount": "1000000000000",
+    "amount": "50000000000000",
     "paid": true
   }
 ]
@@ -107,10 +107,10 @@ Returns every projected action with status, bond, deadline, reasoning, and trans
 ```json
 [
   {
-    "actionId": 2,
-    "invoiceId": 1046,
-    "bondRequired": "20000000000",
-    "bondPosted": "20000000000",
+    "actionId": 5,
+    "invoiceId": 2046,
+    "bondRequired": "2500000000000",
+    "bondPosted": "2500000000000",
     "status": "ResolvedSlash"
   }
 ]
@@ -122,12 +122,12 @@ Returns one full lifecycle, reasoning text and digest, CES events, transaction h
 
 ```json
 {
-  "actionId": 3,
+  "actionId": 6,
   "status": "ResolvedRefund",
-  "reasoningHash": "b311a7b6b68e7e11f7776b37b4a5207540abfe04439a71a979f39fd221d7fadd",
+  "reasoningHash": "a8ad930f7e120b2ad0f707846c48a2dca7bd99a14bb30e0d760f2f21279fdaab",
   "events": [],
   "explorerLinks": {
-    "execute": "https://testnet.cspr.live/transaction/7aaacbf79351637b4e72e37866e7f1f329da8d96d3574888ae90d2c76bdaf04a"
+    "execute": "https://testnet.cspr.live/transaction/da6cf2f9bcd3cbe7d0c662da9f574f83eb0b988db79790ae6c2b902150123b3d"
   }
 }
 ```
@@ -162,13 +162,13 @@ Returns InvoicePool reserve accounting and the slash events that funded it.
 The backend signs with the challenger account, submits `challenge_action`, waits for confirmation, then submits `resolve_action`.
 
 ```json
-{ "actionId": 2 }
+{ "actionId": 5 }
 ```
 
 ```json
 {
-  "challenge": "9fcd2f838faa72c27566d1a6b3f2fb7d5d6cb70528ec722d837d8ba134ec3727",
-  "resolve": "362cc7d7d41e373590ec0fe25135edb466d51e07032e1843c3c5a9ef3ed39622"
+  "challenge": "62cab945481750aa78283e603b1211eba77ad7527feab92b3ecb4e19fb450f4a",
+  "resolve": "a49bc9c653901120caccba2733eada7300b4702f459545c6e24cde2bf720e217"
 }
 ```
 
@@ -177,12 +177,12 @@ The backend signs with the challenger account, submits `challenge_action`, waits
 Manually triggers resolution for an already challenged action or an expired clean action.
 
 ```json
-{ "actionId": 3 }
+{ "actionId": 6 }
 ```
 
 ```json
 {
-  "resolve": "44b34116d9d22b9fcae2925eadf11011fb7190ec6065169674de547508ea0c3a"
+  "resolve": "178c9e297511734dc0110747191028c8a5f4066621b2bda073b8bf50a796117c"
 }
 ```
 
@@ -195,7 +195,7 @@ Returns the exact contents of `deployments/testnet.json`.
 - Token values are `U256` atomic units with 9 decimals.
 - `challenger_bps` uses `u32` because Casper CL types do not support an on-chain `u16`; the constructor enforces `0..=10000`.
 - Odra constructors are protected install entrypoints. To break the circular vault/controller/pool address dependency, vault and controller install with deployer placeholders, then deployer-only one-time setters finalize the controller and pool addresses permanently.
-- Agent and pool mints are 500,000 and 2,000,000 csprUSD.
+- Initial agent and pool mints are 500,000 and 2,000,000 csprUSD. Seed idempotently mints a 100,000 csprUSD operating balance to the fresh demo agent.
 - Install gas is capped at 500 CSPR per contract call and normal calls at 50 CSPR; Casper refunds unused payment.
 - SQLite is a projection, never the source of contract truth. Reconciliation is idempotent and direct reads repair missed stream events.
 - The controller has no owner slash function. A challenge succeeds only when InvoicePool proves that the action paid an already-recorded claim.
@@ -204,14 +204,14 @@ Returns the exact contents of `deployments/testnet.json`.
 
 Duplicate path:
 
-- Action: `2`
-- Challenge: [`9fcd2f838faa72c27566d1a6b3f2fb7d5d6cb70528ec722d837d8ba134ec3727`](https://testnet.cspr.live/transaction/9fcd2f838faa72c27566d1a6b3f2fb7d5d6cb70528ec722d837d8ba134ec3727)
-- Slash resolution: [`362cc7d7d41e373590ec0fe25135edb466d51e07032e1843c3c5a9ef3ed39622`](https://testnet.cspr.live/transaction/362cc7d7d41e373590ec0fe25135edb466d51e07032e1843c3c5a9ef3ed39622)
+- Action: `5`
+- Challenge: [`62cab945481750aa78283e603b1211eba77ad7527feab92b3ecb4e19fb450f4a`](https://testnet.cspr.live/transaction/62cab945481750aa78283e603b1211eba77ad7527feab92b3ecb4e19fb450f4a)
+- Slash resolution: [`a49bc9c653901120caccba2733eada7300b4702f459545c6e24cde2bf720e217`](https://testnet.cspr.live/transaction/a49bc9c653901120caccba2733eada7300b4702f459545c6e24cde2bf720e217)
 - Terminal state: `ResolvedSlash`
 
 Clean path:
 
-- Action: `3`
-- Execute: [`7aaacbf79351637b4e72e37866e7f1f329da8d96d3574888ae90d2c76bdaf04a`](https://testnet.cspr.live/transaction/7aaacbf79351637b4e72e37866e7f1f329da8d96d3574888ae90d2c76bdaf04a)
-- Refund resolution: [`44b34116d9d22b9fcae2925eadf11011fb7190ec6065169674de547508ea0c3a`](https://testnet.cspr.live/transaction/44b34116d9d22b9fcae2925eadf11011fb7190ec6065169674de547508ea0c3a)
+- Action: `6`
+- Execute: [`da6cf2f9bcd3cbe7d0c662da9f574f83eb0b988db79790ae6c2b902150123b3d`](https://testnet.cspr.live/transaction/da6cf2f9bcd3cbe7d0c662da9f574f83eb0b988db79790ae6c2b902150123b3d)
+- Refund resolution: [`178c9e297511734dc0110747191028c8a5f4066621b2bda073b8bf50a796117c`](https://testnet.cspr.live/transaction/178c9e297511734dc0110747191028c8a5f4066621b2bda073b8bf50a796117c)
 - Terminal state: `ResolvedRefund`

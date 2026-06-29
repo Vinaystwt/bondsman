@@ -17,18 +17,36 @@ import {
 } from '../backend/src/casper/actions.js';
 import {
   ensureSubaccountKeys,
+  keyMetadata,
   loadPrivateKey,
+  type AccountMetadata,
 } from '../backend/src/casper/keys.js';
+import {
+  KeyAlgorithm,
+  PrivateKey,
+} from '../backend/src/casper/sdk.js';
 import { createRpcClient } from '../backend/src/casper/rpc.js';
 import {
   fundToTarget,
   SUBACCOUNT_TARGET_MOTES,
 } from '../backend/src/casper/funding.js';
+import { requestDecision } from '../backend/src/agent/anthropic.js';
+import type { AgentDecision } from '../backend/src/agent/decision.js';
+import {
+  blake2b256,
+} from '../backend/src/agent/hashing.js';
+import type { AgentRun } from '../backend/src/agent/runner.js';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 loadDotenv({ path: join(repository, '.env'), quiet: true });
 
 export interface SeedState {
+  agent: AccountMetadata;
+  decisions: {
+    baseline: AgentDecision;
+    duplicate: AgentDecision;
+    clean: AgentDecision;
+  };
   baseline: {
     actionId: number;
     transactions: BondedTransactions;
@@ -40,6 +58,12 @@ export interface SeedState {
   };
 }
 
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
@@ -47,6 +71,89 @@ async function writeJson(path: string, value: unknown): Promise<void> {
     mode: 0o600,
   });
   await rename(temporary, path);
+}
+
+async function ensureDemoAgent(path: string) {
+  try {
+    return await loadPrivateKey(path);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'ENOENT'
+    ) {
+      throw error;
+    }
+  }
+  const generated = PrivateKey.generate(KeyAlgorithm.ED25519);
+  await writeFile(path, generated.toPem(), {
+    encoding: 'utf8',
+    mode: 0o600,
+    flag: 'wx',
+  });
+  return generated;
+}
+
+async function loadDecisions(): Promise<SeedState['decisions']> {
+  const path = join(repository, '.data/demo-decisions.json');
+  let cached: Partial<Record<string, AgentDecision>> = {};
+  try {
+    cached = JSON.parse(await readFile(path, 'utf8')) as Partial<
+      Record<string, AgentDecision>
+    >;
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'ENOENT'
+    ) {
+      throw error;
+    }
+  }
+  const apiKey = requiredEnvironment('ANTHROPIC_API_KEY');
+  const model =
+    process.env.AGENT_LLM_MODEL?.trim() ||
+    'claude-haiku-4-5-20251001';
+  const names = ['baseline', 'duplicate', 'clean'] as const;
+  for (const [index, name] of names.entries()) {
+    if (!cached[name]) {
+      cached[name] = await requestDecision(
+        demoInvoices[index]!,
+        apiKey,
+        model,
+      );
+      await writeJson(path, cached);
+    }
+    if (cached[name]?.decision !== 'approve') {
+      throw new Error(`Anthropic rejected the ${name} demo invoice`);
+    }
+  }
+  return cached as SeedState['decisions'];
+}
+
+export async function persistDemoAgentRun(
+  run: AgentRun,
+): Promise<void> {
+  const path = join(repository, '.data/agent-runs.json');
+  let runs: AgentRun[] = [];
+  try {
+    runs = JSON.parse(await readFile(path, 'utf8')) as AgentRun[];
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'ENOENT'
+    ) {
+      throw error;
+    }
+  }
+  runs = runs.filter(
+    (candidate) =>
+      candidate.actionId !== run.actionId &&
+      candidate.invoiceId !== run.invoiceId,
+  );
+  runs.push(run);
+  await writeJson(path, runs);
 }
 
 export async function seed(): Promise<SeedState> {
@@ -62,6 +169,9 @@ export async function seed(): Promise<SeedState> {
   const deployerPath = resolve(config.deployerSecretKeyPath);
   const deployer = await loadPrivateKey(deployerPath);
   const keys = await ensureSubaccountKeys(join(repository, '.keys'));
+  const demoSignerPath = join(repository, '.keys/demo-agent.pem');
+  const demoAgent = await ensureDemoAgent(demoSignerPath);
+  const demoAgentMetadata = keyMetadata(demoAgent);
   const rpc = createRpcClient(config);
   await fundToTarget(
     rpc,
@@ -69,6 +179,41 @@ export async function seed(): Promise<SeedState> {
     keys.agent.publicKey,
     SUBACCOUNT_TARGET_MOTES,
   );
+  await fundToTarget(
+    rpc,
+    deployer,
+    demoAgent.publicKey,
+    SUBACCOUNT_TARGET_MOTES,
+  );
+  const demoAgentAddress =
+    `account-hash-${demoAgentMetadata.accountHash}`;
+  const tokenTarget = 100_000n * 1_000_000_000n;
+  const tokenBalance = BigInt(
+    await readContract<string>({
+      repository,
+      config,
+      signerPath: deployerPath,
+      contract: 'MockCsprUSD',
+      entrypoint: 'balance_of',
+      arguments: ['--address', demoAgentAddress],
+    }),
+  );
+  if (tokenBalance < tokenTarget) {
+    await callContract({
+      repository,
+      config,
+      signerPath: deployerPath,
+      contract: 'MockCsprUSD',
+      entrypoint: 'mint',
+      arguments: [
+        '--to',
+        demoAgentAddress,
+        '--amount',
+        (tokenTarget - tokenBalance).toString(),
+      ],
+    });
+  }
+  const decisions = await loadDecisions();
   await fundToTarget(
     rpc,
     deployer,
@@ -110,19 +255,27 @@ export async function seed(): Promise<SeedState> {
     demoInvoices,
   );
 
-  const options = { repository, config, deployment };
+  const options = {
+    repository,
+    config,
+    deployment,
+    signerPath: demoSignerPath,
+    agentAccountHash: demoAgentMetadata.accountHash,
+  };
   let actions = await chainActions(options);
-  let baseline = actions.find((action) => action.invoiceId === 1045);
+  let baseline = actions.find(
+    (action) => action.invoiceId === demoInvoices[0]!.id,
+  );
   let baselineTransactions: BondedTransactions;
   if (!baseline) {
     const executed = await executeBondedInvoice(
       demoInvoices[0]!,
-      'Delivery confirmed; amount positive; invoice due.',
+      decisions.baseline.reasoning,
       options,
     );
     baseline = {
       actionId: executed.actionId,
-      invoiceId: 1045,
+      invoiceId: demoInvoices[0]!.id,
       windowEnd: 0,
       status: 'Executed',
     };
@@ -132,17 +285,19 @@ export async function seed(): Promise<SeedState> {
   }
 
   actions = await chainActions(options);
-  let duplicate = actions.find((action) => action.invoiceId === 1046);
+  let duplicate = actions.find(
+    (action) => action.invoiceId === demoInvoices[1]!.id,
+  );
   let duplicateTransactions: BondedTransactions;
   if (!duplicate) {
     const executed = await executeBondedInvoice(
       demoInvoices[1]!,
-      'Delivery confirmed; amount positive; invoice due.',
+      decisions.duplicate.reasoning,
       options,
     );
     duplicate = {
       actionId: executed.actionId,
-      invoiceId: 1046,
+      invoiceId: demoInvoices[1]!.id,
       windowEnd: 0,
       status: 'Executed',
     };
@@ -174,6 +329,8 @@ export async function seed(): Promise<SeedState> {
     }
   })();
   const state: SeedState = {
+    agent: demoAgentMetadata,
+    decisions,
     baseline: {
       actionId: baseline.actionId,
       transactions:
@@ -191,6 +348,30 @@ export async function seed(): Promise<SeedState> {
     },
   };
   await writeJson(join(repository, '.data/seed-state.json'), state);
+  for (const [invoice, action, decision, transactions] of [
+    [
+      demoInvoices[0]!,
+      state.baseline,
+      decisions.baseline,
+      state.baseline.transactions,
+    ],
+    [
+      demoInvoices[1]!,
+      state.duplicate,
+      decisions.duplicate,
+      state.duplicate.transactions,
+    ],
+  ] as const) {
+    await persistDemoAgentRun({
+      invoiceId: invoice.id,
+      actionId: action.actionId,
+      decision: decision.decision,
+      reasoning: decision.reasoning,
+      reasoningHash: blake2b256(decision.reasoning).toString('hex'),
+      confidence: decision.confidence,
+      transactions,
+    });
+  }
   return state;
 }
 

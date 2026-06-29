@@ -23,10 +23,12 @@ export interface BondedTransactions {
   execute: string;
 }
 
-interface ActionOptions {
+export interface ActionOptions {
   repository: string;
   config: BondsmanConfig;
   deployment: Deployment;
+  signerPath?: string;
+  agentAccountHash?: string;
 }
 
 interface RawAction {
@@ -39,7 +41,9 @@ export async function chainActions(
   options: ActionOptions,
 ): Promise<ChainActionView[]> {
   const result: ChainActionView[] = [];
-  const signerPath = join(options.repository, '.keys/agent.pem');
+  const signerPath =
+    options.signerPath ??
+    join(options.repository, '.keys/agent.pem');
   for (let actionId = 0; actionId < 10_000; actionId += 1) {
     try {
       const serialized = await readContract<string>({
@@ -69,7 +73,9 @@ export async function executeBondedInvoice(
   reasoning: string,
   options: ActionOptions,
 ): Promise<{ actionId: number; transactions: BondedTransactions }> {
-  const signerPath = join(options.repository, '.keys/agent.pem');
+  const signerPath =
+    options.signerPath ??
+    join(options.repository, '.keys/agent.pem');
   const actionId = (await chainActions(options)).length;
   const digest = blake2b256(reasoning);
   const initiate = await callContract({
@@ -99,7 +105,10 @@ export async function executeBondedInvoice(
       '--amount',
       invoice.amount,
       '--agent',
-      `account-hash-${options.deployment.accounts.agent.accountHash}`,
+      `account-hash-${
+        options.agentAccountHash ??
+        options.deployment.accounts.agent.accountHash
+      }`,
     ],
   });
   const approve = await callContract({

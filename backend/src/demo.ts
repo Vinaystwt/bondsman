@@ -2,7 +2,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
-import { seed } from '../../scripts/seed.js';
+import {
+  persistDemoAgentRun,
+  seed,
+} from '../../scripts/seed.js';
 import { loadConfig } from './config/env.js';
 import { deploymentSchema } from './shared/deployment.js';
 import { demoInvoices } from './shared/invoices.js';
@@ -13,6 +16,7 @@ import {
 } from './casper/actions.js';
 import { callContract } from './casper/odra-cli.js';
 import { readContract } from './casper/odra-cli.js';
+import { blake2b256 } from './agent/hashing.js';
 
 interface DemoResult {
   duplicate: {
@@ -56,8 +60,15 @@ if (isMain) {
       ),
     ),
   );
-  const options = { repository, config, deployment };
   const seedState = await seed();
+  const demoSignerPath = join(repository, '.keys/demo-agent.pem');
+  const options = {
+    repository,
+    config,
+    deployment,
+    signerPath: demoSignerPath,
+    agentAccountHash: seedState.agent.accountHash,
+  };
   let saved: SavedDemo | undefined;
   try {
     saved = JSON.parse(
@@ -71,7 +82,11 @@ if (isMain) {
   const duplicate = actions.find(
     (action) => action.actionId === seedState.duplicate.actionId,
   )!;
-  let slashResolve = saved?.duplicate.resolve ?? '';
+  const savedDuplicate =
+    saved?.duplicate.actionId === duplicate.actionId
+      ? saved.duplicate
+      : undefined;
+  let slashResolve = savedDuplicate?.resolve ?? '';
   if (duplicate.status === 'Challenged') {
     slashResolve = await callContract({
       repository,
@@ -84,12 +99,20 @@ if (isMain) {
   }
 
   actions = await chainActions(options);
-  let clean = actions.find((action) => action.invoiceId === 1047);
-  let cleanTransactions = saved?.cleanTransactions;
+  let clean = actions.find(
+    (action) => action.invoiceId === demoInvoices[2]!.id,
+  );
+  const savedClean =
+    clean && saved?.clean.actionId === clean.actionId
+      ? saved.clean
+      : undefined;
+  let cleanTransactions = savedClean
+    ? saved?.cleanTransactions
+    : undefined;
   if (!clean) {
     const executed = await executeBondedInvoice(
       demoInvoices[2]!,
-      'Delivery confirmed; amount positive; invoice due.',
+      seedState.decisions.clean.reasoning,
       options,
     );
     cleanTransactions = executed.transactions;
@@ -101,20 +124,20 @@ if (isMain) {
     const bond = await readContract<string>({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'BondsmanController',
       entrypoint: 'get_bond_required',
       arguments: [
         '--amount',
         demoInvoices[2]!.amount,
         '--agent',
-        `account-hash-${deployment.accounts.agent.accountHash}`,
+        `account-hash-${seedState.agent.accountHash}`,
       ],
     });
     const approve = await callContract({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'MockCsprUSD',
       entrypoint: 'approve',
       arguments: [
@@ -127,7 +150,7 @@ if (isMain) {
     const postBond = await callContract({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'BondsmanController',
       entrypoint: 'post_bond',
       arguments: ['--action_id', String(clean.actionId)],
@@ -135,7 +158,7 @@ if (isMain) {
     const execute = await callContract({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'BondsmanController',
       entrypoint: 'execute_action',
       arguments: ['--action_id', String(clean.actionId)],
@@ -153,7 +176,7 @@ if (isMain) {
     const execute = await callContract({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'BondsmanController',
       entrypoint: 'execute_action',
       arguments: ['--action_id', String(clean.actionId)],
@@ -168,7 +191,7 @@ if (isMain) {
       (action) => action.actionId === clean!.actionId,
     )!;
   }
-  let refundResolve = saved?.clean.resolve ?? '';
+  let refundResolve = savedClean?.resolve ?? '';
   if (clean.status === 'Executed') {
     const waitMs = Math.max(0, clean.windowEnd - Date.now() + 1_500);
     if (waitMs > 0) {
@@ -182,7 +205,7 @@ if (isMain) {
     refundResolve = await callContract({
       repository,
       config,
-      signerPath: join(repository, '.keys/agent.pem'),
+      signerPath: demoSignerPath,
       contract: 'BondsmanController',
       entrypoint: 'resolve_action',
       arguments: ['--action_id', String(clean.actionId)],
@@ -212,7 +235,7 @@ if (isMain) {
     clean: {
       actionId: clean.actionId,
       execute:
-        cleanTransactions?.execute ?? saved?.clean.execute ?? '',
+        cleanTransactions?.execute ?? savedClean?.execute ?? '',
       resolve: refundResolve,
       status: 'ResolvedRefund',
     },
@@ -223,5 +246,16 @@ if (isMain) {
     `${JSON.stringify(result, null, 2)}\n`,
     { mode: 0o600 },
   );
+  await persistDemoAgentRun({
+    invoiceId: demoInvoices[2]!.id,
+    actionId: clean.actionId,
+    decision: seedState.decisions.clean.decision,
+    reasoning: seedState.decisions.clean.reasoning,
+    reasoningHash: blake2b256(
+      seedState.decisions.clean.reasoning,
+    ).toString('hex'),
+    confidence: seedState.decisions.clean.confidence,
+    transactions: cleanTransactions ?? {},
+  });
   console.log(formatDemoOutput(result));
 }
