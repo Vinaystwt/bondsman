@@ -2,17 +2,16 @@ import type { FastifyInstance } from 'fastify';
 import type { Repository } from '../db/repositories.js';
 import type { Deployment } from '../shared/deployment.js';
 import type { ResolutionService } from './resolution.js';
+import type { DemoArmService } from './arm.js';
+import { actionDetail } from './action-detail.js';
 import { actionBodySchema } from './schemas.js';
-
-function explorer(hash: string): string {
-  return `https://testnet.cspr.live/transaction/${hash}`;
-}
 
 export function registerRoutes(
   server: FastifyInstance,
   repository: Repository,
   deployment: Deployment,
   resolution: ResolutionService,
+  arm: DemoArmService,
 ): void {
   server.get('/api/invoices', async () => repository.listInvoices());
   server.get('/api/actions', async () => repository.listActions());
@@ -20,22 +19,9 @@ export function registerRoutes(
     const actionId = Number(
       (request.params as { id: string }).id,
     );
-    const action = repository.action(actionId);
-    if (!action) return reply.code(404).send({ error: 'not found' });
-    return {
-      ...action,
-      events: repository.eventsForAction(actionId).map((event) => ({
-        ...event,
-        explorerLink: event.transactionHash
-          ? explorer(event.transactionHash)
-          : null,
-      })),
-      explorerLinks: Object.fromEntries(
-        Object.entries(action.transactions)
-          .filter(([, hash]) => hash.length === 64)
-          .map(([key, hash]) => [key, explorer(hash)]),
-      ),
-    };
+    const detail = actionDetail(repository, actionId);
+    if (!detail) return reply.code(404).send({ error: 'not found' });
+    return detail;
   });
   server.get('/api/agents/:address', async (request, reply) => {
     const address = (request.params as { address: string }).address;
@@ -62,5 +48,6 @@ export function registerRoutes(
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
   });
+  server.post('/api/demo/arm', async () => arm.arm());
   server.get('/api/deployments', async () => deployment);
 }

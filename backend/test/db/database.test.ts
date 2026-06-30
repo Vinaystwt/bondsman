@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { openDatabase } from '../../src/db/database.js';
+import {
+  deploymentDatabasePath,
+  openDatabase,
+} from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
 
 describe('database projection', () => {
+  it('isolates projections by controller hash', () => {
+    expect(
+      deploymentDatabasePath(
+        '/tmp/bondsman',
+        `hash-${'a'.repeat(64)}`,
+      ),
+    ).toBe(
+      `/tmp/bondsman/bondsman-${'a'.repeat(64)}.sqlite`,
+    );
+  });
+
   it('migrates and idempotently upserts events and actions', () => {
     const database = openDatabase(':memory:');
     const repository = new Repository(database);

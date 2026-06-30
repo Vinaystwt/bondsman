@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { loadConfig } from '../config/env.js';
 import { deploymentSchema } from '../shared/deployment.js';
-import { openDatabase } from '../db/database.js';
+import {
+  deploymentDatabasePath,
+  openDatabase,
+} from '../db/database.js';
 import { Repository } from '../db/repositories.js';
 import {
   reconcileChain,
@@ -18,8 +21,6 @@ const repositoryPath = resolve(
 loadDotenv({ path: join(repositoryPath, '.env'), quiet: true });
 const dataDirectory = join(repositoryPath, '.data');
 await mkdir(dataDirectory, { recursive: true });
-const database = openDatabase(join(dataDirectory, 'bondsman.sqlite'));
-const repository = new Repository(database);
 const deployment = deploymentSchema.parse(
   JSON.parse(
     await readFile(
@@ -28,6 +29,13 @@ const deployment = deploymentSchema.parse(
     ),
   ),
 );
+const database = openDatabase(
+  deploymentDatabasePath(
+    dataDirectory,
+    deployment.contracts.controller.contractHash,
+  ),
+);
+const repository = new Repository(database);
 const options = {
   repositoryPath,
   config: loadConfig(),

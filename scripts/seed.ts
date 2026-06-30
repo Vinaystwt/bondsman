@@ -35,7 +35,10 @@ import type { AgentDecision } from '../backend/src/agent/decision.js';
 import {
   blake2b256,
 } from '../backend/src/agent/hashing.js';
-import type { AgentRun } from '../backend/src/agent/runner.js';
+import {
+  persistAgentRun,
+  type AgentRun,
+} from '../backend/src/agent/runner.js';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 loadDotenv({ path: join(repository, '.env'), quiet: true });
@@ -134,26 +137,7 @@ async function loadDecisions(): Promise<SeedState['decisions']> {
 export async function persistDemoAgentRun(
   run: AgentRun,
 ): Promise<void> {
-  const path = join(repository, '.data/agent-runs.json');
-  let runs: AgentRun[] = [];
-  try {
-    runs = JSON.parse(await readFile(path, 'utf8')) as AgentRun[];
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !('code' in error) ||
-      error.code !== 'ENOENT'
-    ) {
-      throw error;
-    }
-  }
-  runs = runs.filter(
-    (candidate) =>
-      candidate.actionId !== run.actionId &&
-      candidate.invoiceId !== run.invoiceId,
-  );
-  runs.push(run);
-  await writeJson(path, runs);
+  await persistAgentRun(repository, run);
 }
 
 export async function seed(): Promise<SeedState> {

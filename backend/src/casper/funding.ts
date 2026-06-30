@@ -8,12 +8,24 @@ import {
 import { accountBalanceMotes } from './rpc.js';
 
 export const SUBACCOUNT_TARGET_MOTES = 400_000_000_000n;
+const MINIMUM_TRANSFER_MOTES = 2_500_000_000n;
 
 export function fundingShortfall(
   current: bigint,
   target: bigint,
 ): bigint {
   return current < target ? target - current : 0n;
+}
+
+export function transferableTopUp(
+  current: bigint,
+  target: bigint,
+): bigint {
+  const shortfall = fundingShortfall(current, target);
+  if (shortfall === 0n) return 0n;
+  return shortfall < MINIMUM_TRANSFER_MOTES
+    ? MINIMUM_TRANSFER_MOTES
+    : shortfall;
 }
 
 export function isMissingPurse(error: unknown): boolean {
@@ -55,7 +67,7 @@ export async function fundToTarget(
     if (!isMissingPurse(error)) throw error;
     balance = 0n;
   }
-  const amount = fundingShortfall(balance, targetMotes);
+  const amount = transferableTopUp(balance, targetMotes);
   if (amount === 0n) {
     return undefined;
   }

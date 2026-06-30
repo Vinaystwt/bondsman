@@ -55,7 +55,7 @@ async function nextActionId(
   throw new Error('unable to find the next action identifier');
 }
 
-async function persistRun(
+export async function persistAgentRun(
   repository: string,
   run: AgentRun,
 ): Promise<void> {
@@ -73,6 +73,13 @@ async function persistRun(
     ) {
       throw error;
     }
+  }
+  if (run.actionId !== undefined) {
+    runs = runs.filter(
+      (candidate) =>
+        candidate.actionId !== run.actionId &&
+        candidate.invoiceId !== run.invoiceId,
+    );
   }
   runs.push(run);
   const temporary = `${path}.${process.pid}.tmp`;
@@ -102,7 +109,7 @@ export async function runAgent(
     transactions: {},
   };
   if (decision.decision === 'reject') {
-    await persistRun(options.repository, base);
+    await persistAgentRun(options.repository, base);
     return base;
   }
 
@@ -173,6 +180,6 @@ export async function runAgent(
     actionId,
     transactions,
   };
-  await persistRun(options.repository, run);
+  await persistAgentRun(options.repository, run);
   return run;
 }

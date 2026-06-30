@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fundingShortfall,
   isMissingPurse,
+  transferableTopUp,
 } from '../../src/casper/funding.js';
 
 describe('fundingShortfall', () => {
@@ -9,6 +10,23 @@ describe('fundingShortfall', () => {
     expect(fundingShortfall(20n, 100n)).toBe(80n);
     expect(fundingShortfall(100n, 100n)).toBe(0n);
     expect(fundingShortfall(120n, 100n)).toBe(0n);
+  });
+});
+
+describe('transferableTopUp', () => {
+  it('rounds a nonzero shortfall up to Casper minimum transfer', () => {
+    expect(
+      transferableTopUp(
+        399_900_000_000n,
+        400_000_000_000n,
+      ),
+    ).toBe(2_500_000_000n);
+    expect(
+      transferableTopUp(
+        400_000_000_000n,
+        400_000_000_000n,
+      ),
+    ).toBe(0n);
   });
 });
 

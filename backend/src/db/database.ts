@@ -1,5 +1,17 @@
 import Database from 'better-sqlite3';
+import { join } from 'node:path';
 import { schema } from './schema.js';
+
+export function deploymentDatabasePath(
+  directory: string,
+  controllerHash: string,
+): string {
+  const hash = controllerHash.replace(/^hash-/, '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    throw new Error('invalid controller hash for projection database');
+  }
+  return join(directory, `bondsman-${hash}.sqlite`);
+}
 
 export function openDatabase(path: string): Database.Database {
   const database = new Database(path);

@@ -60,11 +60,23 @@ function fixture() {
       }),
     resolve: vi.fn().mockResolvedValue('d'.repeat(64)),
   };
+  const arm = {
+    arm: vi.fn().mockResolvedValue({
+      actionId: 5,
+      invoiceId: 2048,
+      status: 'Executed',
+      events: [],
+      explorerLinks: {
+        execute: `https://testnet.cspr.live/transaction/${'e'.repeat(64)}`,
+      },
+    }),
+  };
   return {
     database,
     repository,
     resolution,
-    server: buildServer(repository, deployment, resolution),
+    arm,
+    server: buildServer(repository, deployment, resolution, arm),
   };
 }
 
@@ -108,6 +120,27 @@ describe('REST routes', () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(context.resolution.resolve).toHaveBeenCalledWith(4);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('arms one fresh challengeable action', async () => {
+    const context = fixture();
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/api/demo/arm',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      actionId: 5,
+      status: 'Executed',
+      events: [],
+      explorerLinks: {
+        execute: expect.stringContaining('testnet.cspr.live'),
+      },
+    });
+    expect(context.arm.arm).toHaveBeenCalledTimes(1);
     await context.server.close();
     context.database.close();
   });
