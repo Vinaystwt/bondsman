@@ -46,6 +46,33 @@ export function retainTokenContract(
   return `${header}\n\n[[contracts]]${token.trimEnd()}\n`;
 }
 
+export function prepareRedeployRegistry(
+  source: string,
+  priorPackages: Record<string, string>,
+): string {
+  const blocks = source.split('[[contracts]]');
+  const header = blocks[0]?.trim() ?? '';
+  const kept = blocks.slice(1).filter((block) => {
+    const name = block.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+    const packageHash = block.match(
+      /^\s*package_hash\s*=\s*"(hash-[0-9a-f]{64})"/m,
+    )?.[1];
+    if (!name || !packageHash) return false;
+    if (name === 'MockCsprUSD') {
+      if (packageHash !== priorPackages.MockCsprUSD) {
+        throw new Error('token package hash does not match deployment');
+      }
+      return true;
+    }
+    return packageHash !== priorPackages[name];
+  });
+  return [
+    header,
+    ...kept.map((block) => `[[contracts]]${block.trimEnd()}`),
+    '',
+  ].join('\n\n');
+}
+
 function runOdraDeploy(environment: NodeJS.ProcessEnv): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(
@@ -91,9 +118,14 @@ export async function redeploy(): Promise<Deployment> {
   const prior = deploymentSchema.parse(
     JSON.parse(await readFile(deploymentPath, 'utf8')),
   );
-  const registry = retainTokenContract(
+  const registry = prepareRedeployRegistry(
     await readFile(registryPath, 'utf8'),
-    prior.contracts.mockCsprUsd.packageHash,
+    {
+      MockCsprUSD: prior.contracts.mockCsprUsd.packageHash,
+      BondVault: prior.contracts.bondVault.packageHash,
+      BondsmanController: prior.contracts.controller.packageHash,
+      InvoicePool: prior.contracts.invoicePool.packageHash,
+    },
   );
   await writeFile(registryPath, registry, 'utf8');
 

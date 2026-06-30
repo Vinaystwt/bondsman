@@ -8,16 +8,16 @@
       "contractHash": "hash-410af53a3a93196081eb3b8c7dafab120efeed826b30b23cbed3873203709668"
     },
     "bondVault": {
-      "packageHash": "hash-c186fafb66c07d16185d845098ce44022f5e41ec658b44632047f242be58fe9e",
-      "contractHash": "hash-256d38d33de00d86915c163c7458a9d0ce9ce2a087b31a457984cfe2ca423e42"
+      "packageHash": "hash-1fd15fc112007d0cd2a06ce571bdc9aa6fd0a1d61199294c4b8b8e3ae2183ca0",
+      "contractHash": "hash-80e67ef6955e1a5734168c109e18def082c596cc58dba87f50ab523bfe042db6"
     },
     "controller": {
-      "packageHash": "hash-2ed52e6c3a8709e7322f64011d563669483d96f5ac1816f395794dcaacc8f599",
-      "contractHash": "hash-d5bac55b8ce24a69ba78a11a95c13c708f28adaac1982bf7041af8784607ca44"
+      "packageHash": "hash-9bedae33a4f53adcaab4f6c74a2c214b051361e0fe85671be3f82f0ca4c24722",
+      "contractHash": "hash-6f1e1b47040f8b90f73b4bb7b8cc6303a18ae09b628fc4870c14eb6250303a2b"
     },
     "invoicePool": {
-      "packageHash": "hash-a9320ae95af3e12c8d43c8d7d810bf81144d7b76c9102030bb3c55577caed77c",
-      "contractHash": "hash-f3d6302f339b2de20ee1fbf92a5041cef10dc78df4ae20e38d33886573fc3297"
+      "packageHash": "hash-bb2077d5cc0d2d8340cfe8a3d6e4f7cecbeeb5b18888730d0e0e703c46bdec3d",
+      "contractHash": "hash-ada888facd119474d3fb5271f23e403aa7bc033b87def9945e1aa6b2906a0b0a"
     }
   },
   "accounts": {

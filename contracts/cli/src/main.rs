@@ -14,7 +14,7 @@ use odra_cli::{
     DeployedContractsContainer, DeployerExt, OdraCli,
 };
 
-const INSTALL_GAS: u64 = 500_000_000_000;
+const INSTALL_GAS: u64 = 350_000_000_000;
 const CALL_GAS: u64 = 50_000_000_000;
 const TOKEN_UNIT: u64 = 1_000_000_000;
 const AGENT_MINT: u64 = 500_000 * TOKEN_UNIT;

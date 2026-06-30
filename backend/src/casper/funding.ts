@@ -7,7 +7,7 @@ import {
 } from './sdk.js';
 import { accountBalanceMotes } from './rpc.js';
 
-export const SUBACCOUNT_TARGET_MOTES = 750_000_000_000n;
+export const SUBACCOUNT_TARGET_MOTES = 400_000_000_000n;
 
 export function fundingShortfall(
   current: bigint,
