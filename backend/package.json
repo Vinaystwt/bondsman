@@ -10,6 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deploy": "tsx ../scripts/deploy.ts",
+    "redeploy": "tsx ../scripts/redeploy.ts",
     "agent": "tsx src/agent/main.ts",
     "listener": "tsx src/listener/main.ts",
     "api": "tsx src/api/main.ts",

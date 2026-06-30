@@ -48,7 +48,7 @@ impl DeployScript for BondsmanDeploy {
                 vault: vault.address(),
                 pool: deployer,
                 token: token.address(),
-                window_secs: 300,
+                window_secs: 1_800,
                 challenger_bps: 5_000,
             },
             container,
