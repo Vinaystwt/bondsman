@@ -17,7 +17,10 @@ import {
 import {
   loadPrivateKey,
 } from '../casper/keys.js';
-import { createRpcClient } from '../casper/rpc.js';
+import {
+  accountBalanceMotes,
+  createRpcClient,
+} from '../casper/rpc.js';
 import type { BondsmanConfig } from '../config/env.js';
 import type { Repository } from '../db/repositories.js';
 import type { Deployment } from '../shared/deployment.js';
@@ -29,7 +32,7 @@ const TOKEN_UNIT = 1_000_000_000n;
 const AGENT_TOKEN_TARGET = 100_000n * TOKEN_UNIT;
 const POOL_TOKEN_TARGET = 500_000n * TOKEN_UNIT;
 const THIRTY_MINUTES_MS = 1_800_000;
-export const DEMO_GAS_TARGET_MOTES = 200_000_000_000n;
+export const DEMO_GAS_TARGET_MOTES = 300_000_000_000n;
 
 export interface DemoArmService {
   arm(options: {
@@ -85,6 +88,43 @@ export function isTransientRpcError(error: unknown): boolean {
   ].some((message) => error.message.includes(message));
 }
 
+export function isInsufficientFundsError(error: unknown): boolean {
+  return error instanceof Error &&
+    error.message.includes('Insufficient funds');
+}
+
+class DemoFundingUnavailableError extends Error {
+  readonly statusCode = 503;
+
+  constructor(cause: unknown) {
+    super('demo funding is temporarily unavailable', { cause });
+    this.name = 'DemoFundingUnavailableError';
+  }
+}
+
+export async function runFundedDemoAction<T>(
+  topUp: () => Promise<void>,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const attempt = async () => {
+    await topUp();
+    return operation();
+  };
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isInsufficientFundsError(error)) throw error;
+  }
+  try {
+    return await attempt();
+  } catch (error) {
+    if (isInsufficientFundsError(error)) {
+      throw new DemoFundingUnavailableError(error);
+    }
+    throw error;
+  }
+}
+
 async function ensureTokenTarget(
   repositoryPath: string,
   config: BondsmanConfig,
@@ -128,18 +168,13 @@ export function createDemoArmService(
   let queue: Promise<void> = Promise.resolve();
   let pendingInvoiceId: number | undefined;
 
-  const armOnce = async (reservedForManual: boolean) => {
-    const deployerPath = resolve(config.deployerSecretKeyPath);
-    const agentPath = join(repositoryPath, '.keys/agent.pem');
-    const challengerPath = join(
-      repositoryPath,
-      '.keys/challenger.pem',
+  const ensureDemoFunding = async () => {
+    const deployer = await loadPrivateKey(
+      resolve(config.deployerSecretKeyPath),
     );
-    const [deployer, agent, challenger] = await Promise.all([
-      loadPrivateKey(deployerPath),
-      loadPrivateKey(agentPath),
-      loadPrivateKey(challengerPath),
-    ]);
+    const agent = await loadPrivateKey(
+      join(repositoryPath, '.keys/agent.pem'),
+    );
     const rpc = createRpcClient(config);
     await fundToTarget(
       rpc,
@@ -147,12 +182,17 @@ export function createDemoArmService(
       agent.publicKey,
       DEMO_GAS_TARGET_MOTES,
     );
-    await fundToTarget(
-      rpc,
-      deployer,
-      challenger.publicKey,
-      DEMO_GAS_TARGET_MOTES,
-    );
+    const balance = await accountBalanceMotes(rpc, agent.publicKey);
+    if (balance < DEMO_GAS_TARGET_MOTES) {
+      throw new Error(
+        'Insufficient funds: demo agent top-up did not reach target',
+      );
+    }
+  };
+
+  const armOnce = async (reservedForManual: boolean) => {
+    const deployerPath = resolve(config.deployerSecretKeyPath);
+    const agentPath = join(repositoryPath, '.keys/agent.pem');
     const agentAddress =
       `account-hash-${deployment.accounts.agent.accountHash}`;
     const poolAddress = deployment.contracts.invoicePool.packageHash;
@@ -213,7 +253,7 @@ export function createDemoArmService(
           await callContract({
             repository: repositoryPath,
             config,
-            signerPath: deployerPath,
+            signerPath: agentPath,
             contract: 'InvoicePool',
             entrypoint: 'submit_invoice',
             arguments: [
@@ -460,7 +500,12 @@ export function createDemoArmService(
 
   return {
     arm({ reservedForManual }) {
-      const result = queue.then(() => armOnce(reservedForManual));
+      const result = queue.then(() =>
+        runFundedDemoAction(
+          ensureDemoFunding,
+          () => armOnce(reservedForManual),
+        ),
+      );
       queue = result.then(
         () => undefined,
         () => undefined,

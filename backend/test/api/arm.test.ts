@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertChallengeWindow,
   createInvoiceIdGenerator,
   DEMO_GAS_TARGET_MOTES,
+  isInsufficientFundsError,
   isTransientRpcError,
+  runFundedDemoAction,
 } from '../../src/api/arm.js';
 
 describe('createInvoiceIdGenerator', () => {
@@ -41,6 +43,56 @@ describe('assertChallengeWindow', () => {
 
 describe('demo gas target', () => {
   it('keeps existing subaccounts funded without forcing deployer top-ups', () => {
-    expect(DEMO_GAS_TARGET_MOTES).toBe(200_000_000_000n);
+    expect(DEMO_GAS_TARGET_MOTES).toBe(300_000_000_000n);
+  });
+});
+
+describe('runFundedDemoAction', () => {
+  it('preflights funding and retries one insufficient-funds failure', async () => {
+    const topUp = vi.fn().mockResolvedValue(undefined);
+    const operation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Insufficient funds'))
+      .mockResolvedValueOnce('armed');
+
+    await expect(
+      runFundedDemoAction(topUp, operation),
+    ).resolves.toBe('armed');
+    expect(topUp).toHaveBeenCalledTimes(2);
+    expect(operation).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry unrelated failures', async () => {
+    const topUp = vi.fn().mockResolvedValue(undefined);
+    const operation = vi
+      .fn()
+      .mockRejectedValue(new Error('NotDuplicate'));
+
+    await expect(runFundedDemoAction(topUp, operation)).rejects.toThrow(
+      'NotDuplicate',
+    );
+    expect(topUp).toHaveBeenCalledTimes(1);
+    expect(operation).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks exhausted insufficient funds as service unavailable', async () => {
+    const error = new Error('Insufficient funds');
+    const operation = vi.fn().mockRejectedValue(error);
+
+    await expect(
+      runFundedDemoAction(async () => undefined, operation),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(operation).toHaveBeenCalledTimes(2);
+  });
+
+  it('recognizes only explicit insufficient-funds errors', () => {
+    expect(
+      isInsufficientFundsError(new Error('Insufficient funds')),
+    ).toBe(true);
+    expect(
+      isInsufficientFundsError(new Error('network timeout')),
+    ).toBe(false);
   });
 });

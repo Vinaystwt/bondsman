@@ -346,6 +346,7 @@ hashes.
 - SQLite is a projection, never the source of contract truth. Reconciliation is idempotent and direct reads repair missed stream events.
 - Manual reservations and challenger origin are projection metadata because the deployed contracts intentionally do not encode UI ownership.
 - The watchdog rebuilds its paid-claim index from projected executed actions on every scan. The earliest paid fingerprint is the baseline; only later unreserved, unchallenged actions inside their window are candidates.
+- Both demo-arm routes preflight the shared agent to a 300 CSPR gas floor from the deployer. Invoice submission uses that funded signer, and an explicit insufficient-funds failure triggers one idempotent top-up and resume attempt before returning a service-unavailable error.
 - The controller has no owner slash function. A challenge succeeds only when InvoicePool proves that the action paid an already-recorded claim.
 
 ## Live arm evidence

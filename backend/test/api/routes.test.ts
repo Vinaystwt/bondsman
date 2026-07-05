@@ -162,6 +162,29 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('returns service unavailable when demo funding is exhausted', async () => {
+    const context = fixture();
+    context.arm.arm.mockRejectedValueOnce(
+      Object.assign(
+        new Error('demo funding is temporarily unavailable'),
+        { statusCode: 503 },
+      ),
+    );
+
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/api/demo/arm',
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      statusCode: 503,
+      error: 'Service Unavailable',
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
   it('exposes watchdog status and arms a non-reserved duplicate', async () => {
     const context = fixture();
     const watchdogAddress =
