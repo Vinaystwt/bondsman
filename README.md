@@ -11,8 +11,9 @@ No frontend is included. The stable integration boundaries are `deployments/test
 - `BondsmanController` computes risk-tier bonds, owns action lifecycle and reputation, and uses Casper block time in milliseconds. It computes `window_end = block_time_ms + window_secs * 1000`.
 - `InvoicePool` stores invoices, pays vendors, records the first paid claim, proves later duplicates, and accounts for its protection reserve.
 - The TypeScript agent calls Anthropic Haiku 4.5 once per invoice at temperature zero. The model receives no paid-claim registry or cross-invoice memory.
-- The listener reads CES event dictionaries, reconciles authoritative contract state, resolves expired clean actions, and projects into SQLite.
-- Fastify serves the projected state and owns challenge and resolution transactions.
+- The listener uses authenticated CSPR.cloud RPC and SSE with automatic public-node fallback, reconciles authoritative contract state, resolves expired clean actions, and projects into SQLite.
+- The watchdog independently detects repeated paid claim fingerprints, then challenges and resolves eligible duplicates with its own serialized signer account.
+- Fastify serves the projected state and owns the separately serialized manual challenge path.
 
 The vault performs both token transfers during a slash. The controller calls `pool.add_to_reserve(remainder)` only to update reserve accounting; it never transfers that amount twice.
 
@@ -46,15 +47,19 @@ Copy `.env.example` to `.env` and fill local secrets:
 ```dotenv
 DEPLOYER_SECRET_KEY_PATH=/absolute/path/to/secret_key.pem
 CHAIN_NAME=casper-test
+NODE_RPC_URL=https://node.testnet.cspr.cloud
+EVENTS_URL=https://node-sse.testnet.cspr.cloud/events/main
 CSPR_CLOUD_API_KEY=
 ANTHROPIC_API_KEY=
 AGENT_LLM_MODEL=claude-haiku-4-5-20251001
+WATCHDOG_DELAY_MS=30000
+WATCHDOG_POLL_MS=5000
 PORT=3001
 ```
 
-`CSPR_CLOUD_API_KEY` is optional. Without it, all reads and deploys use `https://node.testnet.casper.network/rpc`; event streaming may be slower. Secret PEM files, `.env`, `.keys/`, and `.data/` are ignored by Git. Key material and API keys are never logged.
+When `CSPR_CLOUD_API_KEY` is present, reads use the authenticated CSPR.cloud testnet RPC and event stream. A failed cloud request retries against `https://node.testnet.casper.network/rpc`; the listener also reconnects to the public event stream. Without the key, the public node is used directly. Secret PEM files, `.env`, `.keys/`, and `.data/` are ignored by Git. Key material and API keys are never logged.
 
-The deployer account was created in Casper Wallet, funded from the Casper testnet faucet, and exported as a secret PEM before running this repository. No further faucet action is required: deployment creates agent and challenger keys and funds each to an idempotent 400 CSPR operating target.
+The deployer account was created in Casper Wallet, funded from the Casper testnet faucet, and exported as a secret PEM before running this repository. Deployment creates the agent, challenger, and watchdog keys and funds their testnet gas targets idempotently.
 
 ## Install and run
 
@@ -68,6 +73,7 @@ npm run redeploy
 npm run seed
 npm run agent
 npm run listener
+npm run watchdog
 npm run api
 npm run demo
 ```
@@ -103,7 +109,7 @@ Returns seeded pending and paid invoices.
 
 ### `GET /api/actions`
 
-Returns every projected action with status, bond, deadline, reasoning, and transaction hashes.
+Returns every projected action with status, bond, deadline, reasoning, transaction hashes, `challengerType`, and `reservedForManual`.
 
 ```json
 [
@@ -112,7 +118,9 @@ Returns every projected action with status, bond, deadline, reasoning, and trans
     "invoiceId": 2046,
     "bondRequired": "2500000000000",
     "bondPosted": "2500000000000",
-    "status": "Challenged"
+    "status": "Challenged",
+    "challengerType": "manual",
+    "reservedForManual": false
   }
 ]
 ```
@@ -125,6 +133,8 @@ Returns one full lifecycle, reasoning text and digest, CES events, transaction h
 {
   "actionId": 3,
   "status": "Executed",
+  "challengerType": null,
+  "reservedForManual": true,
   "reasoningHash": "a8ad930f7e120b2ad0f707846c48a2dca7bd99a14bb30e0d760f2f21279fdaab",
   "events": [],
   "explorerLinks": {
@@ -160,13 +170,15 @@ Returns InvoicePool reserve accounting and the slash events that funded it.
 
 ### `POST /api/demo/arm`
 
-Creates a unique invoice with the seeded duplicate claim digest, then uses the existing agent account to initiate, approve, post its bond, and execute the payout. Calls are serialized, and transport failures are resumed only after authoritative state reads. Each successful call returns the same shape as `GET /api/actions/:id`.
+Creates a unique invoice with the seeded duplicate claim digest, then uses the existing agent account to initiate, approve, post its bond, and execute the payout. The action has `reservedForManual: true`, so the watchdog leaves it for a person. Calls are serialized, and transport failures are resumed only after authoritative state reads. Each successful call returns the same shape as `GET /api/actions/:id`.
 
 ```json
 {
   "actionId": 3,
   "invoiceId": 1782790776435,
   "status": "Executed",
+  "challengerType": null,
+  "reservedForManual": true,
   "bondRequired": "2500000000000",
   "windowEnd": 1782793103205,
   "transactions": {
@@ -181,9 +193,47 @@ Creates a unique invoice with the seeded duplicate claim digest, then uses the e
 
 The deployed Controller sets `window_end` exactly `1,800,000` milliseconds after the execution block time, so an armed action has a thirty-minute challenge window.
 
+### `GET /api/watchdog`
+
+Returns the daemon heartbeat, public account, recent completed catches, and its cumulative csprUSD reward in atomic units.
+
+```json
+{
+  "running": true,
+  "account": "account-hash-80b98aa54801f01eb434094bc8d6401b4c9ecab2396810d2ae250ef276608428",
+  "recentCatches": [
+    {
+      "actionId": 6,
+      "reward": "1250000000000",
+      "reasoning": "Action 6 repeats a claim fingerprint that an earlier executed payout already used.",
+      "challengeTx": "4c9b3a5e9c434b45d34dca78b348fb7a033ac59ea49b25bcc4ad40720fc2b683",
+      "resolveTx": "6e11a87a989eadadf87e724c47f58db92c3ce3b376ca5916fc850b841d890232",
+      "timestamp": "2026-07-05T12:00:00.000Z"
+    }
+  ],
+  "totalRewardEarned": "1250000000000"
+}
+```
+
+### `POST /api/watchdog/demo`
+
+Creates and executes a fresh duplicate action with `reservedForManual: false`. It returns the full action record immediately after execution; clients can poll that action or `GET /api/watchdog` while the daemon waits `WATCHDOG_DELAY_MS` and catches it.
+
+```json
+{
+  "actionId": 6,
+  "status": "Executed",
+  "challengerType": null,
+  "reservedForManual": false,
+  "bondPosted": "2500000000000",
+  "events": [],
+  "explorerLinks": {}
+}
+```
+
 ### `POST /api/challenge`
 
-The backend signs with the challenger account, submits `challenge_action`, waits for confirmation, then submits `resolve_action`.
+The backend signs with the manual challenger account, submits `challenge_action`, waits for confirmation, then submits `resolve_action`. Requests for that signer are serialized. A resolved action reports `challengerType: "manual"`; autonomous catches report `"watchdog"`.
 
 ```json
 { "actionId": 2 }
@@ -222,6 +272,8 @@ Returns the exact contents of `deployments/testnet.json`.
 - Initial agent and pool mints are 500,000 and 2,000,000 csprUSD. Seed idempotently mints a 100,000 csprUSD operating balance to the fresh demo agent.
 - Install gas is capped at 350 CSPR per contract call and normal calls at 50 CSPR; Casper refunds unused payment.
 - SQLite is a projection, never the source of contract truth. Reconciliation is idempotent and direct reads repair missed stream events.
+- Manual reservations and challenger origin are projection metadata because the deployed contracts intentionally do not encode UI ownership.
+- The watchdog rebuilds its paid-claim index from projected executed actions on every scan. The earliest paid fingerprint is the baseline; only later unreserved, unchallenged actions inside their window are candidates.
 - The controller has no owner slash function. A challenge succeeds only when InvoicePool proves that the action paid an already-recorded claim.
 
 ## Live arm evidence

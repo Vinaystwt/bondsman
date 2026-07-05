@@ -48,6 +48,20 @@ export function registerRoutes(
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
   });
-  server.post('/api/demo/arm', async () => arm.arm());
+  server.post('/api/demo/arm', async () =>
+    arm.arm({ reservedForManual: true }),
+  );
+  server.get('/api/watchdog', async () => {
+    const summary = repository.watchdogSummary();
+    return {
+      ...summary,
+      account:
+        summary.account ??
+        `account-hash-${deployment.accounts.watchdog.accountHash}`,
+    };
+  });
+  server.post('/api/watchdog/demo', async () =>
+    arm.arm({ reservedForManual: false }),
+  );
   server.get('/api/deployments', async () => deployment);
 }

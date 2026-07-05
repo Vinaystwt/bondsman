@@ -32,7 +32,9 @@ const POOL_TOKEN_TARGET = 500_000n * TOKEN_UNIT;
 const THIRTY_MINUTES_MS = 1_800_000;
 
 export interface DemoArmService {
-  arm(): Promise<NonNullable<ReturnType<typeof actionDetail>>>;
+  arm(options: {
+    reservedForManual: boolean;
+  }): Promise<NonNullable<ReturnType<typeof actionDetail>>>;
 }
 
 export function createInvoiceIdGenerator(
@@ -126,7 +128,7 @@ export function createDemoArmService(
   let queue: Promise<void> = Promise.resolve();
   let pendingInvoiceId: number | undefined;
 
-  const armOnce = async () => {
+  const armOnce = async (reservedForManual: boolean) => {
     const deployerPath = resolve(config.deployerSecretKeyPath);
     const agentPath = join(repositoryPath, '.keys/agent.pem');
     const challengerPath = join(
@@ -440,7 +442,7 @@ export function createDemoArmService(
       status: raw.status,
       challenger: null,
       challengerType: null,
-      reservedForManual: true,
+      reservedForManual,
       transactions,
     });
     await persistAgentRun(repositoryPath, {
@@ -457,8 +459,8 @@ export function createDemoArmService(
   };
 
   return {
-    arm() {
-      const result = queue.then(armOnce);
+    arm({ reservedForManual }) {
+      const result = queue.then(() => armOnce(reservedForManual));
       queue = result.then(
         () => undefined,
         () => undefined,

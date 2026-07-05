@@ -64,15 +64,21 @@ function fixture() {
     resolve: vi.fn().mockResolvedValue('d'.repeat(64)),
   };
   const arm = {
-    arm: vi.fn().mockResolvedValue({
-      actionId: 5,
-      invoiceId: 2048,
-      status: 'Executed',
-      events: [],
-      explorerLinks: {
-        execute: `https://testnet.cspr.live/transaction/${'e'.repeat(64)}`,
-      },
-    }),
+    arm: vi
+      .fn()
+      .mockImplementation(
+        async ({ reservedForManual }: { reservedForManual: boolean }) => ({
+          actionId: 5,
+          invoiceId: 2048,
+          status: 'Executed',
+          challengerType: null,
+          reservedForManual,
+          events: [],
+          explorerLinks: {
+            execute: `https://testnet.cspr.live/transaction/${'e'.repeat(64)}`,
+          },
+        }),
+      ),
   };
   return {
     database,
@@ -102,6 +108,12 @@ describe('REST routes', () => {
         await context.server.inject('/api/actions/4')
       ).json().explorerLinks.execute,
     ).toContain('testnet.cspr.live');
+    expect(
+      (await context.server.inject('/api/actions')).json()[0],
+    ).toMatchObject({
+      challengerType: null,
+      reservedForManual: false,
+    });
     await context.server.close();
     context.database.close();
   });
@@ -143,7 +155,42 @@ describe('REST routes', () => {
         execute: expect.stringContaining('testnet.cspr.live'),
       },
     });
-    expect(context.arm.arm).toHaveBeenCalledTimes(1);
+    expect(context.arm.arm).toHaveBeenCalledWith({
+      reservedForManual: true,
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('exposes watchdog status and arms a non-reserved duplicate', async () => {
+    const context = fixture();
+    const watchdogAddress =
+      `account-hash-${deployment.accounts.watchdog.accountHash}`;
+    context.repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
+
+    const status = await context.server.inject('/api/watchdog');
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({
+      running: true,
+      account: watchdogAddress,
+      recentCatches: [],
+      totalRewardEarned: '0',
+    });
+
+    const demo = await context.server.inject({
+      method: 'POST',
+      url: '/api/watchdog/demo',
+    });
+    expect(demo.statusCode).toBe(200);
+    expect(demo.json()).toMatchObject({
+      actionId: 5,
+      status: 'Executed',
+      challengerType: null,
+      reservedForManual: false,
+    });
+    expect(context.arm.arm).toHaveBeenCalledWith({
+      reservedForManual: false,
+    });
     await context.server.close();
     context.database.close();
   });

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
 import { callContract } from '../casper/odra-cli.js';
+import { SignerQueue } from '../casper/signer-queue.js';
 
 export interface ResolutionService {
   challengeAndResolve(
@@ -17,6 +18,7 @@ export function createResolutionService(
     repositoryPath,
     '.keys/challenger.pem',
   );
+  const queue = new SignerQueue();
   const call = (entrypoint: string, actionId: number) =>
     callContract({
       repository: repositoryPath,
@@ -27,11 +29,13 @@ export function createResolutionService(
       arguments: ['--action_id', String(actionId)],
     });
   return {
-    async challengeAndResolve(actionId) {
-      const challenge = await call('challenge_action', actionId);
-      const resolve = await call('resolve_action', actionId);
-      return { challenge, resolve };
-    },
-    resolve: (actionId) => call('resolve_action', actionId),
+    challengeAndResolve: (actionId) =>
+      queue.run(async () => {
+        const challenge = await call('challenge_action', actionId);
+        const resolve = await call('resolve_action', actionId);
+        return { challenge, resolve };
+      }),
+    resolve: (actionId) =>
+      queue.run(() => call('resolve_action', actionId)),
   };
 }
