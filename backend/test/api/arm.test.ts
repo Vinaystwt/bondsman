@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertChallengeWindow,
   createInvoiceIdGenerator,
+  DEMO_GAS_TARGET_MOTES,
   isTransientRpcError,
 } from '../../src/api/arm.js';
 
@@ -35,5 +36,11 @@ describe('assertChallengeWindow', () => {
     expect(() =>
       assertChallengeWindow(10_000, 1_809_999),
     ).toThrow('thirty minutes');
+  });
+});
+
+describe('demo gas target', () => {
+  it('keeps existing subaccounts funded without forcing deployer top-ups', () => {
+    expect(DEMO_GAS_TARGET_MOTES).toBe(200_000_000_000n);
   });
 });

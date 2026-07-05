@@ -13,7 +13,6 @@ import {
 } from '../casper/odra-cli.js';
 import {
   fundToTarget,
-  SUBACCOUNT_TARGET_MOTES,
 } from '../casper/funding.js';
 import {
   loadPrivateKey,
@@ -30,6 +29,7 @@ const TOKEN_UNIT = 1_000_000_000n;
 const AGENT_TOKEN_TARGET = 100_000n * TOKEN_UNIT;
 const POOL_TOKEN_TARGET = 500_000n * TOKEN_UNIT;
 const THIRTY_MINUTES_MS = 1_800_000;
+export const DEMO_GAS_TARGET_MOTES = 200_000_000_000n;
 
 export interface DemoArmService {
   arm(options: {
@@ -145,13 +145,13 @@ export function createDemoArmService(
       rpc,
       deployer,
       agent.publicKey,
-      SUBACCOUNT_TARGET_MOTES,
+      DEMO_GAS_TARGET_MOTES,
     );
     await fundToTarget(
       rpc,
       deployer,
       challenger.publicKey,
-      SUBACCOUNT_TARGET_MOTES,
+      DEMO_GAS_TARGET_MOTES,
     );
     const agentAddress =
       `account-hash-${deployment.accounts.agent.accountHash}`;
