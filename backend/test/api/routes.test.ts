@@ -194,4 +194,52 @@ describe('REST routes', () => {
     await context.server.close();
     context.database.close();
   });
+
+  it('requires the sandbox payment envelope for claim verification', async () => {
+    const context = fixture();
+    const unpaid = await context.server.inject({
+      method: 'POST',
+      url: '/api/verify',
+      payload: { claimHash: 'aa' },
+    });
+    expect(unpaid.statusCode).toBe(402);
+    expect(unpaid.headers['x-payment-network']).toBe('casper');
+    expect(unpaid.headers['x-payment-simulated']).toBe('true');
+    expect(unpaid.json()).toMatchObject({
+      payment: {
+        mode: 'sandbox',
+        simulated: true,
+        settled: false,
+      },
+    });
+
+    const paid = await context.server.inject({
+      method: 'POST',
+      url: '/api/verify',
+      headers: {
+        'x-payment-network': 'casper',
+        'x-payment':
+          `casper:01${'a'.repeat(64)}:1000000:` +
+          `sig_ed25519_${'b'.repeat(128)}`,
+      },
+      payload: { claimHash: 'aa' },
+    });
+    expect(paid.statusCode).toBe(200);
+    expect(paid.json()).toEqual({
+      claimHash: 'aa',
+      collidesWithPaidClaim: true,
+      matchingActionIds: [4],
+      payment: {
+        mode: 'sandbox',
+        simulated: true,
+        settled: false,
+        network: 'casper',
+        amount: '1000000',
+        payer: `01${'a'.repeat(64)}`,
+        transactionHash: null,
+      },
+    });
+    await context.server.close();
+    context.database.close();
+  });
 });

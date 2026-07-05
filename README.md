@@ -54,6 +54,7 @@ ANTHROPIC_API_KEY=
 AGENT_LLM_MODEL=claude-haiku-4-5-20251001
 WATCHDOG_DELAY_MS=30000
 WATCHDOG_POLL_MS=5000
+X402_VERIFY_PRICE=1000000
 PORT=3001
 ```
 
@@ -264,6 +265,45 @@ Manually triggers resolution for an already challenged action or an expired clea
 ### `GET /api/deployments`
 
 Returns the exact contents of `deployments/testnet.json`.
+
+### `POST /api/verify`
+
+Checks a supplied `claimHash` or `actionId` for a collision with an earlier paid claim. This endpoint currently uses a clearly labeled x402 sandbox gate. A request without payment metadata receives HTTP 402 plus:
+
+```text
+X-Payment-Address: <testnet payee public key>
+X-Payment-Amount: 1000000
+X-Payment-Network: casper
+X-Payment-Simulated: true
+```
+
+Retry with the Casper envelope:
+
+```text
+X-Payment: casper:<ed25519-public-key>:1000000:sig_ed25519_<signature>
+X-Payment-Network: casper
+```
+
+```json
+{
+  "claimHash": "9a86f...",
+  "collidesWithPaidClaim": true,
+  "matchingActionIds": [0],
+  "payment": {
+    "mode": "sandbox",
+    "simulated": true,
+    "settled": false,
+    "network": "casper",
+    "amount": "1000000",
+    "payer": "01a3b5c7d9e1f2...",
+    "transactionHash": null
+  }
+}
+```
+
+The sandbox validates the network, amount, Ed25519 public-key shape, and signature envelope shape. It does not claim cryptographic authorization or move tokens.
+
+The authenticated CSPR.cloud facilitator probe is live and reports support for the `exact` scheme on `casper:casper-test`. Real settlement requires a CEP-18 token with `transfer_with_authorization` and typed authorization support. The deployed MockCsprUSD intentionally has no such entry point, and this task forbids replacing or changing it. The integration path is therefore to deploy a compatible payment asset in a later contract-scoped change, then forward the facilitator’s real `/verify` and `/settle` receipts here.
 
 ## MCP server
 

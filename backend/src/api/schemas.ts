@@ -5,3 +5,8 @@ export const actionBodySchema = z
     actionId: z.number().int().nonnegative(),
   })
   .strict();
+
+export const verifyBodySchema = z.union([
+  z.object({ claimHash: z.string().min(1) }).strict(),
+  z.object({ actionId: z.number().int().nonnegative() }).strict(),
+]);
