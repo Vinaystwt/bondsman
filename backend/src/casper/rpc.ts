@@ -8,14 +8,64 @@ import type { BondsmanConfig } from '../config/env.js';
 
 const HASH_PATTERN = /^hash-[0-9a-f]{64}$/;
 
-export function createRpcClient(config: BondsmanConfig): InstanceType<typeof RpcClient> {
-  const handler = new HttpHandler(config.nodeRpcUrl, 'fetch');
-  if (config.cloudApiKey) {
-    handler.setCustomHeaders({
-      authorization: config.cloudApiKey,
-    });
+export function withRpcFallback<T extends object>(
+  primary: T,
+  fallback: T,
+): T {
+  return new Proxy(primary, {
+    get(target, property) {
+      const primaryValue = Reflect.get(target, property);
+      if (typeof primaryValue !== 'function') return primaryValue;
+      return (...arguments_: unknown[]) => {
+        try {
+          const result = Reflect.apply(primaryValue, target, arguments_);
+          if (
+            result &&
+            typeof result === 'object' &&
+            'catch' in result &&
+            typeof result.catch === 'function'
+          ) {
+            return result.catch(() => {
+              const fallbackValue = Reflect.get(fallback, property);
+              return Reflect.apply(
+                fallbackValue as (...values: unknown[]) => unknown,
+                fallback,
+                arguments_,
+              );
+            });
+          }
+          return result;
+        } catch {
+          const fallbackValue = Reflect.get(fallback, property);
+          return Reflect.apply(
+            fallbackValue as (...values: unknown[]) => unknown,
+            fallback,
+            arguments_,
+          );
+        }
+      };
+    },
+  });
+}
+
+function rpcClient(
+  url: string,
+  authorization?: string,
+): InstanceType<typeof RpcClient> {
+  const handler = new HttpHandler(url, 'fetch');
+  if (authorization) {
+    handler.setCustomHeaders({ Authorization: authorization });
   }
   return new RpcClient(handler);
+}
+
+export function createRpcClient(config: BondsmanConfig): InstanceType<typeof RpcClient> {
+  const primary = rpcClient(config.nodeRpcUrl, config.cloudApiKey);
+  if (!config.cloudApiKey) return primary;
+  return withRpcFallback(
+    primary,
+    rpcClient(config.publicNodeRpcUrl),
+  );
 }
 
 export async function accountBalanceMotes(

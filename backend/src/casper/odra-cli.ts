@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
+import { publicFallbackConfig } from '../config/env.js';
 
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
 const TRANSACTION_PATTERN =
@@ -110,17 +111,22 @@ export async function readContract<T>(
     arguments: string[];
   },
 ): Promise<T> {
-  const output = await runOdraCommand({
-    repository: options.repository,
-    config: options.config,
-    signerPath: options.signerPath,
-    json: true,
-    arguments: [
-      'contract',
-      options.contract,
-      options.entrypoint,
-      ...options.arguments,
-    ],
+  const command = (config: BondsmanConfig) =>
+    runOdraCommand({
+      repository: options.repository,
+      config,
+      signerPath: options.signerPath,
+      json: true,
+      arguments: [
+        'contract',
+        options.contract,
+        options.entrypoint,
+        ...options.arguments,
+      ],
+    });
+  const output = await command(options.config).catch((error) => {
+    if (!options.config.cloudApiKey) throw error;
+    return command(publicFallbackConfig(options.config));
   });
   const parsed = JSON.parse(output) as { result: T };
   return parsed.result;
@@ -137,17 +143,22 @@ export async function readEvents(
     count?: number;
   },
 ): Promise<OdraEvent[]> {
-  const output = await runOdraCommand({
-    repository: options.repository,
-    config: options.config,
-    signerPath: options.signerPath,
-    json: true,
-    arguments: [
-      'print-events',
-      options.contract,
-      '--number',
-      String(options.count ?? 49),
-    ],
+  const command = (config: BondsmanConfig) =>
+    runOdraCommand({
+      repository: options.repository,
+      config,
+      signerPath: options.signerPath,
+      json: true,
+      arguments: [
+        'print-events',
+        options.contract,
+        '--number',
+        String(options.count ?? 49),
+      ],
+    });
+  const output = await command(options.config).catch((error) => {
+    if (!options.config.cloudApiKey) throw error;
+    return command(publicFallbackConfig(options.config));
   });
   const parsed = JSON.parse(output) as { events: OdraEvent[] };
   return parsed.events;

@@ -4,6 +4,9 @@ export interface BondsmanConfig {
   nodeRpcUrl: string;
   nodeAddress: string;
   eventsUrl: string;
+  publicNodeRpcUrl: string;
+  publicNodeAddress: string;
+  publicEventsUrl: string;
   cloudApiKey?: string;
   usingPublicRpc: boolean;
 }
@@ -47,6 +50,9 @@ export function loadConfig(
       nodeRpcUrl: PUBLIC_RPC_URL,
       nodeAddress: PUBLIC_NODE_ADDRESS,
       eventsUrl: PUBLIC_EVENTS_URL,
+      publicNodeRpcUrl: PUBLIC_RPC_URL,
+      publicNodeAddress: PUBLIC_NODE_ADDRESS,
+      publicEventsUrl: PUBLIC_EVENTS_URL,
       usingPublicRpc: true,
     };
   }
@@ -61,8 +67,24 @@ export function loadConfig(
     nodeAddress,
     eventsUrl:
       env.EVENTS_URL?.trim() ||
-      'https://node.testnet.cspr.cloud/events',
+      'https://node-sse.testnet.cspr.cloud/events/main',
+    publicNodeRpcUrl: PUBLIC_RPC_URL,
+    publicNodeAddress: PUBLIC_NODE_ADDRESS,
+    publicEventsUrl: PUBLIC_EVENTS_URL,
     cloudApiKey,
     usingPublicRpc: false,
+  };
+}
+
+export function publicFallbackConfig(
+  config: BondsmanConfig,
+): BondsmanConfig {
+  const { cloudApiKey: _cloudApiKey, ...withoutCloudKey } = config;
+  return {
+    ...withoutCloudKey,
+    nodeRpcUrl: config.publicNodeRpcUrl,
+    nodeAddress: config.publicNodeAddress,
+    eventsUrl: config.publicEventsUrl,
+    usingPublicRpc: true,
   };
 }

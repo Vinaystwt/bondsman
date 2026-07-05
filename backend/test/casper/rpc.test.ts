@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   latestContractHash,
   parseOdraContracts,
+  withRpcFallback,
 } from '../../src/casper/rpc.js';
 
 describe('parseOdraContracts', () => {
@@ -60,5 +61,38 @@ describe('latestContractHash', () => {
     expect(() =>
       latestContractHash({ storedValue: { contractPackage: {} } }),
     ).toThrow('contract entries');
+  });
+});
+
+describe('withRpcFallback', () => {
+  it('retries a rejected primary RPC method on the public client', async () => {
+    const primary = {
+      query: async () => {
+        throw new Error('cloud unavailable');
+      },
+    };
+    const fallback = {
+      query: async (value: string) => `public:${value}`,
+    };
+
+    const client = withRpcFallback(primary, fallback);
+
+    await expect(client.query('state')).resolves.toBe('public:state');
+  });
+
+  it('does not call the public client when cloud succeeds', async () => {
+    let fallbackCalls = 0;
+    const client = withRpcFallback(
+      { query: async () => 'cloud' },
+      {
+        query: async () => {
+          fallbackCalls += 1;
+          return 'public';
+        },
+      },
+    );
+
+    await expect(client.query()).resolves.toBe('cloud');
+    expect(fallbackCalls).toBe(0);
   });
 });

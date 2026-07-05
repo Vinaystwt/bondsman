@@ -13,6 +13,7 @@ import {
   reconcileChain,
   resolveExpiredClean,
 } from './reconcile.js';
+import { streamEventWakeups } from './event-stream.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -56,5 +57,21 @@ async function tick(): Promise<void> {
 
 await tick();
 if (!process.argv.includes('--once')) {
-  setInterval(() => void tick().catch(console.error), 20_000);
+  let queue = Promise.resolve();
+  let debounce: NodeJS.Timeout | undefined;
+  const scheduleTick = () => {
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      queue = queue.then(tick).catch(console.error);
+    }, 500);
+  };
+  setInterval(scheduleTick, 20_000);
+  const controller = new AbortController();
+  process.once('SIGINT', () => controller.abort());
+  process.once('SIGTERM', () => controller.abort());
+  void streamEventWakeups(
+    options.config,
+    scheduleTick,
+    controller.signal,
+  ).catch(console.error);
 }

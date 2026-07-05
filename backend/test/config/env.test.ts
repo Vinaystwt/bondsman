@@ -28,4 +28,26 @@ describe('loadConfig', () => {
     );
     expect(config.usingPublicRpc).toBe(true);
   });
+
+  it('uses the official authenticated CSPR.cloud node endpoints', () => {
+    const config = loadConfig({
+      CHAIN_NAME: 'casper-test',
+      DEPLOYER_SECRET_KEY_PATH: '/tmp/deployer.pem',
+      CSPR_CLOUD_API_KEY: 'cloud-token',
+    });
+
+    expect(config.nodeRpcUrl).toBe(
+      'https://node.testnet.cspr.cloud/rpc',
+    );
+    expect(config.eventsUrl).toBe(
+      'https://node-sse.testnet.cspr.cloud/events/main',
+    );
+    expect(config.publicNodeRpcUrl).toBe(
+      'https://node.testnet.casper.network/rpc',
+    );
+    expect(config.publicEventsUrl).toBe(
+      'https://node.testnet.casper.network/events',
+    );
+    expect(config.cloudApiKey).toBe('cloud-token');
+  });
 });
