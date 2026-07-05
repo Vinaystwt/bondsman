@@ -98,6 +98,7 @@ describe('database projection', () => {
     repository.recordWatchdogCatch(catchRecord);
     repository.recordWatchdogCatch(catchRecord);
 
+    expect(repository.watchdogCatch(7)).toEqual(catchRecord);
     expect(repository.watchdogSummary()).toEqual({
       running: false,
       account: null,

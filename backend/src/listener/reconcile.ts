@@ -237,6 +237,7 @@ export async function reconcileChain(
     const action = JSON.parse(serialized) as ChainAction;
     const run = runs.find((candidate) => candidate.actionId === actionId);
     const projected = options.repository.action(actionId);
+    const watchdogCatch = options.repository.watchdogCatch(actionId);
     const challenger =
       action.challenger === 'None'
         ? null
@@ -270,6 +271,12 @@ export async function reconcileChain(
             (entry): entry is [string, string] => !!entry[1],
           ),
           )),
+        ...(watchdogCatch
+          ? {
+              challenge: watchdogCatch.challengeTx,
+              resolve: watchdogCatch.resolveTx,
+            }
+          : {}),
       },
     };
     options.repository.upsertAction(record);

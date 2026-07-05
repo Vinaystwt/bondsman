@@ -310,6 +310,34 @@ export class Repository {
     );
   }
 
+  watchdogCatch(actionId: number): WatchdogCatchRecord | undefined {
+    const row = this.database
+      .prepare(
+        `SELECT action_id, reward, reasoning, challenge_tx, resolve_tx,
+          timestamp FROM watchdog_catches WHERE action_id = ?`,
+      )
+      .get(actionId) as
+      | {
+          action_id: number;
+          reward: string;
+          reasoning: string;
+          challenge_tx: string;
+          resolve_tx: string;
+          timestamp: string;
+        }
+      | undefined;
+    return row
+      ? {
+          actionId: row.action_id,
+          reward: row.reward,
+          reasoning: row.reasoning,
+          challengeTx: row.challenge_tx,
+          resolveTx: row.resolve_tx,
+          timestamp: row.timestamp,
+        }
+      : undefined;
+  }
+
   setWatchdogHeartbeat(account: string, nowMs: number): void {
     this.database
       .prepare(
