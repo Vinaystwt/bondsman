@@ -206,14 +206,14 @@ Returns the daemon heartbeat, public account, recent completed catches, and its 
   "recentCatches": [
     {
       "actionId": 6,
-      "reward": "1250000000000",
+      "reward": "1500000000000",
       "reasoning": "Action 6 repeats a claim fingerprint that an earlier executed payout already used.",
-      "challengeTx": "4c9b3a5e9c434b45d34dca78b348fb7a033ac59ea49b25bcc4ad40720fc2b683",
-      "resolveTx": "6e11a87a989eadadf87e724c47f58db92c3ce3b376ca5916fc850b841d890232",
-      "timestamp": "2026-07-05T12:00:00.000Z"
+      "challengeTx": "27e2edff3979f7d87310f1e6ade1148978ab0f37da44b62e7f5738727cf94f1f",
+      "resolveTx": "1351c153b1ff2e416a81b4e6457478f827560a57b4eb3d35a8713b83124d9483",
+      "timestamp": "2026-07-05T13:48:05.000Z"
     }
   ],
-  "totalRewardEarned": "1250000000000"
+  "totalRewardEarned": "1500000000000"
 }
 ```
 
