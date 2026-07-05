@@ -14,12 +14,14 @@
     "agent": "tsx src/agent/main.ts",
     "listener": "tsx src/listener/main.ts",
     "watchdog": "tsx src/watchdog/main.ts",
+    "mcp": "tsx src/mcp/main.ts",
     "api": "tsx src/api/main.ts",
     "seed": "tsx ../scripts/seed.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.106.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@noble/hashes": "1.8.0",
     "better-sqlite3": "12.11.1",
     "casper-js-sdk": "5.0.12",

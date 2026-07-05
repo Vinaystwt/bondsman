@@ -75,6 +75,7 @@ npm run agent
 npm run listener
 npm run watchdog
 npm run api
+npm run mcp
 npm run demo
 ```
 
@@ -263,6 +264,37 @@ Manually triggers resolution for an already challenged action or an expired clea
 ### `GET /api/deployments`
 
 Returns the exact contents of `deployments/testnet.json`.
+
+## MCP server
+
+`npm run mcp` starts a standard MCP stdio server backed by the same testnet projection and signer configuration. Keep `npm run listener` running to maintain fresh projected action and reputation reads. The server exposes:
+
+- `get_action(actionId)` and `list_actions()` for action state
+- `get_reputation(agentAddress)` for clean, slashed, and score counters
+- `get_bond_requirement(amount, agentAddress)` for a live Controller read
+- `get_deployments()` for contract hashes and public accounts
+- `challenge_action(actionId)` for a real serialized challenge and resolution signed by the manual challenger
+
+An external agent can register it with this local process configuration:
+
+```json
+{
+  "mcpServers": {
+    "bondsman": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "cwd": "/Users/vinaysharma/bondsman"
+    }
+  }
+}
+```
+
+The agent can first call `get_reputation` with
+`account-hash-ea2a1d98965a16b0e1234a3c3d251732cfb831bcf21ee060ecbae471bdf42fdf`,
+inspect a suspicious record with `get_action`, and call
+`challenge_action` only while that executed action remains inside its
+challenge window. The final tool returns the two real testnet transaction
+hashes.
 
 ## Engineering decisions
 

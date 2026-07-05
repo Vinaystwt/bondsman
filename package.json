@@ -12,6 +12,7 @@
     "agent": "npm --workspace backend run agent",
     "listener": "npm --workspace backend run listener",
     "watchdog": "npm --workspace backend run watchdog",
+    "mcp": "npm --workspace backend run mcp",
     "api": "npm --workspace backend run api",
     "seed": "npm --workspace backend run seed",
     "test": "npm --workspace backend test",
