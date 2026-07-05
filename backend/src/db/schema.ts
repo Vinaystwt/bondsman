@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS actions (
   window_end INTEGER NOT NULL,
   status TEXT NOT NULL,
   challenger TEXT,
+  challenger_type TEXT,
+  reserved_for_manual INTEGER NOT NULL DEFAULT 0,
   transactions_json TEXT NOT NULL
 );
 
@@ -47,5 +49,20 @@ CREATE TABLE IF NOT EXISTS agent_reputation (
 CREATE TABLE IF NOT EXISTS reserve (
   singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
   balance TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS watchdog_catches (
+  action_id INTEGER PRIMARY KEY,
+  reward TEXT NOT NULL,
+  reasoning TEXT NOT NULL,
+  challenge_tx TEXT NOT NULL,
+  resolve_tx TEXT NOT NULL,
+  timestamp TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS watchdog_status (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  account TEXT NOT NULL,
+  heartbeat_at INTEGER NOT NULL
 );
 `;

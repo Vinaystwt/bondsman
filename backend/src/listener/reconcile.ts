@@ -236,29 +236,41 @@ export async function reconcileChain(
     });
     const action = JSON.parse(serialized) as ChainAction;
     const run = runs.find((candidate) => candidate.actionId === actionId);
+    const projected = options.repository.action(actionId);
+    const challenger =
+      action.challenger === 'None'
+        ? null
+        : normalizeAddress(action.challenger);
     const record: ActionRecord = {
       actionId,
       invoiceId: Number(action.invoice_id),
       agent: normalizeAddress(action.agent),
       amount: action.amount,
       claimHash: bytesHex(action.claim_hash),
-      reasoning: run?.reasoning ?? '',
+      reasoning: run?.reasoning ?? projected?.reasoning ?? '',
       reasoningHash: bytesHex(action.reasoning_hash),
       bondRequired: action.bond_required,
       bondPosted: action.bond_posted,
       windowEnd: Number(action.window_end),
       status: action.status,
-      challenger:
-        action.challenger === 'None'
+      challenger,
+      challengerType:
+        challenger === null
           ? null
-          : normalizeAddress(action.challenger),
-      transactions:
-        transactionEvidence.get(actionId) ??
-        Object.fromEntries(
+          : challenger ===
+              `account-hash-${options.deployment.accounts.watchdog.accountHash}`
+            ? 'watchdog'
+            : 'manual',
+      reservedForManual: projected?.reservedForManual ?? false,
+      transactions: {
+        ...(projected?.transactions ?? {}),
+        ...(transactionEvidence.get(actionId) ??
+          Object.fromEntries(
           Object.entries(run?.transactions ?? {}).filter(
             (entry): entry is [string, string] => !!entry[1],
           ),
-        ),
+          )),
+      },
     };
     options.repository.upsertAction(record);
     const reputationJson = await readContract<string>({

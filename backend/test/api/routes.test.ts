@@ -43,6 +43,8 @@ function fixture() {
     windowEnd: 123,
     status: 'Executed',
     challenger: null,
+    challengerType: null,
+    reservedForManual: false,
     transactions: { execute: 'c'.repeat(64) },
   });
   repository.setReputation(

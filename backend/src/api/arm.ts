@@ -439,6 +439,8 @@ export function createDemoArmService(
       windowEnd,
       status: raw.status,
       challenger: null,
+      challengerType: null,
+      reservedForManual: true,
       transactions,
     });
     await persistAgentRun(repositoryPath, {

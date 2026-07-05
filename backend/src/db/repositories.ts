@@ -25,7 +25,25 @@ export interface ActionRecord {
   windowEnd: number;
   status: string;
   challenger: string | null;
+  challengerType: 'watchdog' | 'manual' | null;
+  reservedForManual: boolean;
   transactions: Record<string, string>;
+}
+
+export interface WatchdogCatchRecord {
+  actionId: number;
+  reward: string;
+  reasoning: string;
+  challengeTx: string;
+  resolveTx: string;
+  timestamp: string;
+}
+
+export interface WatchdogSummary {
+  running: boolean;
+  account: string | null;
+  recentCatches: WatchdogCatchRecord[];
+  totalRewardEarned: string;
 }
 
 export interface EventRecord {
@@ -66,6 +84,11 @@ function actionFromRow(row: Record<string, unknown>): ActionRecord {
     status: String(row.status),
     challenger:
       row.challenger === null ? null : String(row.challenger),
+    challengerType:
+      row.challenger_type === null
+        ? null
+        : (String(row.challenger_type) as 'watchdog' | 'manual'),
+    reservedForManual: Boolean(row.reserved_for_manual),
     transactions: JSON.parse(
       String(row.transactions_json),
     ) as Record<string, string>,
@@ -114,8 +137,8 @@ export class Repository {
         `INSERT INTO actions
           (action_id, invoice_id, agent, amount, claim_hash, reasoning,
            reasoning_hash, bond_required, bond_posted, window_end, status,
-           challenger, transactions_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           challenger, challenger_type, reserved_for_manual, transactions_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(action_id) DO UPDATE SET
           invoice_id=excluded.invoice_id, agent=excluded.agent,
           amount=excluded.amount, claim_hash=excluded.claim_hash,
@@ -123,6 +146,8 @@ export class Repository {
           bond_required=excluded.bond_required, bond_posted=excluded.bond_posted,
           window_end=excluded.window_end, status=excluded.status,
           challenger=excluded.challenger,
+          challenger_type=excluded.challenger_type,
+          reserved_for_manual=excluded.reserved_for_manual,
           transactions_json=excluded.transactions_json`,
       )
       .run(
@@ -138,6 +163,8 @@ export class Repository {
         action.windowEnd,
         action.status,
         action.challenger,
+        action.challengerType,
+        Number(action.reservedForManual),
         JSON.stringify(action.transactions),
       );
   }
@@ -250,5 +277,98 @@ export class Repository {
       .prepare('SELECT balance FROM reserve WHERE singleton = 1')
       .get() as { balance: string } | undefined;
     return row?.balance ?? '0';
+  }
+
+  recordWatchdogCatch(record: WatchdogCatchRecord): void {
+    this.database
+      .prepare(
+        `INSERT INTO watchdog_catches
+          (action_id, reward, reasoning, challenge_tx, resolve_tx, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(action_id) DO UPDATE SET
+          reward=excluded.reward, reasoning=excluded.reasoning,
+          challenge_tx=excluded.challenge_tx,
+          resolve_tx=excluded.resolve_tx, timestamp=excluded.timestamp`,
+      )
+      .run(
+        record.actionId,
+        record.reward,
+        record.reasoning,
+        record.challengeTx,
+        record.resolveTx,
+        record.timestamp,
+      );
+  }
+
+  hasWatchdogCatch(actionId: number): boolean {
+    return Boolean(
+      this.database
+        .prepare(
+          'SELECT 1 FROM watchdog_catches WHERE action_id = ?',
+        )
+        .get(actionId),
+    );
+  }
+
+  setWatchdogHeartbeat(account: string, nowMs: number): void {
+    this.database
+      .prepare(
+        `INSERT INTO watchdog_status (singleton, account, heartbeat_at)
+         VALUES (1, ?, ?)
+         ON CONFLICT(singleton) DO UPDATE SET
+          account=excluded.account, heartbeat_at=excluded.heartbeat_at`,
+      )
+      .run(account, nowMs);
+  }
+
+  watchdogSummary(
+    nowMs: number = Date.now(),
+    heartbeatMaxAgeMs = 60_000,
+  ): WatchdogSummary {
+    const status = this.database
+      .prepare(
+        'SELECT account, heartbeat_at FROM watchdog_status WHERE singleton = 1',
+      )
+      .get() as
+      | { account: string; heartbeat_at: number }
+      | undefined;
+    const recentCatches = (
+      this.database
+        .prepare(
+          `SELECT action_id, reward, reasoning, challenge_tx, resolve_tx,
+            timestamp FROM watchdog_catches
+           ORDER BY timestamp DESC LIMIT 20`,
+        )
+        .all() as {
+        action_id: number;
+        reward: string;
+        reasoning: string;
+        challenge_tx: string;
+        resolve_tx: string;
+        timestamp: string;
+      }[]
+    ).map((row) => ({
+      actionId: row.action_id,
+      reward: row.reward,
+      reasoning: row.reasoning,
+      challengeTx: row.challenge_tx,
+      resolveTx: row.resolve_tx,
+      timestamp: row.timestamp,
+    }));
+    const totalRewardEarned = (
+      this.database
+        .prepare('SELECT reward FROM watchdog_catches')
+        .all() as { reward: string }[]
+    )
+      .reduce((total, row) => total + BigInt(row.reward), 0n)
+      .toString();
+    return {
+      running: Boolean(
+        status && nowMs - status.heartbeat_at <= heartbeatMaxAgeMs,
+      ),
+      account: status?.account ?? null,
+      recentCatches,
+      totalRewardEarned,
+    };
   }
 }

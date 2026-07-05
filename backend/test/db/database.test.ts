@@ -33,6 +33,8 @@ describe('database projection', () => {
       windowEnd: 123,
       status: 'Executed',
       challenger: null,
+      challengerType: null,
+      reservedForManual: false,
       transactions: { execute: 'cc' },
     });
     const event = {
@@ -72,10 +74,36 @@ describe('database projection', () => {
         windowEnd,
         status,
         challenger: null,
+        challengerType: null,
+        reservedForManual: false,
         transactions: {},
       });
     }
     expect(repository.expiredCleanActions(200)).toEqual([1]);
+    database.close();
+  });
+
+  it('stores watchdog catches idempotently and totals atomic rewards', () => {
+    const database = openDatabase(':memory:');
+    const repository = new Repository(database);
+    const catchRecord = {
+      actionId: 7,
+      reward: '2500000000',
+      reasoning: 'Repeated paid claim fingerprint detected.',
+      challengeTx: 'a'.repeat(64),
+      resolveTx: 'b'.repeat(64),
+      timestamp: '2026-07-05T12:00:00.000Z',
+    };
+
+    repository.recordWatchdogCatch(catchRecord);
+    repository.recordWatchdogCatch(catchRecord);
+
+    expect(repository.watchdogSummary()).toEqual({
+      running: false,
+      account: null,
+      recentCatches: [catchRecord],
+      totalRewardEarned: '2500000000',
+    });
     database.close();
   });
 });

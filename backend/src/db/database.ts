@@ -18,5 +18,20 @@ export function openDatabase(path: string): Database.Database {
   database.pragma('journal_mode = WAL');
   database.pragma('foreign_keys = ON');
   database.exec(schema);
+  const actionColumns = new Set(
+    (
+      database.pragma('table_info(actions)') as {
+        name: string;
+      }[]
+    ).map((column) => column.name),
+  );
+  if (!actionColumns.has('challenger_type')) {
+    database.exec('ALTER TABLE actions ADD COLUMN challenger_type TEXT');
+  }
+  if (!actionColumns.has('reserved_for_manual')) {
+    database.exec(
+      'ALTER TABLE actions ADD COLUMN reserved_for_manual INTEGER NOT NULL DEFAULT 0',
+    );
+  }
   return database;
 }
