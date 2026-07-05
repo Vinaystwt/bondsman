@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { loadConfig } from '../backend/src/config/env.js';
 import {
+  ensureNamedKey,
   ensureSubaccountKeys,
   keyMetadata,
   loadPrivateKey,
@@ -83,6 +84,10 @@ async function main(): Promise<void> {
   const deployerPath = resolve(config.deployerSecretKeyPath);
   const deployer = await loadPrivateKey(deployerPath);
   const keys = await ensureSubaccountKeys(join(repository, '.keys'));
+  const watchdog = await ensureNamedKey(
+    join(repository, '.keys'),
+    'watchdog',
+  );
   const rpc = createRpcClient(config);
 
   if (config.usingPublicRpc) {
@@ -94,6 +99,7 @@ async function main(): Promise<void> {
   for (const [name, key] of [
     ['agent', keys.agent],
     ['challenger', keys.challenger],
+    ['watchdog', watchdog],
   ] as const) {
     const hash = await fundToTarget(
       rpc,
@@ -154,6 +160,7 @@ async function main(): Promise<void> {
       deployer: keyMetadata(deployer),
       agent: keyMetadata(keys.agent),
       challenger: keyMetadata(keys.challenger),
+      watchdog: keyMetadata(watchdog),
     },
   });
   await atomicWrite(deploymentPath, deployment);

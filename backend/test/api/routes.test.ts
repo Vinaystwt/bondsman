@@ -23,6 +23,7 @@ const deployment = {
     deployer: account,
     agent: account,
     challenger: account,
+    watchdog: account,
   },
 } as Deployment;
 

@@ -66,6 +66,17 @@ async function ensureKey(path: string): Promise<PrivateKeyInstance> {
   }
 }
 
+export async function ensureNamedKey(
+  directory: string,
+  name: string,
+): Promise<PrivateKeyInstance> {
+  if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+    throw new Error('invalid Casper account key name');
+  }
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  return ensureKey(join(directory, `${name}.pem`));
+}
+
 export interface SubaccountKeys {
   agent: PrivateKeyInstance;
   challenger: PrivateKeyInstance;
@@ -74,10 +85,9 @@ export interface SubaccountKeys {
 export async function ensureSubaccountKeys(
   directory: string,
 ): Promise<SubaccountKeys> {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
   const [agent, challenger] = await Promise.all([
-    ensureKey(join(directory, 'agent.pem')),
-    ensureKey(join(directory, 'challenger.pem')),
+    ensureNamedKey(directory, 'agent'),
+    ensureNamedKey(directory, 'challenger'),
   ]);
   return { agent, challenger };
 }

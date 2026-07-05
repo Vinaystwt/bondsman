@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { KeyAlgorithm, PrivateKey } from '../../src/casper/sdk.js';
 import {
+  ensureNamedKey,
   ensureSubaccountKeys,
   keyMetadata,
 } from '../../src/casper/keys.js';
@@ -33,5 +34,20 @@ describe('keyMetadata', () => {
     expect((await stat(join(directory, 'agent.pem'))).mode & 0o777).toBe(
       0o600,
     );
+  });
+
+  it('creates an idempotent named watchdog key', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'bondsman-watchdog-'));
+
+    const first = await ensureNamedKey(directory, 'watchdog');
+    const second = await ensureNamedKey(directory, 'watchdog');
+
+    expect(keyMetadata(first)).toEqual(keyMetadata(second));
+    expect(
+      await readFile(join(directory, 'watchdog.pem'), 'utf8'),
+    ).toContain('PRIVATE KEY');
+    expect(
+      (await stat(join(directory, 'watchdog.pem'))).mode & 0o777,
+    ).toBe(0o600);
   });
 });

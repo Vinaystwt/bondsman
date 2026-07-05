@@ -32,6 +32,10 @@
     "challenger": {
       "publicKey": "0118b3ca611c6bb2746a2fa679143549789a42c16f166c9c0166376c847818d0c4",
       "accountHash": "49d3c32b9e2c38a5b377387882e0926ca9d9d542da1cc739d1572e0a513aeab8"
+    },
+    "watchdog": {
+      "publicKey": "010f416134e6fa84a9a9538b510c88173744291e20f7c46ebebb20a500c316748c",
+      "accountHash": "80b98aa54801f01eb434094bc8d6401b4c9ecab2396810d2ae250ef276608428"
     }
   }
 }

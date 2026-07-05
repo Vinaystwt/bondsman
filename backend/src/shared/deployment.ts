@@ -28,6 +28,7 @@ export const deploymentSchema = z.object({
     deployer: accountSchema,
     agent: accountSchema,
     challenger: accountSchema,
+    watchdog: accountSchema,
   }),
 });
 

@@ -25,10 +25,12 @@ describe('deploymentSchema', () => {
         deployer: account,
         agent: account,
         challenger: account,
+        watchdog: account,
       },
     });
 
     expect(deployment.chainName).toBe('casper-test');
+    expect(deployment.accounts.watchdog).toEqual(account);
   });
 
   it('rejects another network', () => {
