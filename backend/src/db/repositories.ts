@@ -323,7 +323,7 @@ export class Repository {
 
   watchdogSummary(
     nowMs: number = Date.now(),
-    heartbeatMaxAgeMs = 60_000,
+    heartbeatMaxAgeMs = 600_000,
   ): WatchdogSummary {
     const status = this.database
       .prepare(

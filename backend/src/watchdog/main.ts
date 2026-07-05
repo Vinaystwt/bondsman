@@ -100,15 +100,15 @@ const service = createWatchdogService({
   delayMs: Number(process.env.WATCHDOG_DELAY_MS ?? 30_000),
   transact,
   reasoning: watchdogReasoning,
-  reconcile,
 });
 
 async function tick(): Promise<void> {
   repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
-  await reconcile();
   const catches = await service.scanOnce();
   repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
   if (catches.length) console.log(JSON.stringify({ catches }));
+  await reconcile();
+  repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
 }
 
 const schedule = createSingleFlight(tick);
