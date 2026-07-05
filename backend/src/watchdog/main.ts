@@ -18,7 +18,10 @@ import { Repository } from '../db/repositories.js';
 import { reconcileChain } from '../listener/reconcile.js';
 import { deploymentSchema } from '../shared/deployment.js';
 import { watchdogReasoning } from './reasoning.js';
-import { createWatchdogService } from './service.js';
+import {
+  createSingleFlight,
+  createWatchdogService,
+} from './service.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -108,9 +111,7 @@ async function tick(): Promise<void> {
   if (catches.length) console.log(JSON.stringify({ catches }));
 }
 
-let queue = Promise.resolve();
-const schedule = () => {
-  queue = queue.then(tick).catch(console.error);
-};
-schedule();
-setInterval(schedule, Number(process.env.WATCHDOG_POLL_MS ?? 5_000));
+const schedule = createSingleFlight(tick);
+const run = () => void schedule().catch(console.error);
+run();
+setInterval(run, Number(process.env.WATCHDOG_POLL_MS ?? 5_000));

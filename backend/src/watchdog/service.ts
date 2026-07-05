@@ -22,6 +22,19 @@ export interface WatchdogService {
   scanOnce(): Promise<WatchdogCatchRecord[]>;
 }
 
+export function createSingleFlight(
+  operation: () => Promise<void>,
+): () => Promise<void> {
+  let active: Promise<void> | undefined;
+  return () => {
+    if (active) return active;
+    active = operation().finally(() => {
+      active = undefined;
+    });
+    return active;
+  };
+}
+
 function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

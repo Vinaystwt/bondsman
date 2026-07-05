@@ -1,9 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
-import { createWatchdogService } from '../../src/watchdog/service.js';
+import {
+  createSingleFlight,
+  createWatchdogService,
+} from '../../src/watchdog/service.js';
 
 describe('watchdog service', () => {
+  it('coalesces overlapping poll requests without a backlog', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const operation = vi.fn(async () => gate);
+    const run = createSingleFlight(operation);
+
+    const first = run();
+    const second = run();
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+
+    release();
+    await first;
+    await run();
+    expect(operation).toHaveBeenCalledTimes(2);
+  });
+
   it('waits, catches a duplicate, and records reward and hashes once', async () => {
     const database = openDatabase(':memory:');
     const repository = new Repository(database);

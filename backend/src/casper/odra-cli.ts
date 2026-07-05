@@ -27,6 +27,16 @@ export function transactionHash(output: string): string {
   return hash;
 }
 
+export function canFallbackTransaction(
+  error: unknown,
+  config: BondsmanConfig,
+): boolean {
+  if (!config.cloudApiKey || !(error instanceof Error)) return false;
+  return /HTTP status client error \((401 Unauthorized|403 Forbidden)\)/.test(
+    error.message,
+  );
+}
+
 export function runOdraCommand(
   options: OdraCommandOptions,
 ): Promise<string> {
@@ -88,18 +98,23 @@ export async function callContract(
     gas?: string;
   },
 ): Promise<string> {
-  const output = await runOdraCommand({
-    repository: options.repository,
-    config: options.config,
-    signerPath: options.signerPath,
-    arguments: [
-      'contract',
-      options.contract,
-      options.entrypoint,
-      ...options.arguments,
-      '--gas',
-      options.gas ?? '50 cspr',
-    ],
+  const command = (config: BondsmanConfig) =>
+    runOdraCommand({
+      repository: options.repository,
+      config,
+      signerPath: options.signerPath,
+      arguments: [
+        'contract',
+        options.contract,
+        options.entrypoint,
+        ...options.arguments,
+        '--gas',
+        options.gas ?? '50 cspr',
+      ],
+    });
+  const output = await command(options.config).catch((error) => {
+    if (!canFallbackTransaction(error, options.config)) throw error;
+    return command(publicFallbackConfig(options.config));
   });
   return transactionHash(output);
 }
