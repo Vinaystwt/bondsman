@@ -82,12 +82,52 @@ function fixture() {
         }),
       ),
   };
+  const walletChallenge = {
+    transactionStatus: vi.fn().mockResolvedValue({
+      hash: 'f'.repeat(64),
+      status: 'success',
+      final: true,
+      success: true,
+      error: null,
+    }),
+    resolveWalletChallenge: vi.fn().mockResolvedValue({
+      success: true,
+      actionId: 5,
+      challenger: `account-hash-${'8'.repeat(64)}`,
+      challengerSource: 'external-wallet',
+      reward: {
+        total: '400',
+        challengerShare: '200',
+        reserveShare: '200',
+        token: 'csprUSD',
+        decimals: 9,
+      },
+      transactions: {
+        challenge: 'f'.repeat(64),
+        resolve: 'e'.repeat(64),
+      },
+      finality: { challenge: true, resolve: true },
+      explorerLinks: {
+        challenge:
+          `https://testnet.cspr.live/transaction/${'f'.repeat(64)}`,
+        resolve:
+          `https://testnet.cspr.live/transaction/${'e'.repeat(64)}`,
+      },
+    }),
+  };
   return {
     database,
     repository,
     resolution,
     arm,
-    server: buildServer(repository, deployment, resolution, arm),
+    walletChallenge,
+    server: buildServer(
+      repository,
+      deployment,
+      resolution,
+      arm,
+      walletChallenge,
+    ),
   };
 }
 
@@ -241,6 +281,38 @@ describe('REST routes', () => {
     expect(context.arm.arm).toHaveBeenCalledWith({
       reservedForManual: false,
     });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('exposes transaction finality and resolves a wallet challenge', async () => {
+    const context = fixture();
+    const challengeDeployHash = 'f'.repeat(64);
+    const status = await context.server.inject(
+      `/api/transactions/${challengeDeployHash}`,
+    );
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      hash: challengeDeployHash,
+      status: 'success',
+      final: true,
+    });
+
+    const resolved = await context.server.inject({
+      method: 'POST',
+      url: '/api/challenge/wallet-resolve',
+      payload: { actionId: 5, challengeDeployHash },
+    });
+    expect(resolved.statusCode).toBe(200);
+    expect(resolved.json()).toMatchObject({
+      success: true,
+      actionId: 5,
+      challengerSource: 'external-wallet',
+      finality: { challenge: true, resolve: true },
+    });
+    expect(
+      context.walletChallenge.resolveWalletChallenge,
+    ).toHaveBeenCalledWith({ actionId: 5, challengeDeployHash });
     await context.server.close();
     context.database.close();
   });

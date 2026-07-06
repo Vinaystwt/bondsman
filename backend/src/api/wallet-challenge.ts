@@ -221,6 +221,7 @@ export function createWalletChallengeService(
       if (
         projected?.status !== 'ResolvedSlash' ||
         projected.challenger !== walletAccount ||
+        projected.challengerType !== 'external-wallet' ||
         projected.challengeSigning !== 'external-wallet'
       ) {
         throw new ApiError(

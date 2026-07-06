@@ -5,12 +5,14 @@ import type { ResolutionService } from './resolution.js';
 import type { DemoArmService } from './arm.js';
 import { registerRoutes } from './routes.js';
 import { normalizeApiError } from './errors.js';
+import type { WalletChallengeService } from './wallet-challenge.js';
 
 export function buildServer(
   repository: Repository,
   deployment: Deployment,
   resolution: ResolutionService,
   arm: DemoArmService,
+  walletChallenge: WalletChallengeService,
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   server.setErrorHandler((error, _request, reply) => {
@@ -28,6 +30,13 @@ export function buildServer(
       message: 'route not found',
     }),
   );
-  registerRoutes(server, repository, deployment, resolution, arm);
+  registerRoutes(
+    server,
+    repository,
+    deployment,
+    resolution,
+    arm,
+    walletChallenge,
+  );
   return server;
 }

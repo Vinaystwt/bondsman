@@ -217,7 +217,10 @@ export async function reconcileChain(
           : challenger ===
               `account-hash-${options.deployment.accounts.watchdog.accountHash}`
             ? 'watchdog'
-            : 'manual',
+            : challenger ===
+                `account-hash-${options.deployment.accounts.challenger.accountHash}`
+              ? 'manual'
+              : 'external-wallet',
       challengeSigning:
         challenger === null
           ? null

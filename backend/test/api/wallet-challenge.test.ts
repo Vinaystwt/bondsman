@@ -99,6 +99,7 @@ function repository(): WalletChallengeRepository {
       actionId: 21,
       status: 'ResolvedSlash',
       challenger: walletAccount,
+      challengerType: 'external-wallet',
       challengeSigning: 'external-wallet',
       transactions: {
         challenge: challengeHash,

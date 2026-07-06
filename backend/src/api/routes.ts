@@ -6,7 +6,9 @@ import type { DemoArmService } from './arm.js';
 import { actionDetail } from './action-detail.js';
 import {
   actionBodySchema,
+  transactionHashSchema,
   verifyBodySchema,
+  walletChallengeBodySchema,
 } from './schemas.js';
 import {
   parseSandboxPayment,
@@ -18,6 +20,7 @@ import {
   isChallengeEligible,
 } from './eligibility.js';
 import { ApiError } from './errors.js';
+import type { WalletChallengeService } from './wallet-challenge.js';
 
 export function registerRoutes(
   server: FastifyInstance,
@@ -25,6 +28,7 @@ export function registerRoutes(
   deployment: Deployment,
   resolution: ResolutionService,
   arm: DemoArmService,
+  walletChallenge: WalletChallengeService,
 ): void {
   server.get('/api/invoices', async () => repository.listInvoices());
   const currentController =
@@ -78,6 +82,16 @@ export function registerRoutes(
   server.post('/api/resolve', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
+  });
+  server.get('/api/transactions/:hash', async (request) => {
+    const hash = transactionHashSchema.parse(
+      (request.params as { hash: string }).hash,
+    );
+    return walletChallenge.transactionStatus(hash);
+  });
+  server.post('/api/challenge/wallet-resolve', async (request) => {
+    const input = walletChallengeBodySchema.parse(request.body);
+    return walletChallenge.resolveWalletChallenge(input);
   });
   const armDemo = async (reservedForManual: boolean) => {
     try {

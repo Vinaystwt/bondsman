@@ -14,6 +14,9 @@ import { createResolutionService } from './resolution.js';
 import { buildServer } from './server.js';
 import { createDemoArmService } from './arm.js';
 import { clearLegacyEvidence } from '../evidence/store.js';
+import { createWalletChallengeService } from './wallet-challenge.js';
+import { getTransaction } from '../casper/transactions.js';
+import { readContract } from '../casper/odra-cli.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -46,15 +49,43 @@ const reconcile = () => reconcileChain({
   repository,
 });
 await reconcile();
+const resolution = createResolutionService(
+  repositoryPath,
+  config,
+  deployment.contracts.controller.contractHash,
+  reconcile,
+);
+const walletChallenge = createWalletChallengeService({
+  deployment,
+  repository,
+  getTransaction: (hash) => getTransaction(config, hash),
+  readAction: async (actionId) => {
+    const serialized = await readContract<string>({
+      repository: repositoryPath,
+      config,
+      signerPath: join(repositoryPath, '.keys/agent.pem'),
+      contract: 'BondsmanController',
+      entrypoint: 'get_action',
+      arguments: ['--action_id', String(actionId)],
+    });
+    const action = JSON.parse(serialized) as {
+      status: string;
+      challenger: string;
+      bond_posted: string;
+    };
+    return {
+      status: action.status,
+      challenger: action.challenger,
+      bondPosted: action.bond_posted,
+    };
+  },
+  resolve: (actionId, evidence) =>
+    resolution.resolve(actionId, evidence),
+});
 const server = buildServer(
   repository,
   deployment,
-  createResolutionService(
-    repositoryPath,
-    config,
-    deployment.contracts.controller.contractHash,
-    reconcile,
-  ),
+  resolution,
   createDemoArmService(
     repositoryPath,
     config,
@@ -62,6 +93,7 @@ const server = buildServer(
     repository,
     reconcile,
   ),
+  walletChallenge,
 );
 const port = Number(process.env.PORT ?? 3001);
 await server.listen({ host: '127.0.0.1', port });

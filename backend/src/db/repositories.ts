@@ -25,7 +25,11 @@ export interface ActionRecord {
   windowEnd: number;
   status: string;
   challenger: string | null;
-  challengerType: 'watchdog' | 'manual' | null;
+  challengerType:
+    | 'watchdog'
+    | 'manual'
+    | 'external-wallet'
+    | null;
   challengeSigning?: 'backend-key' | 'watchdog-key' | 'external-wallet' | null;
   controllerHash?: string;
   duplicateProven?: boolean;
@@ -90,7 +94,10 @@ function actionFromRow(row: Record<string, unknown>): ActionRecord {
     challengerType:
       row.challenger_type === null
         ? null
-        : (String(row.challenger_type) as 'watchdog' | 'manual'),
+        : (String(row.challenger_type) as
+            | 'watchdog'
+            | 'manual'
+            | 'external-wallet'),
     challengeSigning:
       row.challenge_signing === null
         ? null
