@@ -254,6 +254,75 @@ The backend signs with the manual challenger account, submits `challenge_action`
 }
 ```
 
+### `GET /api/transactions/:hash`
+
+Returns the backend's independent Casper finality check for a transaction hash. A transaction is successful only when `info_get_transaction` contains execution information with no execution error.
+
+```json
+{
+  "hash": "389d259161d33c23e24067011f9c33aa631f88bb4c7a8aa658d02ac1bd4a251c",
+  "status": "success",
+  "final": true,
+  "success": true,
+  "error": null
+}
+```
+
+An unknown or accepted-but-unexecuted transaction returns `status: "pending"` and `final: false`. A finalized failure returns `status: "failed"` with the exact execution error.
+
+### `POST /api/challenge/wallet-resolve`
+
+Finalizes an action after the user's wallet has already signed and submitted the challenge:
+
+```json
+{
+  "actionId": 15,
+  "challengeDeployHash": "389d259161d33c23e24067011f9c33aa631f88bb4c7a8aa658d02ac1bd4a251c"
+}
+```
+
+The backend verifies that the transaction is final and successful on `casper-test`, targets the current controller, calls `challenge_action`, contains the requested U64 `action_id`, and was signed by the challenger stored on chain. Configured backend accounts are rejected from this path. The funded backend key signs only `resolve_action`; it cannot replace the stored reward recipient.
+
+```json
+{
+  "success": true,
+  "actionId": 15,
+  "challenger": "account-hash-6acdd2b7e4635ddca5b4cefe4c64f90f53ddda223fe191ab5e4e2e17ecf15d77",
+  "challengerSource": "external-wallet",
+  "reward": {
+    "total": "4000000000000",
+    "challengerShare": "2000000000000",
+    "reserveShare": "2000000000000",
+    "token": "csprUSD",
+    "decimals": 9
+  },
+  "transactions": {
+    "challenge": "389d259161d33c23e24067011f9c33aa631f88bb4c7a8aa658d02ac1bd4a251c",
+    "resolve": "7264f61c09e4fb63fb9a0d8ab7a739661d04bd40c543f838e0c56bca2d09958a"
+  },
+  "finality": {
+    "challenge": true,
+    "resolve": true
+  },
+  "explorerLinks": {
+    "challenge": "https://testnet.cspr.live/transaction/389d259161d33c23e24067011f9c33aa631f88bb4c7a8aa658d02ac1bd4a251c",
+    "resolve": "https://testnet.cspr.live/transaction/7264f61c09e4fb63fb9a0d8ab7a739661d04bd40c543f838e0c56bca2d09958a"
+  }
+}
+```
+
+If execution information is not yet present, the endpoint returns `CHALLENGE_NOT_FINAL` and performs no resolution.
+
+The frontend wallet transaction must use:
+
+- chain: `casper-test`
+- target: `deployments/testnet.json` → `contracts.controller.packageHash`, with current package selection
+- entrypoint: `challenge_action`
+- named argument: `action_id` as U64
+- standard payment in CSPR; 50 CSPR is the tested payment limit
+
+After wallet submission, poll `GET /api/transactions/:hash`. Once successful, call the wallet-resolve endpoint. `GET /api/actions/:id` will then report both `challengerType` and `challengeSigning` as `external-wallet`.
+
 ### `POST /api/resolve`
 
 Manually triggers resolution for an already challenged action or an expired clean action.
@@ -352,7 +421,7 @@ hashes.
 - SQLite is a projection, never the source of contract truth. Reconciliation is idempotent and direct reads repair missed stream events.
 - Manual reservations and challenger origin are projection metadata because the deployed contracts intentionally do not encode UI ownership.
 - The watchdog rebuilds its paid-claim index from projected executed actions on every scan. The earliest paid fingerprint is the baseline; only later unreserved, unchallenged actions inside their window are candidates.
-- Both demo-arm routes preflight the shared agent to a 300 CSPR gas floor from the deployer. Invoice submission uses that funded signer, and an explicit insufficient-funds failure triggers one idempotent top-up and resume attempt before returning a service-unavailable error.
+- Both demo-arm routes preflight the shared agent to a 300 CSPR gas floor from the deployer. Owner-only invoice submission is signed by the deployer; the agent signs initiate, approve, bond, and execute. An explicit insufficient-funds failure triggers one idempotent top-up and resume attempt before returning a service-unavailable error.
 - The controller has no owner slash function. A challenge succeeds only when InvoicePool proves that the action paid an already-recorded claim.
 
 ## Live arm evidence
