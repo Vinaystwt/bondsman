@@ -22,6 +22,7 @@ import {
   createSingleFlight,
   createWatchdogService,
 } from './service.js';
+import { mergeActionTransactions } from '../evidence/store.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -92,6 +93,12 @@ const transact = (actionId: number) =>
       entrypoint: 'resolve_action',
       arguments: ['--action_id', String(actionId)],
     });
+    await mergeActionTransactions(
+      repositoryPath,
+      deployment.contracts.controller.contractHash,
+      actionId,
+      { challenge, resolve },
+    );
     return { challenge, resolve };
   });
 const service = createWatchdogService({
