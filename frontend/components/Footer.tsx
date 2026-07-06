@@ -73,14 +73,14 @@ function FooterCol({
                 href={l.href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sm text-bone/80 transition-colors hover:text-copper"
+                className="text-sm text-bone/80 transition-colors hover:text-accent"
               >
                 {l.label}
               </a>
             ) : (
               <Link
                 href={l.href}
-                className="text-sm text-bone/80 transition-colors hover:text-copper"
+                className="text-sm text-bone/80 transition-colors hover:text-accent"
               >
                 {l.label}
               </Link>

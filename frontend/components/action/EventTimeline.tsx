@@ -7,9 +7,8 @@ import { truncateHash } from '@/lib/format';
 import CopyHash from '@/components/ui/CopyHash';
 
 const DOT: Record<string, string> = {
-  copper: 'border-copper bg-copper/20',
-  sage: 'border-sage bg-sage/20',
-  void: 'border-void bg-void/20',
+  accent: 'border-accent bg-accent/20',
+  slash: 'border-slash bg-slash/20',
   muted: 'border-rule bg-surface',
 };
 

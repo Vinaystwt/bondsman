@@ -46,7 +46,25 @@ export interface ActionSummary {
   windowEnd: number;
   status: ActionStatus;
   challenger: string | null;
+  challengerType: 'watchdog' | 'manual' | null;
+  reservedForManual: boolean;
   transactions: ActionTransactions;
+}
+
+export interface WatchdogCatch {
+  actionId: number;
+  reward: string;
+  reasoning: string;
+  challengeTx: string | null;
+  resolveTx: string | null;
+  timestamp: number;
+}
+
+export interface Watchdog {
+  running: boolean;
+  account: string;
+  recentCatches: WatchdogCatch[];
+  totalRewardEarned: string;
 }
 
 export interface ActionTransactions {
@@ -87,7 +105,7 @@ export interface SlashEvent {
   eventType: string;
   actionId: number;
   data: string;
-  transactionHash: string;
+  transactionHash: string | null;
 }
 
 export interface Reserve {

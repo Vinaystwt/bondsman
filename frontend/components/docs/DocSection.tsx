@@ -19,7 +19,7 @@ export default function DocSection({
       className="scroll-mt-24 border-t border-rule py-12 first:border-t-0 first:pt-0"
     >
       <div className="flex items-baseline gap-3">
-        <span className="serial text-[0.7rem] text-copper">
+        <span className="serial text-[0.7rem] text-accent">
           {String(index).padStart(2, '0')}
         </span>
         <h2 className="font-display text-3xl font-semibold tracking-tight text-bone">

@@ -5,6 +5,7 @@ import type {
   Deployment,
   Invoice,
   Reserve,
+  Watchdog,
 } from './types';
 
 // Server components talk to the backend origin directly.
@@ -56,6 +57,7 @@ export const api = {
     serverGet<AgentReputation>(`/api/agents/${address}`),
   reserve: () => serverGet<Reserve>('/api/reserve'),
   deployments: () => serverGet<Deployment>('/api/deployments'),
+  watchdog: () => serverGet<Watchdog>('/api/watchdog'),
 };
 
 // Client-side reads, proxied through Next at /api/*.
@@ -65,8 +67,24 @@ async function clientGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function clientPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`request failed: ${res.status}`);
+  return (await res.json()) as T;
+}
+
 export const clientApi = {
   actions: () => clientGet<ActionSummary[]>('/actions'),
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   reserve: () => clientGet<Reserve>('/reserve'),
+  watchdog: () => clientGet<Watchdog>('/watchdog'),
+  // Mutations, forwarded to the backend through Next route handlers.
+  arm: () => clientPost<ActionDetail>('/demo/arm'),
+  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo'),
+  challenge: (actionId: number) =>
+    clientPost<{ challenge: string; resolve: string }>('/challenge', { actionId }),
 };

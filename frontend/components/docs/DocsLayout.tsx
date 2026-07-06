@@ -64,7 +64,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search docs"
-                className="mb-4 w-full rounded border border-rule bg-surface px-3 py-2 text-sm text-bone placeholder:text-muted focus:border-copper/60"
+                className="mb-4 w-full rounded border border-rule bg-surface px-3 py-2 text-sm text-bone placeholder:text-muted focus:border-accent/60"
               />
               <ul className="space-y-0.5">
                 {filtered.map((s, i) => (
@@ -75,7 +75,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
                       aria-current={active === s.id ? 'true' : undefined}
                       className={`flex items-baseline gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
                         active === s.id
-                          ? 'bg-copper/10 text-copper'
+                          ? 'bg-accent/10 text-accent'
                           : 'text-muted hover:text-bone'
                       }`}
                     >

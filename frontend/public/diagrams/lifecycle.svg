@@ -1,0 +1,58 @@
+<svg viewBox="0 0 1180 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="lc-green" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#35C281"/>
+    </marker>
+    <marker id="lc-red" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#E5484D"/>
+    </marker>
+  </defs>
+
+  <!-- spine connectors -->
+  <g fill="none" stroke="#35C281" stroke-width="2">
+    <line x1="216" y1="342" x2="270" y2="342" marker-end="url(#lc-green)"/>
+    <line x1="452" y1="342" x2="506" y2="342" marker-end="url(#lc-green)"/>
+    <line x1="688" y1="342" x2="742" y2="342" marker-end="url(#lc-green)"/>
+  </g>
+
+  <!-- branch trunk + up (green) + down (red) -->
+  <path d="M924 342 H952 V190 H970" fill="none" stroke="#35C281" stroke-width="2" stroke-linejoin="round" marker-end="url(#lc-green)"/>
+  <path d="M924 342 H952 V496 H970" fill="none" stroke="#E5484D" stroke-width="2" stroke-linejoin="round" marker-end="url(#lc-red)"/>
+
+  <!-- spine boxes -->
+  <!-- Intent (neutral) -->
+  <rect x="40" y="300" width="176" height="84" rx="6" fill="#121815" stroke="#3A423E" stroke-width="1.5"/>
+  <text x="128" y="338" text-anchor="middle" fill="#E8EDEA" font-size="19" font-weight="600">Intent</text>
+  <text x="128" y="360" text-anchor="middle" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">decision committed</text>
+
+  <!-- Bond -->
+  <rect x="276" y="300" width="176" height="84" rx="6" fill="#121815" stroke="#35C281" stroke-width="1.5"/>
+  <text x="364" y="338" text-anchor="middle" fill="#E8EDEA" font-size="19" font-weight="600">Bond</text>
+  <text x="364" y="360" text-anchor="middle" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">stake locked</text>
+
+  <!-- Execute -->
+  <rect x="512" y="300" width="176" height="84" rx="6" fill="#121815" stroke="#35C281" stroke-width="1.5"/>
+  <text x="600" y="338" text-anchor="middle" fill="#E8EDEA" font-size="19" font-weight="600">Execute</text>
+  <text x="600" y="360" text-anchor="middle" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">payout clears</text>
+
+  <!-- Challenge window -->
+  <rect x="748" y="300" width="176" height="84" rx="6" fill="#121815" stroke="#35C281" stroke-width="1.5"/>
+  <text x="836" y="338" text-anchor="middle" fill="#E8EDEA" font-size="18" font-weight="600">Challenge window</text>
+  <text x="836" y="360" text-anchor="middle" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">open to anyone</text>
+
+  <!-- Refund outcome (green) -->
+  <rect x="970" y="150" width="172" height="80" rx="6" fill="#10211A" stroke="#35C281" stroke-width="1.5"/>
+  <circle cx="998" cy="190" r="11" fill="none" stroke="#35C281" stroke-width="1.6"/>
+  <path d="M993 190 l3.5 3.5 l6 -7" fill="none" stroke="#35C281" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1018" y="185" fill="#E8EDEA" font-size="18" font-weight="600">Refund</text>
+  <text x="1018" y="207" fill="#9FB7AC" font-size="12.5" font-family="ui-monospace, Menlo, monospace">bond returns</text>
+  <text x="1056" y="252" text-anchor="middle" fill="#6E7D77" font-size="11.5" font-family="ui-monospace, Menlo, monospace">no challenge holds</text>
+
+  <!-- Slash outcome (red) -->
+  <rect x="970" y="456" width="172" height="80" rx="6" fill="#231112" stroke="#E5484D" stroke-width="1.5"/>
+  <circle cx="998" cy="496" r="11" fill="none" stroke="#E5484D" stroke-width="1.6"/>
+  <line x1="991" y1="489" x2="1005" y2="503" stroke="#E5484D" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="1018" y="491" fill="#E8EDEA" font-size="18" font-weight="600">Slash</text>
+  <text x="1018" y="513" fill="#E1A0A2" font-size="12.5" font-family="ui-monospace, Menlo, monospace">bond taken</text>
+  <text x="1056" y="444" text-anchor="middle" fill="#9A6A6C" font-size="11.5" font-family="ui-monospace, Menlo, monospace">duplicate proven</text>
+</svg>

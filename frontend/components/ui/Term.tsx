@@ -36,7 +36,7 @@ export function Term({ name, children }: TermProps) {
     <span className="relative inline-block">
       <button
         type="button"
-        className="cursor-help border-b border-dotted border-muted/70 text-bone transition-colors hover:border-copper hover:text-copper focus-visible:border-copper"
+        className="cursor-help border-b border-dotted border-muted/70 text-bone transition-colors hover:border-accent hover:text-accent focus-visible:border-accent"
         aria-describedby={`term-${name}`}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}

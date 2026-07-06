@@ -36,7 +36,7 @@ export function CopyHash({ value, href, label, className }: CopyHashProps) {
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="text-bone/90 underline decoration-rule decoration-1 underline-offset-4 transition-colors hover:text-copper"
+          className="text-bone/90 underline decoration-rule decoration-1 underline-offset-4 transition-colors hover:text-accent"
           title={`Open ${stripPrefix(value)} on the testnet explorer`}
         >
           {shown}

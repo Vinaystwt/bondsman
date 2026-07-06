@@ -35,6 +35,7 @@ export function truncateHash(hash: string): string {
 
 /** Strip a leading hash- or account-hash- prefix for explorer links. */
 export function stripPrefix(value: string): string {
+  if (!value) return '';
   return value.replace(/^account-hash-/, '').replace(/^hash-/, '');
 }
 

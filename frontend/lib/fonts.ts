@@ -1,28 +1,22 @@
-import { Fraunces, Hanken_Grotesk, IBM_Plex_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 
-// Display: engraved, high-contrast serif. Reads like an embossed certificate.
-export const display = Fraunces({
-  subsets: ['latin'],
-  weight: 'variable',
-  axes: ['opsz', 'SOFT'],
-  variable: '--font-display',
-  display: 'swap',
-});
-
-// Body: humanist grotesque, warm and legible, not the SaaS default.
-export const sans = Hanken_Grotesk({
+// A clean, modern product face. Text renders immediately with display swap and
+// a real system fallback, so nothing above the fold waits on a font load.
+export const sans = Geist({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-sans',
   display: 'swap',
+  fallback: ['system-ui', 'arial'],
 });
 
-// Figures, hashes, addresses: a typewriter-lineage mono. Numbers are the hero.
-export const mono = IBM_Plex_Mono({
+// Numbers, hashes, and addresses are the hero data of a financial instrument.
+export const mono = Geist_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
   variable: '--font-mono',
   display: 'swap',
+  fallback: ['ui-monospace', 'SFMono-Regular', 'monospace'],
 });
 
-export const fontVariables = `${display.variable} ${sans.variable} ${mono.variable}`;
+export const fontVariables = `${sans.variable} ${mono.variable}`;

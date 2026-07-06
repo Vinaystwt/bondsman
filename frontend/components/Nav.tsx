@@ -15,8 +15,6 @@ const APP_LINKS = [
   { href: '/app', label: 'Overview' },
   { href: '/app/arena', label: 'Challenge Arena' },
   { href: '/app/agents', label: 'Agents' },
-  { href: '/app/policies', label: 'Policies' },
-  { href: '/app/reserve', label: 'Reserve' },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -51,7 +49,7 @@ export default function Nav() {
               aria-current={isActive(pathname, link.href) ? 'page' : undefined}
               className={`rounded px-3 py-2 text-sm transition-colors ${
                 isActive(pathname, link.href)
-                  ? 'text-copper'
+                  ? 'text-accent'
                   : 'text-muted hover:text-bone'
               }`}
             >
@@ -63,7 +61,7 @@ export default function Nav() {
         <div className="flex items-center gap-2">
           <Link
             href={inApp ? '/' : '/app'}
-            className="hidden rounded border border-copper/50 bg-copper/10 px-4 py-2 text-sm font-medium text-copper transition-colors hover:bg-copper/20 sm:inline-flex"
+            className="hidden rounded border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
           >
             {inApp ? 'Public site' : 'Launch app'}
           </Link>
@@ -98,7 +96,7 @@ export default function Nav() {
                 onClick={() => setOpen(false)}
                 className={`rounded px-3 py-2.5 text-sm ${
                   isActive(pathname, link.href)
-                    ? 'bg-copper/10 text-copper'
+                    ? 'bg-accent/10 text-accent'
                     : 'text-muted hover:text-bone'
                 }`}
               >

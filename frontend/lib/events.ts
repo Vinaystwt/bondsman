@@ -10,23 +10,23 @@ function amount(data: Record<string, unknown>, key: string): string | null {
   return null;
 }
 
-const TONE: Record<EventType, 'copper' | 'sage' | 'void' | 'muted'> = {
+const TONE: Record<EventType, 'accent' | 'accent' | 'slash' | 'muted'> = {
   ActionInitiated: 'muted',
-  BondLocked: 'copper',
-  BondPosted: 'copper',
-  PayoutApproved: 'copper',
-  ActionExecuted: 'copper',
-  DuplicateDetected: 'void',
-  BondSlashed: 'void',
-  ResolvedSlash: 'void',
-  BondReleased: 'sage',
-  ResolvedRefund: 'sage',
+  BondLocked: 'accent',
+  BondPosted: 'accent',
+  PayoutApproved: 'accent',
+  ActionExecuted: 'accent',
+  DuplicateDetected: 'slash',
+  BondSlashed: 'slash',
+  ResolvedSlash: 'slash',
+  BondReleased: 'accent',
+  ResolvedRefund: 'accent',
 };
 
 export interface EventView {
   headline: string;
   detail: string | null;
-  tone: 'copper' | 'sage' | 'void' | 'muted';
+  tone: 'accent' | 'accent' | 'slash' | 'muted';
 }
 
 export function describeEvent(event: CesEvent): EventView {

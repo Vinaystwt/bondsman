@@ -1,21 +1,20 @@
 import type { ActionStatus } from '@/lib/types';
 import { STATUS_LABEL } from '@/lib/format';
 
-type Tone = 'copper' | 'sage' | 'void' | 'muted';
+type Tone = 'accent' | 'slash' | 'muted';
 
 const TONE: Record<ActionStatus, Tone> = {
   Initiated: 'muted',
-  Bonded: 'copper',
-  Executed: 'copper',
-  Challenged: 'copper',
-  ResolvedSlash: 'void',
-  ResolvedRefund: 'sage',
+  Bonded: 'accent',
+  Executed: 'accent',
+  Challenged: 'accent',
+  ResolvedSlash: 'slash',
+  ResolvedRefund: 'accent',
 };
 
 const TONE_CLASS: Record<Tone, string> = {
-  copper: 'border-copper/40 text-copper bg-copper/10',
-  sage: 'border-sage/40 text-sage bg-sage/10',
-  void: 'border-void/50 text-void bg-void/10',
+  accent: 'border-accent/40 text-accent bg-accent/10',
+  slash: 'border-slash/50 text-slash bg-slash/10',
   muted: 'border-rule text-muted bg-bone/5',
 };
 

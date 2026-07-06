@@ -29,7 +29,7 @@ export default async function AgentPage({
     );
   }
   const agent = res.data;
-  const scoreTone = agent.score > 0 ? 'sage' : agent.score < 0 ? 'void' : 'bone';
+  const scoreTone = agent.score > 0 ? 'accent' : agent.score < 0 ? 'slash' : 'bone';
 
   return (
     <article className="space-y-10">
@@ -59,10 +59,10 @@ export default async function AgentPage({
       </div>
 
       <section aria-label="Reputation" className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Clean actions" tone="sage">
+        <Stat label="Clean actions" tone="accent">
           {agent.clean}
         </Stat>
-        <Stat label="Slashed" tone="void">
+        <Stat label="Slashed" tone="slash">
           {agent.slashed}
         </Stat>
         <Stat label="Score" tone={scoreTone}>

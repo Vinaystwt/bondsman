@@ -22,7 +22,7 @@ export default function EmailCapture() {
 
   if (done) {
     return (
-      <p className="text-sm text-sage" role="status">
+      <p className="text-sm text-accent" role="status">
         Noted. We will be in touch when Bondsman moves past testnet. The demo is
         open now.
       </p>
@@ -45,17 +45,17 @@ export default function EmailCapture() {
           placeholder="you@company.com"
           aria-invalid={!!error}
           aria-describedby={error ? 'waitlist-error' : undefined}
-          className="min-w-0 flex-1 rounded-md border border-rule bg-ink px-4 py-3 text-bone placeholder:text-muted focus:border-copper/60"
+          className="min-w-0 flex-1 rounded-md border border-rule bg-ink px-4 py-3 text-bone placeholder:text-muted focus:border-accent/60"
         />
         <button
           type="submit"
-          className="rounded-md border border-copper bg-copper/15 px-5 py-3 font-medium text-copper transition-colors hover:bg-copper/25"
+          className="rounded-md border border-accent bg-accent/15 px-5 py-3 font-medium text-accent transition-colors hover:bg-accent/25"
         >
           Keep me posted
         </button>
       </div>
       {error && (
-        <span id="waitlist-error" className="text-sm text-void">
+        <span id="waitlist-error" className="text-sm text-slash">
           {error}
         </span>
       )}

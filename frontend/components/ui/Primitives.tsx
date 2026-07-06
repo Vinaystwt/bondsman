@@ -42,13 +42,12 @@ export function Stat({
 }: {
   label: string;
   children: ReactNode;
-  tone?: 'bone' | 'copper' | 'sage' | 'void';
+  tone?: 'bone' | 'accent' | 'slash';
 }) {
   const toneClass = {
     bone: 'text-bone',
-    copper: 'text-copper',
-    sage: 'text-sage',
-    void: 'text-void',
+    accent: 'text-accent',
+    slash: 'text-slash',
   }[tone];
   return (
     <div className="rounded-md border border-rule bg-surface px-5 py-4">

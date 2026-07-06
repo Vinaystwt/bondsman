@@ -12,11 +12,11 @@ function sealState(status: ActionStatus): SealState {
 }
 
 const OUTCOME_LINE: Partial<Record<ActionStatus, { text: string; tone: string }>> = {
-  ResolvedSlash: { text: 'The contract found the duplicate. The bond is gone.', tone: 'text-void' },
-  ResolvedRefund: { text: 'The action held up. The bond returns in full.', tone: 'text-sage' },
-  Executed: { text: 'The bond is held while the challenge window is open.', tone: 'text-copper' },
-  Bonded: { text: 'The stake is locked. The payout can proceed.', tone: 'text-copper' },
-  Challenged: { text: 'A challenge is open against this action.', tone: 'text-copper' },
+  ResolvedSlash: { text: 'The contract found the duplicate. The bond is gone.', tone: 'text-slash' },
+  ResolvedRefund: { text: 'The action held up. The bond returns in full.', tone: 'text-accent' },
+  Executed: { text: 'The bond is held while the challenge window is open.', tone: 'text-accent' },
+  Bonded: { text: 'The stake is locked. The payout can proceed.', tone: 'text-accent' },
+  Challenged: { text: 'A challenge is open against this action.', tone: 'text-accent' },
   Initiated: { text: 'The action is initiated, awaiting its bond.', tone: 'text-muted' },
 };
 

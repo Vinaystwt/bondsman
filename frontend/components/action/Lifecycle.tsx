@@ -41,16 +41,15 @@ export default function Lifecycle({ status }: { status: ActionStatus }) {
   const { reached, outcome } = progress(status);
 
   function nodeTone(i: number) {
-    if (i === 4 && outcome === 'slash') return 'void';
-    if (i === 4 && outcome === 'refund') return 'sage';
-    if (i <= reached) return 'copper';
+    if (i === 4 && outcome === 'slash') return 'slash';
+    if (i === 4 && outcome === 'refund') return 'accent';
+    if (i <= reached) return 'accent';
     return 'idle';
   }
 
   const toneRing: Record<string, string> = {
-    copper: 'border-copper bg-copper/15 text-copper',
-    sage: 'border-sage bg-sage/15 text-sage',
-    void: 'border-void bg-void/15 text-void',
+    accent: 'border-accent bg-accent/15 text-accent',
+    slash: 'border-slash bg-slash/15 text-slash',
     idle: 'border-rule bg-surface text-muted',
   };
 
@@ -73,7 +72,7 @@ export default function Lifecycle({ status }: { status: ActionStatus }) {
               <span
                 aria-hidden="true"
                 className={`absolute left-[calc(50%+18px)] top-[18px] hidden h-px w-[calc(100%-36px)] origin-left md:block ${
-                  i < reached ? 'bg-copper/60' : 'bg-rule'
+                  i < reached ? 'bg-accent/60' : 'bg-rule'
                 }`}
               />
             )}

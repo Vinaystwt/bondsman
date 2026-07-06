@@ -53,18 +53,18 @@ export default async function AgentsPage() {
               href={`/app/agents/${encodeURIComponent(address)}`}
               className="group block"
             >
-              <Panel className="p-6 transition-colors group-hover:border-copper/40">
-                <p className="font-mono text-sm text-bone group-hover:text-copper">
+              <Panel className="p-6 transition-colors group-hover:border-accent/40">
+                <p className="font-mono text-sm text-bone group-hover:text-accent">
                   {truncateHash(address)}
                 </p>
                 <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
                   <div>
                     <dt className="serial text-[0.58rem] text-muted">Clean</dt>
-                    <dd className="mt-1 font-mono text-lg text-sage tabular">{rec.clean}</dd>
+                    <dd className="mt-1 font-mono text-lg text-accent tabular">{rec.clean}</dd>
                   </div>
                   <div>
                     <dt className="serial text-[0.58rem] text-muted">Slashed</dt>
-                    <dd className="mt-1 font-mono text-lg text-void tabular">{rec.slashed}</dd>
+                    <dd className="mt-1 font-mono text-lg text-slash tabular">{rec.slashed}</dd>
                   </div>
                   <div>
                     <dt className="serial text-[0.58rem] text-muted">Moved</dt>
@@ -73,7 +73,7 @@ export default async function AgentsPage() {
                     </dd>
                   </div>
                 </dl>
-                <span className="mt-4 inline-block text-xs text-copper opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="mt-4 inline-block text-xs text-accent opacity-0 transition-opacity group-hover:opacity-100">
                   View profile and reputation
                 </span>
               </Panel>

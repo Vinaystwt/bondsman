@@ -16,10 +16,10 @@ interface SealProps {
 }
 
 const COLOR: Record<SealState, string> = {
-  idle: '#B7791F', // copper
-  stamp: '#B7791F', // copper, the sealed state
-  lift: '#5A7D6F', // sage, the quiet refund
-  strike: '#E0231C', // void red, the slash (the only place red appears)
+  idle: '#35C281', // accent green
+  stamp: '#35C281', // accent green, the sealed state
+  lift: '#46D08E', // accent strong, the quiet refund
+  strike: '#E5484D', // slash red, the only place red appears
 };
 
 // The toothed outer ring of a notary stamp.
@@ -122,7 +122,7 @@ function SealBody({
             y1="80"
             x2="80"
             y2="20"
-            stroke="#E0231C"
+            stroke="#E5484D"
             strokeWidth="4"
             strokeLinecap="round"
             initial={{ pathLength: 0 }}
@@ -130,7 +130,7 @@ function SealBody({
             transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
           />
         ) : (
-          <line x1="20" y1="80" x2="80" y2="20" stroke="#E0231C" strokeWidth="4" strokeLinecap="round" />
+          <line x1="20" y1="80" x2="80" y2="20" stroke="#E5484D" strokeWidth="4" strokeLinecap="round" />
         ))}
     </>
   );
