@@ -101,7 +101,9 @@ export async function pollArmReadiness(
     ) {
       return action;
     }
-    await sleep(2_000);
+    if (attempt + 1 < (options.attempts ?? 15)) {
+      await sleep(2_000);
+    }
   }
   throw new Error(
     'armed action did not become challengeable before readiness timeout',
@@ -549,6 +551,9 @@ export function createDemoArmService(
       },
     );
     if (reconcile) await reconcile();
+    raw = await pollArmReadiness(getAction, getDuplicate, {
+      attempts: 1,
+    });
     pendingInvoiceId = undefined;
     return actionDetail(repository, actionId)!;
   };
