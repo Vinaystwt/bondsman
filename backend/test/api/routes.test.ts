@@ -40,10 +40,12 @@ function fixture() {
     reasoningHash: 'bb',
     bondRequired: '2',
     bondPosted: '2',
-    windowEnd: 123,
+    windowEnd: Date.now() + 1_800_000,
     status: 'Executed',
     challenger: null,
     challengerType: null,
+    controllerHash: deployment.contracts.controller.contractHash,
+    duplicateProven: true,
     reservedForManual: false,
     transactions: { execute: 'c'.repeat(64) },
   });
@@ -177,9 +179,10 @@ describe('REST routes', () => {
     });
 
     expect(response.statusCode).toBe(503);
-    expect(response.json()).toMatchObject({
-      statusCode: 503,
-      error: 'Service Unavailable',
+    expect(response.json()).toEqual({
+      success: false,
+      code: 'ARM_FAILED',
+      message: 'demo funding is temporarily unavailable',
     });
     await context.server.close();
     context.database.close();

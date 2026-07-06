@@ -20,6 +20,7 @@ export function detectDuplicateActions(
     const duplicate = seen.has(action.claimHash);
     if (
       duplicate &&
+      action.duplicateProven === true &&
       action.status === 'Executed' &&
       action.windowEnd >= nowMs &&
       !action.reservedForManual &&

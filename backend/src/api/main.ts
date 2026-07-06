@@ -13,6 +13,7 @@ import { reconcileChain } from '../listener/reconcile.js';
 import { createResolutionService } from './resolution.js';
 import { buildServer } from './server.js';
 import { createDemoArmService } from './arm.js';
+import { clearLegacyEvidence } from '../evidence/store.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -37,21 +38,29 @@ const database = openDatabase(
 );
 const repository = new Repository(database);
 const config = loadConfig();
-await reconcileChain({
+await clearLegacyEvidence(repositoryPath);
+const reconcile = () => reconcileChain({
   repositoryPath,
   config,
   deployment,
   repository,
 });
+await reconcile();
 const server = buildServer(
   repository,
   deployment,
-  createResolutionService(repositoryPath, config),
+  createResolutionService(
+    repositoryPath,
+    config,
+    deployment.contracts.controller.contractHash,
+    reconcile,
+  ),
   createDemoArmService(
     repositoryPath,
     config,
     deployment,
     repository,
+    reconcile,
   ),
 );
 const port = Number(process.env.PORT ?? 3001);

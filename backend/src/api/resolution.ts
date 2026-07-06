@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
 import { callContract } from '../casper/odra-cli.js';
 import { SignerQueue } from '../casper/signer-queue.js';
+import { mergeActionTransactions } from '../evidence/store.js';
 
 export interface ResolutionService {
   challengeAndResolve(
@@ -13,6 +14,8 @@ export interface ResolutionService {
 export function createResolutionService(
   repositoryPath: string,
   config: BondsmanConfig,
+  controllerHash: string,
+  reconcile?: () => Promise<void>,
 ): ResolutionService {
   const signerPath = join(
     repositoryPath,
@@ -33,9 +36,26 @@ export function createResolutionService(
       queue.run(async () => {
         const challenge = await call('challenge_action', actionId);
         const resolve = await call('resolve_action', actionId);
+        await mergeActionTransactions(
+          repositoryPath,
+          controllerHash,
+          actionId,
+          { challenge, resolve },
+        );
+        if (reconcile) await reconcile();
         return { challenge, resolve };
       }),
     resolve: (actionId) =>
-      queue.run(() => call('resolve_action', actionId)),
+      queue.run(async () => {
+        const resolve = await call('resolve_action', actionId);
+        await mergeActionTransactions(
+          repositoryPath,
+          controllerHash,
+          actionId,
+          { resolve },
+        );
+        if (reconcile) await reconcile();
+        return resolve;
+      }),
   };
 }

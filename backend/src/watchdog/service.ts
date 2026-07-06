@@ -80,6 +80,7 @@ export function createWatchdogService(
           status: 'ResolvedSlash',
           challenger: options.watchdogAddress,
           challengerType: 'watchdog',
+          challengeSigning: 'watchdog-key',
           transactions: {
             ...current.transactions,
             challenge: transactions.challenge,

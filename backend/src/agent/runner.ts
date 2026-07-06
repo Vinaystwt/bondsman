@@ -1,4 +1,3 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
 import type { Deployment } from '../shared/deployment.js';
@@ -10,6 +9,7 @@ import {
 import { blake2b256, claimHash } from './hashing.js';
 import { requestDecision } from './anthropic.js';
 import type { DecisionInvoice } from './prompt.js';
+import { writeActionEvidence } from '../evidence/store.js';
 
 export interface AgentRun {
   invoiceId: number;
@@ -57,36 +57,10 @@ async function nextActionId(
 
 export async function persistAgentRun(
   repository: string,
+  controllerHash: string,
   run: AgentRun,
 ): Promise<void> {
-  const directory = join(repository, '.data');
-  const path = join(directory, 'agent-runs.json');
-  await mkdir(directory, { recursive: true });
-  let runs: AgentRun[] = [];
-  try {
-    runs = JSON.parse(await readFile(path, 'utf8')) as AgentRun[];
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !('code' in error) ||
-      error.code !== 'ENOENT'
-    ) {
-      throw error;
-    }
-  }
-  if (run.actionId !== undefined) {
-    runs = runs.filter(
-      (candidate) =>
-        candidate.actionId !== run.actionId &&
-        candidate.invoiceId !== run.invoiceId,
-    );
-  }
-  runs.push(run);
-  const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(runs, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  await rename(temporary, path);
+  await writeActionEvidence(repository, controllerHash, run);
 }
 
 export async function runAgent(
@@ -109,7 +83,11 @@ export async function runAgent(
     transactions: {},
   };
   if (decision.decision === 'reject') {
-    await persistAgentRun(options.repository, base);
+    await persistAgentRun(
+      options.repository,
+      options.deployment.contracts.controller.contractHash,
+      base,
+    );
     return base;
   }
 
@@ -180,6 +158,10 @@ export async function runAgent(
     actionId,
     transactions,
   };
-  await persistAgentRun(options.repository, run);
+  await persistAgentRun(
+    options.repository,
+    options.deployment.contracts.controller.contractHash,
+    run,
+  );
   return run;
 }

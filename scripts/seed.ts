@@ -39,6 +39,7 @@ import {
   persistAgentRun,
   type AgentRun,
 } from '../backend/src/agent/runner.js';
+import { evidenceFile } from '../backend/src/evidence/store.js';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 loadDotenv({ path: join(repository, '.env'), quiet: true });
@@ -136,8 +137,9 @@ async function loadDecisions(): Promise<SeedState['decisions']> {
 
 export async function persistDemoAgentRun(
   run: AgentRun,
+  controllerHash: string,
 ): Promise<void> {
-  await persistAgentRun(repository, run);
+  await persistAgentRun(repository, controllerHash, run);
 }
 
 export async function seed(): Promise<SeedState> {
@@ -306,7 +308,14 @@ export async function seed(): Promise<SeedState> {
   const prior = await (async () => {
     try {
       return JSON.parse(
-        await readFile(join(repository, '.data/seed-state.json'), 'utf8'),
+        await readFile(
+          evidenceFile(
+            repository,
+            deployment.contracts.controller.contractHash,
+            'seed-state.json',
+          ),
+          'utf8',
+        ),
       ) as SeedState;
     } catch {
       return undefined;
@@ -331,7 +340,14 @@ export async function seed(): Promise<SeedState> {
       challenge: challenge || prior?.duplicate.challenge || '',
     },
   };
-  await writeJson(join(repository, '.data/seed-state.json'), state);
+  await writeJson(
+    evidenceFile(
+      repository,
+      deployment.contracts.controller.contractHash,
+      'seed-state.json',
+    ),
+    state,
+  );
   for (const [invoice, action, decision, transactions] of [
     [
       demoInvoices[0]!,
@@ -354,7 +370,7 @@ export async function seed(): Promise<SeedState> {
       reasoningHash: blake2b256(decision.reasoning).toString('hex'),
       confidence: decision.confidence,
       transactions,
-    });
+    }, deployment.contracts.controller.contractHash);
   }
   return state;
 }

@@ -40,7 +40,11 @@ const repository = new Repository(
     ),
   ),
 );
-const resolution = createResolutionService(repositoryPath, config);
+const resolution = createResolutionService(
+  repositoryPath,
+  config,
+  deployment.contracts.controller.contractHash,
+);
 const tools = createToolHandlers({
   repository,
   deployment,

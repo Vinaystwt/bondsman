@@ -22,17 +22,18 @@ describe('persistAgentRun', () => {
       transactions: {},
     });
 
-    await persistAgentRun(repository, run(100));
-    await persistAgentRun(repository, run(200));
+    const controller = `hash-${'1'.repeat(64)}`;
+    await persistAgentRun(repository, controller, run(100));
+    await persistAgentRun(repository, controller, run(200));
 
     const saved = JSON.parse(
       await readFile(
-        join(repository, '.data/agent-runs.json'),
+        join(repository, '.evidence', '1'.repeat(64), '0.json'),
         'utf8',
       ),
-    ) as AgentRun[];
-    expect(saved).toHaveLength(1);
-    expect(saved[0]?.invoiceId).toBe(200);
+    ) as { controllerHash: string; run: AgentRun };
+    expect(saved.controllerHash).toBe(controller);
+    expect(saved.run.invoiceId).toBe(200);
     await rm(repository, { recursive: true });
   });
 });

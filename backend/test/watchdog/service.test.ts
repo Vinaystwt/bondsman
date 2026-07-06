@@ -47,6 +47,7 @@ describe('watchdog service', () => {
         status,
         challenger: null,
         challengerType: null,
+        duplicateProven: true,
         reservedForManual: false,
         transactions: {},
       });

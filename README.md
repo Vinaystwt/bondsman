@@ -111,7 +111,7 @@ Returns seeded pending and paid invoices.
 
 ### `GET /api/actions`
 
-Returns every projected action with status, bond, deadline, reasoning, transaction hashes, `challengerType`, and `reservedForManual`.
+Returns only current-controller actions that are `Executed`, duplicate-proven, unchallenged, and unexpired. This is the Arena/open-cases feed; resolved, stale, clean, bonded, and expired actions remain available by id. Records include `controllerHash`, `duplicateProven`, `challengerType`, `challengeSigning`, and `reservedForManual`.
 
 ```json
 [
@@ -120,16 +120,18 @@ Returns every projected action with status, bond, deadline, reasoning, transacti
     "invoiceId": 2046,
     "bondRequired": "2500000000000",
     "bondPosted": "2500000000000",
-    "status": "Challenged",
-    "challengerType": "manual",
-    "reservedForManual": false
+    "status": "Executed",
+    "challengerType": null,
+    "challengeSigning": null,
+    "duplicateProven": true,
+    "reservedForManual": true
   }
 ]
 ```
 
 ### `GET /api/actions/:id`
 
-Returns one full lifecycle, reasoning text and digest, CES events, transaction hashes, and testnet explorer links.
+Returns one full lifecycle, reasoning text and digest, CES events, transaction hashes, and exact testnet explorer links. Local transaction evidence is stored under `.evidence/<controller-hash>/<action-id>.json`; unscoped legacy files are never reconciled. When current-version evidence is absent, `proof.message` is `proof unavailable for this contract version` instead of serving a hash from an older deployment.
 
 ```json
 {
@@ -194,6 +196,10 @@ Creates a unique invoice with the seeded duplicate claim digest, then uses the e
 ```
 
 The deployed Controller sets `window_end` exactly `1,800,000` milliseconds after the execution block time, so an armed action has a thirty-minute challenge window.
+
+Invoice submission is owner-signed by the deployer. Initiation, token approval, bond posting, and execution are agent-signed. The endpoint polls on-chain state and returns only after the action is duplicate-proven, unchallenged, `Executed`, and has at least fifteen minutes remaining. Mutations reconcile the projection before responding.
+
+Challenge records describe how they were signed: `backend-key` for the current demo challenger, `watchdog-key` for the deterministic watchdog, and `external-wallet` for another stored challenger. The watchdog is deterministic and x402 verification remains a sandbox. Error responses use `{ "success": false, "code": "...", "message": "..." }`.
 
 ### `GET /api/watchdog`
 

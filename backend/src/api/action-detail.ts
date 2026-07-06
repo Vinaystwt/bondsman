@@ -12,6 +12,13 @@ export function actionDetail(
   if (!action) return undefined;
   return {
     ...action,
+    proof:
+      Object.values(action.transactions).some((hash) => hash.length === 64)
+        ? { available: true }
+        : {
+            available: false,
+            message: 'proof unavailable for this contract version',
+          },
     events: repository.eventsForAction(actionId).map((event) => ({
       ...event,
       explorerLink: event.transactionHash

@@ -7,7 +7,6 @@ import {
   readContract,
   readEvents,
 } from '../casper/odra-cli.js';
-import type { AgentRun } from '../agent/runner.js';
 import { claimHash } from '../agent/hashing.js';
 import type { DecisionInvoice } from '../agent/prompt.js';
 import {
@@ -15,6 +14,10 @@ import {
   type ActionRecord,
 } from '../db/repositories.js';
 import { parseOdraEvent } from './events.js';
+import {
+  readActionEvidence,
+  type ActionEvidence,
+} from '../evidence/store.js';
 
 interface ReconcileOptions {
   repositoryPath: string;
@@ -80,73 +83,8 @@ function transactionForEvent(
     BondSlashed: 'resolve',
     PayoutApproved: 'execute',
     DuplicateDetected: 'execute',
-  }[type] as keyof AgentRun['transactions'] | undefined;
+  }[type] as string | undefined;
   return key ? transactions?.[key] ?? null : null;
-}
-
-async function localTransactions(
-  repositoryPath: string,
-  runs: AgentRun[],
-): Promise<Map<number, Record<string, string>>> {
-  const result = new Map<number, Record<string, string>>();
-  const confirmed = (
-    values: Record<string, string>,
-  ): Record<string, string> =>
-    Object.fromEntries(
-      Object.entries(values).filter(([, value]) => value.length === 64),
-    );
-  for (const run of runs) {
-    if (run.actionId !== undefined) {
-      result.set(run.actionId, confirmed(run.transactions));
-    }
-  }
-  const seed = await optionalJson<{
-    baseline: {
-      actionId: number;
-      transactions: Record<string, string>;
-    };
-    duplicate: {
-      actionId: number;
-      transactions: Record<string, string>;
-      challenge: string;
-    };
-  }>(join(repositoryPath, '.data/seed-state.json'));
-  if (seed) {
-    result.set(
-      seed.baseline.actionId,
-      confirmed(seed.baseline.transactions),
-    );
-    result.set(seed.duplicate.actionId, confirmed({
-      ...seed.duplicate.transactions,
-      challenge: seed.duplicate.challenge,
-    }));
-  }
-  const demo = await optionalJson<{
-    duplicate: {
-      actionId: number;
-      challenge: string;
-      resolve: string;
-    };
-    clean: {
-      actionId: number;
-      execute: string;
-      resolve: string;
-    };
-    cleanTransactions?: Record<string, string>;
-  }>(join(repositoryPath, '.data/demo-state.json'));
-  if (demo) {
-    result.set(demo.duplicate.actionId, confirmed({
-      ...(result.get(demo.duplicate.actionId) ?? {}),
-      challenge: demo.duplicate.challenge,
-      resolve: demo.duplicate.resolve,
-    }));
-    result.set(demo.clean.actionId, confirmed({
-      ...(demo.cleanTransactions ?? {}),
-      execute: demo.clean.execute,
-      resolve: demo.clean.resolve,
-    }));
-  }
-  return result;
 }
 
 async function importPendingInvoice(
@@ -181,14 +119,22 @@ export async function reconcileChain(
   options: ReconcileOptions,
 ): Promise<void> {
   const signerPath = join(options.repositoryPath, '.keys/agent.pem');
-  const runs =
-    (await optionalJson<AgentRun[]>(
-      join(options.repositoryPath, '.data/agent-runs.json'),
-    )) ?? [];
-  const transactionEvidence = await localTransactions(
-    options.repositoryPath,
-    runs,
-  );
+  const controllerHash =
+    options.deployment.contracts.controller.contractHash;
+  const evidence = new Map<number, ActionEvidence | undefined>();
+  const evidenceFor = async (actionId: number) => {
+    if (!evidence.has(actionId)) {
+      evidence.set(
+        actionId,
+        await readActionEvidence(
+          options.repositoryPath,
+          controllerHash,
+          actionId,
+        ),
+      );
+    }
+    return evidence.get(actionId);
+  };
   await importPendingInvoice(options);
 
   const actionIds = new Set<number>();
@@ -209,6 +155,8 @@ export async function reconcileChain(
         ? Number(parsed.fields.action_id)
         : null;
       if (actionId !== null) actionIds.add(actionId);
+      const local =
+        actionId === null ? undefined : await evidenceFor(actionId);
       options.repository.upsertEvent({
         contract,
         eventIndex: event.index,
@@ -216,9 +164,7 @@ export async function reconcileChain(
         actionId,
         data: JSON.stringify(parsed.fields),
         transactionHash: transactionForEvent(
-          actionId === null
-            ? undefined
-            : transactionEvidence.get(actionId),
+          local?.run.transactions,
           parsed.type,
         ),
       });
@@ -235,13 +181,23 @@ export async function reconcileChain(
       arguments: ['--action_id', String(actionId)],
     });
     const action = JSON.parse(serialized) as ChainAction;
-    const run = runs.find((candidate) => candidate.actionId === actionId);
+    const localEvidence = await evidenceFor(actionId);
+    const run = localEvidence?.run;
     const projected = options.repository.action(actionId);
     const watchdogCatch = options.repository.watchdogCatch(actionId);
     const challenger =
       action.challenger === 'None'
         ? null
         : normalizeAddress(action.challenger);
+    const duplicateProven =
+      (await readContract<string>({
+        repository: options.repositoryPath,
+        config: options.config,
+        signerPath,
+        contract: 'InvoicePool',
+        entrypoint: 'is_action_duplicate',
+        arguments: ['--action_id', String(actionId)],
+      })) === 'true';
     const record: ActionRecord = {
       actionId,
       invoiceId: Number(action.invoice_id),
@@ -262,15 +218,25 @@ export async function reconcileChain(
               `account-hash-${options.deployment.accounts.watchdog.accountHash}`
             ? 'watchdog'
             : 'manual',
+      challengeSigning:
+        challenger === null
+          ? null
+          : challenger ===
+              `account-hash-${options.deployment.accounts.watchdog.accountHash}`
+            ? 'watchdog-key'
+            : challenger ===
+                `account-hash-${options.deployment.accounts.challenger.accountHash}`
+              ? 'backend-key'
+              : 'external-wallet',
+      controllerHash,
+      duplicateProven,
       reservedForManual: projected?.reservedForManual ?? false,
       transactions: {
-        ...(projected?.transactions ?? {}),
-        ...(transactionEvidence.get(actionId) ??
-          Object.fromEntries(
+        ...Object.fromEntries(
           Object.entries(run?.transactions ?? {}).filter(
             (entry): entry is [string, string] => !!entry[1],
           ),
-          )),
+        ),
         ...(watchdogCatch
           ? {
               challenge: watchdogCatch.challengeTx,

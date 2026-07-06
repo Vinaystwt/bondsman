@@ -21,6 +21,7 @@ function action(
     status: 'Executed',
     challenger: null,
     challengerType: null,
+    duplicateProven: true,
     reservedForManual: false,
     transactions: {},
     ...overrides,

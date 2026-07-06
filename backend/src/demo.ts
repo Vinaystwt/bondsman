@@ -17,6 +17,7 @@ import {
 import { callContract } from './casper/odra-cli.js';
 import { readContract } from './casper/odra-cli.js';
 import { blake2b256 } from './agent/hashing.js';
+import { evidenceFile } from './evidence/store.js';
 
 interface DemoResult {
   duplicate: {
@@ -72,7 +73,14 @@ if (isMain) {
   let saved: SavedDemo | undefined;
   try {
     saved = JSON.parse(
-      await readFile(join(repository, '.data/demo-state.json'), 'utf8'),
+      await readFile(
+        evidenceFile(
+          repository,
+          deployment.contracts.controller.contractHash,
+          'demo-state.json',
+        ),
+        'utf8',
+      ),
     ) as SavedDemo;
   } catch {
     saved = undefined;
@@ -242,7 +250,11 @@ if (isMain) {
     ...(cleanTransactions ? { cleanTransactions } : {}),
   };
   await writeFile(
-    join(repository, '.data/demo-state.json'),
+    evidenceFile(
+      repository,
+      deployment.contracts.controller.contractHash,
+      'demo-state.json',
+    ),
     `${JSON.stringify(result, null, 2)}\n`,
     { mode: 0o600 },
   );
@@ -256,6 +268,6 @@ if (isMain) {
     ).toString('hex'),
     confidence: seedState.decisions.clean.confidence,
     transactions: cleanTransactions ?? {},
-  });
+  }, deployment.contracts.controller.contractHash);
   console.log(formatDemoOutput(result));
 }

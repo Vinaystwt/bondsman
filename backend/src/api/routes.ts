@@ -13,6 +13,11 @@ import {
   paymentRequired,
 } from '../verify/payment.js';
 import { verifyClaimCollision } from '../verify/service.js';
+import {
+  challengeIneligibilityCode,
+  isChallengeEligible,
+} from './eligibility.js';
+import { ApiError } from './errors.js';
 
 export function registerRoutes(
   server: FastifyInstance,
@@ -22,20 +27,30 @@ export function registerRoutes(
   arm: DemoArmService,
 ): void {
   server.get('/api/invoices', async () => repository.listInvoices());
-  server.get('/api/actions', async () => repository.listActions());
+  const currentController =
+    deployment.contracts.controller.contractHash;
+  server.get('/api/actions', async () =>
+    repository
+      .listActions()
+      .filter((action) =>
+        isChallengeEligible(action, currentController),
+      ),
+  );
   server.get('/api/actions/:id', async (request, reply) => {
     const actionId = Number(
       (request.params as { id: string }).id,
     );
     const detail = actionDetail(repository, actionId);
-    if (!detail) return reply.code(404).send({ error: 'not found' });
+    if (!detail) {
+      throw new ApiError(404, 'NOT_FOUND', 'action not found');
+    }
     return detail;
   });
   server.get('/api/agents/:address', async (request, reply) => {
     const address = (request.params as { address: string }).address;
     const reputation = repository.reputation(address);
     if (!reputation) {
-      return reply.code(404).send({ error: 'not found' });
+      throw new ApiError(404, 'NOT_FOUND', 'agent not found');
     }
     return {
       ...reputation,
@@ -50,15 +65,37 @@ export function registerRoutes(
   }));
   server.post('/api/challenge', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
+    const action = repository.action(actionId);
+    if (!action || !isChallengeEligible(action, currentController)) {
+      const code = challengeIneligibilityCode(
+        action,
+        currentController,
+      );
+      throw new ApiError(409, code, 'action is not challengeable');
+    }
     return resolution.challengeAndResolve(actionId);
   });
   server.post('/api/resolve', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
   });
-  server.post('/api/demo/arm', async () =>
-    arm.arm({ reservedForManual: true }),
-  );
+  const armDemo = async (reservedForManual: boolean) => {
+    try {
+      return await arm.arm({ reservedForManual });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'statusCode' in error &&
+        error.statusCode === 503
+      ) {
+        throw error;
+      }
+      throw new ApiError(500, 'ARM_FAILED', 'could not arm demo action', {
+        cause: error,
+      });
+    }
+  };
+  server.post('/api/demo/arm', async () => armDemo(true));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();
     return {
@@ -68,9 +105,7 @@ export function registerRoutes(
         `account-hash-${deployment.accounts.watchdog.accountHash}`,
     };
   });
-  server.post('/api/watchdog/demo', async () =>
-    arm.arm({ reservedForManual: false }),
-  );
+  server.post('/api/watchdog/demo', async () => armDemo(false));
   server.post('/api/verify', async (request, reply) => {
     const amount = process.env.X402_VERIFY_PRICE ?? '1000000';
     const payTo = deployment.accounts.challenger.publicKey;
@@ -93,7 +128,12 @@ export function registerRoutes(
         .header('X-Payment-Amount', amount)
         .header('X-Payment-Network', 'casper')
         .header('X-Payment-Simulated', 'true')
-        .send({ error: 'payment required', payment: requirement });
+        .send({
+          success: false,
+          code: 'PAYMENT_REQUIRED',
+          message: 'sandbox payment envelope required',
+          payment: requirement,
+        });
     }
     const verification = verifyClaimCollision(
       repository,

@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assertChallengeWindow,
   createInvoiceIdGenerator,
+  demoSignerPlan,
   DEMO_GAS_TARGET_MOTES,
   isInsufficientFundsError,
   isTransientRpcError,
   runFundedDemoAction,
+  pollArmReadiness,
 } from '../../src/api/arm.js';
 
 describe('createInvoiceIdGenerator', () => {
@@ -14,6 +16,45 @@ describe('createInvoiceIdGenerator', () => {
     expect(next()).toBe(2_000_000_000_000);
     expect(next()).toBe(2_000_000_000_001);
     expect(next()).toBe(2_000_000_000_002);
+  });
+});
+
+describe('demo signer plan', () => {
+  it('uses the owner for invoice submission and the agent for action calls', () => {
+    expect(demoSignerPlan('/owner.pem', '/agent.pem')).toEqual({
+      submitInvoice: '/owner.pem',
+      initiate: '/agent.pem',
+      approve: '/agent.pem',
+      postBond: '/agent.pem',
+      execute: '/agent.pem',
+    });
+  });
+});
+
+describe('pollArmReadiness', () => {
+  it('waits for executed duplicate state with fifteen minutes remaining', async () => {
+    const getAction = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'Bonded',
+        challenger: 'None',
+        window_end: '2000000',
+      })
+      .mockResolvedValueOnce({
+        status: 'Executed',
+        challenger: 'None',
+        window_end: '2000000',
+      });
+    const duplicate = vi
+      .fn()
+      .mockResolvedValueOnce('false')
+      .mockResolvedValueOnce('true');
+    const ready = await pollArmReadiness(getAction, duplicate, {
+      now: () => 1_000_000,
+      sleep: vi.fn().mockResolvedValue(undefined),
+      attempts: 2,
+    });
+    expect(ready.status).toBe('Executed');
   });
 });
 

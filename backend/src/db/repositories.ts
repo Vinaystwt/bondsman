@@ -26,6 +26,9 @@ export interface ActionRecord {
   status: string;
   challenger: string | null;
   challengerType: 'watchdog' | 'manual' | null;
+  challengeSigning?: 'backend-key' | 'watchdog-key' | 'external-wallet' | null;
+  controllerHash?: string;
+  duplicateProven?: boolean;
   reservedForManual: boolean;
   transactions: Record<string, string>;
 }
@@ -88,6 +91,15 @@ function actionFromRow(row: Record<string, unknown>): ActionRecord {
       row.challenger_type === null
         ? null
         : (String(row.challenger_type) as 'watchdog' | 'manual'),
+    challengeSigning:
+      row.challenge_signing === null
+        ? null
+        : (String(row.challenge_signing) as
+            | 'backend-key'
+            | 'watchdog-key'
+            | 'external-wallet'),
+    controllerHash: String(row.controller_hash),
+    duplicateProven: Boolean(row.duplicate_proven),
     reservedForManual: Boolean(row.reserved_for_manual),
     transactions: JSON.parse(
       String(row.transactions_json),
@@ -137,8 +149,9 @@ export class Repository {
         `INSERT INTO actions
           (action_id, invoice_id, agent, amount, claim_hash, reasoning,
            reasoning_hash, bond_required, bond_posted, window_end, status,
-           challenger, challenger_type, reserved_for_manual, transactions_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           challenger, challenger_type, challenge_signing, controller_hash,
+           duplicate_proven, reserved_for_manual, transactions_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(action_id) DO UPDATE SET
           invoice_id=excluded.invoice_id, agent=excluded.agent,
           amount=excluded.amount, claim_hash=excluded.claim_hash,
@@ -147,6 +160,9 @@ export class Repository {
           window_end=excluded.window_end, status=excluded.status,
           challenger=excluded.challenger,
           challenger_type=excluded.challenger_type,
+          challenge_signing=excluded.challenge_signing,
+          controller_hash=excluded.controller_hash,
+          duplicate_proven=excluded.duplicate_proven,
           reserved_for_manual=excluded.reserved_for_manual,
           transactions_json=excluded.transactions_json`,
       )
@@ -164,6 +180,9 @@ export class Repository {
         action.status,
         action.challenger,
         action.challengerType,
+        action.challengeSigning ?? null,
+        action.controllerHash ?? '',
+        Number(action.duplicateProven ?? false),
         Number(action.reservedForManual),
         JSON.stringify(action.transactions),
       );

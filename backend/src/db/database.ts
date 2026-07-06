@@ -33,5 +33,18 @@ export function openDatabase(path: string): Database.Database {
       'ALTER TABLE actions ADD COLUMN reserved_for_manual INTEGER NOT NULL DEFAULT 0',
     );
   }
+  if (!actionColumns.has('challenge_signing')) {
+    database.exec('ALTER TABLE actions ADD COLUMN challenge_signing TEXT');
+  }
+  if (!actionColumns.has('controller_hash')) {
+    database.exec(
+      "ALTER TABLE actions ADD COLUMN controller_hash TEXT NOT NULL DEFAULT ''",
+    );
+  }
+  if (!actionColumns.has('duplicate_proven')) {
+    database.exec(
+      'ALTER TABLE actions ADD COLUMN duplicate_proven INTEGER NOT NULL DEFAULT 0',
+    );
+  }
   return database;
 }

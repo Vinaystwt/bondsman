@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS actions (
   status TEXT NOT NULL,
   challenger TEXT,
   challenger_type TEXT,
+  challenge_signing TEXT,
+  controller_hash TEXT NOT NULL DEFAULT '',
+  duplicate_proven INTEGER NOT NULL DEFAULT 0,
   reserved_for_manual INTEGER NOT NULL DEFAULT 0,
   transactions_json TEXT NOT NULL
 );

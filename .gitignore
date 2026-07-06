@@ -4,6 +4,7 @@
 !.env.example
 .keys/
 .data/
+.evidence/
 node_modules/
 target/
 wasm/

@@ -32,7 +32,21 @@ const TOKEN_UNIT = 1_000_000_000n;
 const AGENT_TOKEN_TARGET = 100_000n * TOKEN_UNIT;
 const POOL_TOKEN_TARGET = 500_000n * TOKEN_UNIT;
 const THIRTY_MINUTES_MS = 1_800_000;
+const FIFTEEN_MINUTES_MS = 900_000;
 export const DEMO_GAS_TARGET_MOTES = 300_000_000_000n;
+
+export function demoSignerPlan(
+  deployerPath: string,
+  agentPath: string,
+) {
+  return {
+    submitInvoice: deployerPath,
+    initiate: agentPath,
+    approve: agentPath,
+    postBond: agentPath,
+    execute: agentPath,
+  } as const;
+}
 
 export interface DemoArmService {
   arm(options: {
@@ -58,6 +72,40 @@ export function assertChallengeWindow(
   if (windowEndMs - startedAtMs < THIRTY_MINUTES_MS) {
     throw new Error('armed action challenge window is under thirty minutes');
   }
+}
+
+export async function pollArmReadiness(
+  getAction: () => Promise<RawAction>,
+  getDuplicate: () => Promise<string>,
+  options: {
+    now?: () => number;
+    sleep?: (milliseconds: number) => Promise<void>;
+    attempts?: number;
+  } = {},
+): Promise<RawAction> {
+  const now = options.now ?? Date.now;
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0; attempt < (options.attempts ?? 15); attempt += 1) {
+    const [action, duplicate] = await Promise.all([
+      getAction(),
+      getDuplicate(),
+    ]);
+    if (
+      action.status === 'Executed' &&
+      action.challenger === 'None' &&
+      duplicate === 'true' &&
+      Number(action.window_end) - now() >= FIFTEEN_MINUTES_MS
+    ) {
+      return action;
+    }
+    await sleep(2_000);
+  }
+  throw new Error(
+    'armed action did not become challengeable before readiness timeout',
+  );
 }
 
 function bytesHex(value: string): string {
@@ -163,6 +211,7 @@ export function createDemoArmService(
   config: BondsmanConfig,
   deployment: Deployment,
   repository: Repository,
+  reconcile?: () => Promise<void>,
 ): DemoArmService {
   const nextInvoiceId = createInvoiceIdGenerator();
   let queue: Promise<void> = Promise.resolve();
@@ -193,6 +242,7 @@ export function createDemoArmService(
   const armOnce = async (reservedForManual: boolean) => {
     const deployerPath = resolve(config.deployerSecretKeyPath);
     const agentPath = join(repositoryPath, '.keys/agent.pem');
+    const signers = demoSignerPlan(deployerPath, agentPath);
     const agentAddress =
       `account-hash-${deployment.accounts.agent.accountHash}`;
     const poolAddress = deployment.contracts.invoicePool.packageHash;
@@ -253,7 +303,7 @@ export function createDemoArmService(
           await callContract({
             repository: repositoryPath,
             config,
-            signerPath: agentPath,
+            signerPath: signers.submitInvoice,
             contract: 'InvoicePool',
             entrypoint: 'submit_invoice',
             arguments: [
@@ -301,7 +351,7 @@ export function createDemoArmService(
         await readContract<string>({
           repository: repositoryPath,
           config,
-          signerPath: agentPath,
+          signerPath: signers.initiate,
           contract: 'BondsmanController',
           entrypoint: 'get_action',
           arguments: ['--action_id', String(actionId)],
@@ -335,7 +385,7 @@ export function createDemoArmService(
           transactions.initiate = await callContract({
             repository: repositoryPath,
             config,
-            signerPath: agentPath,
+            signerPath: signers.initiate,
             contract: 'BondsmanController',
             entrypoint: 'initiate_action',
             arguments: [
@@ -375,7 +425,7 @@ export function createDemoArmService(
           transactions.approve = await callContract({
             repository: repositoryPath,
             config,
-            signerPath: agentPath,
+            signerPath: signers.approve,
             contract: 'MockCsprUSD',
             entrypoint: 'approve',
             arguments: [
@@ -409,7 +459,7 @@ export function createDemoArmService(
         transactions.postBond = await callContract({
           repository: repositoryPath,
           config,
-          signerPath: agentPath,
+          signerPath: signers.postBond,
           contract: 'BondsmanController',
           entrypoint: 'post_bond',
           arguments: ['--action_id', String(actionId)],
@@ -428,7 +478,7 @@ export function createDemoArmService(
         transactions.execute = await callContract({
           repository: repositoryPath,
           config,
-          signerPath: agentPath,
+          signerPath: signers.execute,
           contract: 'BondsmanController',
           entrypoint: 'execute_action',
           arguments: ['--action_id', String(actionId)],
@@ -439,7 +489,7 @@ export function createDemoArmService(
         if (confirmed.status !== 'Executed') throw error;
       }
     }
-    const duplicate = await readContract<string>({
+    const getDuplicate = () => readContract<string>({
       repository: repositoryPath,
       config,
       signerPath: agentPath,
@@ -447,11 +497,7 @@ export function createDemoArmService(
       entrypoint: 'is_action_duplicate',
       arguments: ['--action_id', String(actionId)],
     });
-    if (duplicate !== 'true') {
-      throw new Error('armed action is not duplicate');
-    }
-
-    raw = await getAction();
+    raw = await pollArmReadiness(getAction, getDuplicate);
     const windowEnd = Number(raw.window_end);
     assertChallengeWindow(startedAt, windowEnd);
     if (raw.status !== 'Executed') {
@@ -482,18 +528,27 @@ export function createDemoArmService(
       status: raw.status,
       challenger: null,
       challengerType: null,
+      challengeSigning: null,
+      controllerHash:
+        deployment.contracts.controller.contractHash,
+      duplicateProven: true,
       reservedForManual,
       transactions,
     });
-    await persistAgentRun(repositoryPath, {
-      invoiceId: invoice.id,
-      actionId,
-      decision: 'approve',
-      reasoning: decisions.baseline.reasoning,
-      reasoningHash,
-      confidence: decisions.baseline.confidence,
-      transactions,
-    });
+    await persistAgentRun(
+      repositoryPath,
+      deployment.contracts.controller.contractHash,
+      {
+        invoiceId: invoice.id,
+        actionId,
+        decision: 'approve',
+        reasoning: decisions.baseline.reasoning,
+        reasoningHash,
+        confidence: decisions.baseline.confidence,
+        transactions,
+      },
+    );
+    if (reconcile) await reconcile();
     pendingInvoiceId = undefined;
     return actionDetail(repository, actionId)!;
   };
