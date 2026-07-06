@@ -8,7 +8,10 @@ export interface ResolutionService {
   challengeAndResolve(
     actionId: number,
   ): Promise<{ challenge: string; resolve: string }>;
-  resolve(actionId: number): Promise<string>;
+  resolve(
+    actionId: number,
+    evidence?: Record<string, string>,
+  ): Promise<string>;
 }
 
 export function createResolutionService(
@@ -45,14 +48,14 @@ export function createResolutionService(
         if (reconcile) await reconcile();
         return { challenge, resolve };
       }),
-    resolve: (actionId) =>
+    resolve: (actionId, evidence = {}) =>
       queue.run(async () => {
         const resolve = await call('resolve_action', actionId);
         await mergeActionTransactions(
           repositoryPath,
           controllerHash,
           actionId,
-          { resolve },
+          { ...evidence, resolve },
         );
         if (reconcile) await reconcile();
         return resolve;
