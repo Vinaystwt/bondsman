@@ -8,6 +8,8 @@ import {
   isTransientRpcError,
   runFundedDemoAction,
   pollArmReadiness,
+  selectResumablePending,
+  runArmStep,
 } from '../../src/api/arm.js';
 
 describe('createInvoiceIdGenerator', () => {
@@ -55,6 +57,86 @@ describe('pollArmReadiness', () => {
       attempts: 2,
     });
     expect(ready.status).toBe('Executed');
+  });
+});
+
+describe('selectResumablePending', () => {
+  it('does not resume a bonded action whose invoice is already paid', async () => {
+    const pending = await selectResumablePending(
+      [
+        {
+          actionId: 12,
+          invoiceId: 1_000_000_000_100,
+          status: 'ResolvedSlash',
+          windowEnd: 1,
+        },
+        {
+          actionId: 13,
+          invoiceId: 1_000_000_000_100,
+          status: 'Bonded',
+          windowEnd: 0,
+        },
+      ],
+      async (invoiceId) => invoiceId === 1_000_000_000_100,
+    );
+
+    expect(pending).toBeUndefined();
+  });
+
+  it('resumes the newest unpaid initiated or bonded action', async () => {
+    const pending = await selectResumablePending(
+      [
+        {
+          actionId: 13,
+          invoiceId: 1_000_000_000_100,
+          status: 'Bonded',
+          windowEnd: 0,
+        },
+        {
+          actionId: 14,
+          invoiceId: 1_000_000_000_101,
+          status: 'Initiated',
+          windowEnd: 0,
+        },
+      ],
+      async (invoiceId) => invoiceId === 1_000_000_000_100,
+    );
+
+    expect(pending?.actionId).toBe(14);
+  });
+});
+
+describe('runArmStep', () => {
+  it('surfaces the exact step, signer, and contract error', async () => {
+    const logged: unknown[] = [];
+    await expect(
+      runArmStep(
+        'execute_action',
+        {
+          role: 'agent',
+          account: 'account-hash-agent',
+          path: '/keys/agent.pem',
+        },
+        async () => {
+          throw new Error(
+            'Transaction abc failed: User error: 5 (InvoiceAlreadyPaid)',
+          );
+        },
+        (entry) => logged.push(entry),
+      ),
+    ).rejects.toThrow(
+      'execute_action failed; signer=agent (account-hash-agent); reason=Transaction abc failed: User error: 5 (InvoiceAlreadyPaid)',
+    );
+    expect(logged).toEqual([
+      expect.objectContaining({
+        step: 'execute_action',
+        signerRole: 'agent',
+        signerAccount: 'account-hash-agent',
+        signerPath: '/keys/agent.pem',
+        reason:
+          'Transaction abc failed: User error: 5 (InvoiceAlreadyPaid)',
+      }),
+    ]);
   });
 });
 

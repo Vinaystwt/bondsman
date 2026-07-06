@@ -188,6 +188,30 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('returns the real arm step failure instead of an opaque message', async () => {
+    const context = fixture();
+    context.arm.arm.mockRejectedValueOnce(
+      new Error(
+        'execute_action failed; signer=agent (account-hash-agent); reason=User error: 5 (InvoiceAlreadyPaid)',
+      ),
+    );
+
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/api/demo/arm',
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      success: false,
+      code: 'ARM_FAILED',
+      message:
+        'execute_action failed; signer=agent (account-hash-agent); reason=User error: 5 (InvoiceAlreadyPaid)',
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
   it('exposes watchdog status and arms a non-reserved duplicate', async () => {
     const context = fixture();
     const watchdogAddress =

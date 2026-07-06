@@ -5,6 +5,7 @@ import { blake2b256 } from '../agent/hashing.js';
 import { persistAgentRun } from '../agent/runner.js';
 import {
   chainActions,
+  type ChainActionView,
 } from '../casper/actions.js';
 import {
   bytesArgument,
@@ -46,6 +47,54 @@ export function demoSignerPlan(
     postBond: agentPath,
     execute: agentPath,
   } as const;
+}
+
+export interface ArmSigner {
+  role: 'deployer/owner' | 'agent';
+  account: string;
+  path: string;
+}
+
+export async function runArmStep<T>(
+  step: string,
+  signer: ArmSigner,
+  operation: () => Promise<T>,
+  log: (entry: Record<string, unknown>) => void = console.error,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : String(error);
+    log({
+      event: 'demo_arm_step_failed',
+      step,
+      signerRole: signer.role,
+      signerAccount: signer.account,
+      signerPath: signer.path,
+      reason,
+    });
+    throw new Error(
+      `${step} failed; signer=${signer.role} (${signer.account}); reason=${reason}`,
+      { cause: error },
+    );
+  }
+}
+
+export async function selectResumablePending(
+  actions: ChainActionView[],
+  isInvoicePaid: (invoiceId: number) => Promise<boolean>,
+): Promise<ChainActionView | undefined> {
+  for (const action of [...actions].reverse()) {
+    if (
+      action.invoiceId < 1_000_000_000_000 ||
+      !['Initiated', 'Bonded'].includes(action.status)
+    ) {
+      continue;
+    }
+    if (!(await isInvoicePaid(action.invoiceId))) return action;
+  }
+  return undefined;
 }
 
 export interface DemoArmService {
@@ -127,6 +176,10 @@ interface RawAction {
   window_end: string;
   status: string;
   challenger: string;
+}
+
+interface RawInvoice {
+  paid: string | boolean;
 }
 
 export function isTransientRpcError(error: unknown): boolean {
@@ -217,7 +270,6 @@ export function createDemoArmService(
 ): DemoArmService {
   const nextInvoiceId = createInvoiceIdGenerator();
   let queue: Promise<void> = Promise.resolve();
-  let pendingInvoiceId: number | undefined;
 
   const ensureDemoFunding = async () => {
     const deployer = await loadPrivateKey(
@@ -241,10 +293,42 @@ export function createDemoArmService(
     }
   };
 
-  const armOnce = async (reservedForManual: boolean) => {
+  const armOnce = async (
+    reservedForManual: boolean,
+    requestedInvoiceId: number,
+  ) => {
     const deployerPath = resolve(config.deployerSecretKeyPath);
     const agentPath = join(repositoryPath, '.keys/agent.pem');
     const signers = demoSignerPlan(deployerPath, agentPath);
+    const deployerSigner: ArmSigner = {
+      role: 'deployer/owner',
+      account:
+        `account-hash-${deployment.accounts.deployer.accountHash}`,
+      path: signers.submitInvoice,
+    };
+    const agentSigner: ArmSigner = {
+      role: 'agent',
+      account:
+        `account-hash-${deployment.accounts.agent.accountHash}`,
+      path: signers.initiate,
+    };
+    const transact = (
+      step: string,
+      signer: ArmSigner,
+      contract: string,
+      entrypoint: string,
+      arguments_: string[],
+    ) =>
+      runArmStep(step, signer, () =>
+        callContract({
+          repository: repositoryPath,
+          config,
+          signerPath: signer.path,
+          contract,
+          entrypoint,
+          arguments: arguments_,
+        }),
+      );
     const agentAddress =
       `account-hash-${deployment.accounts.agent.accountHash}`;
     const poolAddress = deployment.contracts.invoicePool.packageHash;
@@ -268,16 +352,25 @@ export function createDemoArmService(
       config,
       deployment,
     });
-    const pending = [...chain]
-      .reverse()
-      .find(
-        (action) =>
-          action.invoiceId >= 1_000_000_000_000 &&
-          ['Initiated', 'Bonded'].includes(action.status),
-      );
-    const invoiceId =
-      pending?.invoiceId ?? pendingInvoiceId ?? nextInvoiceId();
-    pendingInvoiceId = invoiceId;
+    const pending = await selectResumablePending(
+      chain,
+      async (candidateInvoiceId) => {
+        const serialized = await readContract<string>({
+          repository: repositoryPath,
+          config,
+          signerPath: deployerPath,
+          contract: 'InvoicePool',
+          entrypoint: 'get_invoice',
+          arguments: [
+            '--invoice_id',
+            String(candidateInvoiceId),
+          ],
+        });
+        const candidate = JSON.parse(serialized) as RawInvoice;
+        return candidate.paid === true || candidate.paid === 'true';
+      },
+    );
+    const invoiceId = pending?.invoiceId ?? requestedInvoiceId;
     const collision = demoInvoices[0]!;
     const invoice: SeedInvoice = {
       ...collision,
@@ -302,13 +395,12 @@ export function createDemoArmService(
       }
       if (!invoiceExists) {
         try {
-          await callContract({
-            repository: repositoryPath,
-            config,
-            signerPath: signers.submitInvoice,
-            contract: 'InvoicePool',
-            entrypoint: 'submit_invoice',
-            arguments: [
+          await transact(
+            'submit_invoice',
+            deployerSigner,
+            'InvoicePool',
+            'submit_invoice',
+            [
               '--invoice_id',
               String(invoice.id),
               '--amount',
@@ -318,7 +410,7 @@ export function createDemoArmService(
               '--claim_hash',
               bytesArgument(Buffer.from(invoice.claimHash, 'hex')),
             ],
-          });
+          );
         } catch (error) {
           if (!isTransientRpcError(error)) throw error;
           await readContract({
@@ -361,13 +453,12 @@ export function createDemoArmService(
       ) as RawAction;
     if (!pending) {
       try {
-        transactions.initiate = await callContract({
-          repository: repositoryPath,
-          config,
-          signerPath: agentPath,
-          contract: 'BondsmanController',
-          entrypoint: 'initiate_action',
-          arguments: [
+        transactions.initiate = await transact(
+          'initiate_action',
+          agentSigner,
+          'BondsmanController',
+          'initiate_action',
+          [
             '--invoice_id',
             String(invoice.id),
             '--claim_hash',
@@ -377,20 +468,19 @@ export function createDemoArmService(
             '--reasoning_hash',
             bytesArgument(Buffer.from(reasoningHash, 'hex')),
           ],
-        });
+        );
       } catch (error) {
         if (!isTransientRpcError(error)) throw error;
         try {
           await getAction();
         } catch (stateError) {
           if (isTransientRpcError(stateError)) throw error;
-          transactions.initiate = await callContract({
-            repository: repositoryPath,
-            config,
-            signerPath: signers.initiate,
-            contract: 'BondsmanController',
-            entrypoint: 'initiate_action',
-            arguments: [
+          transactions.initiate = await transact(
+            'initiate_action',
+            agentSigner,
+            'BondsmanController',
+            'initiate_action',
+            [
               '--invoice_id',
               String(invoice.id),
               '--claim_hash',
@@ -400,7 +490,7 @@ export function createDemoArmService(
               '--reasoning_hash',
               bytesArgument(Buffer.from(reasoningHash, 'hex')),
             ],
-          });
+          );
         }
       }
     }
@@ -424,19 +514,18 @@ export function createDemoArmService(
       );
       if (allowance < BigInt(raw.bond_required)) {
         try {
-          transactions.approve = await callContract({
-            repository: repositoryPath,
-            config,
-            signerPath: signers.approve,
-            contract: 'MockCsprUSD',
-            entrypoint: 'approve',
-            arguments: [
+          transactions.approve = await transact(
+            'approve',
+            agentSigner,
+            'MockCsprUSD',
+            'approve',
+            [
               '--spender',
               deployment.contracts.bondVault.packageHash,
               '--amount',
               raw.bond_required,
             ],
-          });
+          );
         } catch (error) {
           if (!isTransientRpcError(error)) throw error;
           const confirmed = BigInt(
@@ -458,14 +547,13 @@ export function createDemoArmService(
         }
       }
       try {
-        transactions.postBond = await callContract({
-          repository: repositoryPath,
-          config,
-          signerPath: signers.postBond,
-          contract: 'BondsmanController',
-          entrypoint: 'post_bond',
-          arguments: ['--action_id', String(actionId)],
-        });
+        transactions.postBond = await transact(
+          'post_bond',
+          agentSigner,
+          'BondsmanController',
+          'post_bond',
+          ['--action_id', String(actionId)],
+        );
       } catch (error) {
         if (!isTransientRpcError(error)) throw error;
         const confirmed = await getAction();
@@ -477,14 +565,13 @@ export function createDemoArmService(
     }
     if (raw.status === 'Bonded') {
       try {
-        transactions.execute = await callContract({
-          repository: repositoryPath,
-          config,
-          signerPath: signers.execute,
-          contract: 'BondsmanController',
-          entrypoint: 'execute_action',
-          arguments: ['--action_id', String(actionId)],
-        });
+        transactions.execute = await transact(
+          'execute_action',
+          agentSigner,
+          'BondsmanController',
+          'execute_action',
+          ['--action_id', String(actionId)],
+        );
       } catch (error) {
         if (!isTransientRpcError(error)) throw error;
         const confirmed = await getAction();
@@ -554,16 +641,16 @@ export function createDemoArmService(
     raw = await pollArmReadiness(getAction, getDuplicate, {
       attempts: 1,
     });
-    pendingInvoiceId = undefined;
     return actionDetail(repository, actionId)!;
   };
 
   return {
     arm({ reservedForManual }) {
+      const requestedInvoiceId = nextInvoiceId();
       const result = queue.then(() =>
         runFundedDemoAction(
           ensureDemoFunding,
-          () => armOnce(reservedForManual),
+          () => armOnce(reservedForManual, requestedInvoiceId),
         ),
       );
       queue = result.then(

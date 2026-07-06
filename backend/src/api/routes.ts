@@ -90,9 +90,9 @@ export function registerRoutes(
       ) {
         throw error;
       }
-      throw new ApiError(500, 'ARM_FAILED', 'could not arm demo action', {
-        cause: error,
-      });
+      const message =
+        error instanceof Error ? error.message : String(error);
+      throw new ApiError(500, 'ARM_FAILED', message, { cause: error });
     }
   };
   server.post('/api/demo/arm', async () => armDemo(true));
