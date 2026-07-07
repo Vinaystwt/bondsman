@@ -333,7 +333,16 @@ export default function ManualChallenge({
                     or use the demo key
                   </button>
                   <p className="text-xs text-muted">
-                    Your wallet signs the challenge deploy. The slash reward goes to your account.
+                    Your wallet signs the challenge deploy. The slash reward
+                    goes to your account. Signing costs ~50 CSPR gas.{' '}
+                    <a
+                      href="https://testnet.cspr.live/tools/faucet"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-accent underline decoration-rule underline-offset-2 hover:decoration-accent"
+                    >
+                      Need testnet gas?
+                    </a>
                   </p>
                 </>
               ) : (

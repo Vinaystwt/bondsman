@@ -12,6 +12,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import CopyHash from '@/components/ui/CopyHash';
 import { Label, Panel, Stat } from '@/components/ui/Primitives';
 import { BackendDown, EmptyState, SkeletonPanel } from '@/components/ui/States';
+import FaucetHint from '@/components/FaucetHint';
 
 function halve(atomic: string): bigint {
   try { return BigInt(atomic) / 2n; } catch { return 0n; }
@@ -131,6 +132,9 @@ export default function LedgerClient() {
         contract tracks agent reputation only. Reward totals are computed from
         posted bonds using the 50 / 50 split.
       </p>
+
+      <FaucetHint />
+
 
       <section aria-label="Your challenges">
         <h2 className="serial mb-3 text-[0.68rem] text-muted">Your challenges</h2>

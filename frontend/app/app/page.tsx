@@ -6,6 +6,8 @@ import { Label, Panel, Stat } from '@/components/ui/Primitives';
 import PageHeader from '@/components/app/PageHeader';
 import ActionRow from '@/components/app/ActionRow';
 import Ticker from '@/components/live/Ticker';
+import RealVsDemo from '@/components/RealVsDemo';
+import ReserveGrowth from '@/components/ReserveGrowth';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
@@ -117,11 +119,21 @@ export default async function OverviewPage() {
         </section>
       </div>
 
+      <section aria-label="Reserve growth">
+        <h2 className="serial mb-3 text-[0.68rem] text-muted">Reserve growth</h2>
+        <ReserveGrowth reserve={reserve} />
+      </section>
+
       {/* Folded panels: policies and the reserve */}
       <div className="grid gap-10 lg:grid-cols-2">
         <PoliciesPanel />
         <ReservePanel slashes={reserve.slashes} balance={reserve.balance} />
       </div>
+
+      <section aria-label="Real vs demo">
+        <h2 className="serial mb-3 text-[0.68rem] text-muted">What is real, what is mocked</h2>
+        <RealVsDemo />
+      </section>
     </div>
   );
 }
