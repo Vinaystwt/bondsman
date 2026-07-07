@@ -8,6 +8,7 @@ import ActionRow from '@/components/app/ActionRow';
 import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
 import { truncateHash } from '@/lib/format';
+import { resolveRole } from '@/lib/agent-roles';
 
 export const metadata: Metadata = { title: 'Agent' };
 
@@ -18,7 +19,10 @@ export default async function AgentPage({
 }) {
   const { address } = await params;
   const decoded = decodeURIComponent(address);
-  const res = await safeGet(() => api.agent(decoded));
+  const [res, depRes] = await Promise.all([
+    safeGet(() => api.agent(decoded)),
+    safeGet(() => api.deployments()),
+  ]);
 
   if (!res.reachable) {
     return (
@@ -29,6 +33,8 @@ export default async function AgentPage({
     );
   }
   const agent = res.data;
+  const deployments = depRes.reachable ? depRes.data : null;
+  const role = resolveRole(agent.agent, deployments);
   const scoreTone = agent.score > 0 ? 'accent' : agent.score < 0 ? 'slash' : 'bone';
 
   return (
@@ -53,9 +59,15 @@ export default async function AgentPage({
         }
       />
 
-      <div className="flex items-center gap-2">
-        <Label>Account</Label>
-        <CopyHash value={agent.agent} label={truncateHash(agent.agent)} />
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Label>Account</Label>
+          <CopyHash value={agent.agent} label={truncateHash(agent.agent)} />
+        </div>
+        <div className="rounded-md border border-accent/30 bg-accent/5 px-4 py-3">
+          <p className="serial text-[0.62rem] text-accent">{role.label}</p>
+          <p className="mt-1 text-sm text-bone">{role.description}</p>
+        </div>
       </div>
 
       <section aria-label="Reputation" className="grid gap-4 sm:grid-cols-3">

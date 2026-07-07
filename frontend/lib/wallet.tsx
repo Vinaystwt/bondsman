@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { publicKeyToAccountHashHex } from './account';
 
 export interface WalletSignResult {
   cancelled: boolean;
@@ -20,6 +21,7 @@ interface WalletState {
   connected: boolean;
   connecting: boolean;
   publicKey: string | null;
+  accountHash: string | null;
   balance: string | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -31,6 +33,7 @@ const WalletContext = createContext<WalletState>({
   connected: false,
   connecting: false,
   publicKey: null,
+  accountHash: null,
   balance: null,
   connect: async () => {},
   disconnect: async () => {},
@@ -143,9 +146,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return { cancelled: false, signatureHex: parsed.signatureHex ?? '' };
   }, [publicKey]);
 
+  const accountHash = useMemo(
+    () => (publicKey ? publicKeyToAccountHashHex(publicKey) : null),
+    [publicKey],
+  );
+
   const value = useMemo(
-    () => ({ available, connected, connecting, publicKey, balance, connect, disconnect, sign }),
-    [available, connected, connecting, publicKey, balance, connect, disconnect, sign],
+    () => ({ available, connected, connecting, publicKey, accountHash, balance, connect, disconnect, sign }),
+    [available, connected, connecting, publicKey, accountHash, balance, connect, disconnect, sign],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

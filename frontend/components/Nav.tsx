@@ -8,14 +8,17 @@ import WalletButton from './WalletButton';
 
 const PUBLIC_LINKS = [
   { href: '/how-it-works', label: 'How it works' },
+  { href: '/two-agents', label: 'Two agents' },
+  { href: '/rwa', label: 'Invoice pool' },
+  { href: '/build', label: 'Build' },
   { href: '/docs', label: 'Docs' },
-  { href: '/demo', label: 'Demo' },
 ];
 
 const APP_LINKS = [
   { href: '/app', label: 'Overview' },
   { href: '/app/arena', label: 'Arena' },
   { href: '/app/actions', label: 'Docket' },
+  { href: '/app/ledger', label: 'My Ledger' },
   { href: '/app/agents', label: 'Agents' },
 ];
 

@@ -5,6 +5,7 @@ import { BackendDown, EmptyState } from '@/components/ui/States';
 import { Label, Panel, Stat } from '@/components/ui/Primitives';
 import PageHeader from '@/components/app/PageHeader';
 import ActionRow from '@/components/app/ActionRow';
+import Ticker from '@/components/live/Ticker';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
@@ -75,9 +76,14 @@ export default async function OverviewPage() {
         </Stat>
       </section>
 
+      <section aria-label="Live activity">
+        <h2 className="serial mb-3 text-[0.68rem] text-muted">Live activity</h2>
+        <Ticker limit={8} />
+      </section>
+
       <div className="grid gap-10 lg:grid-cols-[1fr_1fr]">
         <section aria-label="Recent activity">
-          <h2 className="serial mb-3 text-[0.68rem] text-muted">Recent activity</h2>
+          <h2 className="serial mb-3 text-[0.68rem] text-muted">Recent actions</h2>
           {recent.length === 0 ? (
             <EmptyState title="No actions yet" body="Once the agent acts on an invoice, it shows up here." />
           ) : (
