@@ -6,6 +6,9 @@
 
 FROM rust:1-bookworm AS rust-base
 
+RUN apt-get update && apt-get install -y --no-install-recommends binaryen \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN rustup toolchain install nightly-2026-01-01 \
   && rustup target add wasm32-unknown-unknown --toolchain nightly-2026-01-01 \
   && rustup default nightly-2026-01-01
