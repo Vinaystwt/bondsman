@@ -637,7 +637,13 @@ export function createDemoArmService(
         transactions,
       },
     );
-    if (reconcile) await reconcile();
+    if (reconcile) {
+      void reconcile().catch((error) => {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        console.error(`Demo arm background reconciliation failed: ${message}`);
+      });
+    }
     raw = await pollArmReadiness(getAction, getDuplicate, {
       attempts: 1,
     });
