@@ -17,6 +17,7 @@
     "mcp": "tsx src/mcp/main.ts",
     "api": "tsx src/api/main.ts",
     "seed": "tsx ../scripts/seed.ts",
+    "demo:prearm": "tsx ../scripts/prearm.ts",
     "demo": "tsx src/demo.ts"
   },
   "dependencies": {

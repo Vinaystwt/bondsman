@@ -21,6 +21,7 @@ import {
 } from './eligibility.js';
 import { ApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
+import { demoReadyResponse } from './demo-ready.js';
 
 export function registerRoutes(
   server: FastifyInstance,
@@ -79,6 +80,9 @@ export function registerRoutes(
     balance: repository.reserve(),
     slashes: repository.slashEvents(),
   }));
+  server.get('/api/demo/ready', async () =>
+    demoReadyResponse(repository, currentController),
+  );
   server.post('/api/challenge', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);

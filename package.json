@@ -15,6 +15,7 @@
     "mcp": "npm --workspace backend run mcp",
     "api": "npm --workspace backend run api",
     "seed": "npm --workspace backend run seed",
+    "demo:prearm": "npm --workspace backend run demo:prearm",
     "test": "npm --workspace backend test",
     "typecheck": "npm --workspace backend run typecheck",
     "demo": "npm --workspace backend run demo"

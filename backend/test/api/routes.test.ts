@@ -50,6 +50,26 @@ function fixture() {
     transactions: { execute: 'c'.repeat(64) },
   });
   repository.upsertAction({
+    actionId: 6,
+    invoiceId: 2049,
+    agent: `account-hash-${account.accountHash}`,
+    amount: '500',
+    claimHash: 'manual-ready',
+    reasoning: 'Duplicate fixture',
+    reasoningHash: 'ee',
+    bondRequired: '25',
+    bondPosted: '25',
+    windowEnd: Date.now() + 1_800_000,
+    status: 'Executed',
+    challenger: null,
+    challengerType: null,
+    challengeSigning: null,
+    controllerHash: deployment.contracts.controller.contractHash,
+    duplicateProven: true,
+    reservedForManual: true,
+    transactions: { execute: '6'.repeat(64) },
+  });
+  repository.upsertAction({
     actionId: 3,
     invoiceId: 1045,
     agent: `account-hash-${account.accountHash}`,
@@ -197,7 +217,7 @@ describe('REST routes', () => {
     ).toContain('testnet.cspr.live');
     expect(
       (await context.server.inject('/api/actions')).json(),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       (await context.server.inject('/api/actions')).json()[1],
     ).toMatchObject({
@@ -210,6 +230,53 @@ describe('REST routes', () => {
       controller: deployment.contracts.controller.contractHash,
       watchdog: { running: false },
       deploymentsPath: 'deployments/testnet.json',
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('returns ready manual demo cases without starting a fresh arm', async () => {
+    const context = fixture();
+    const response = await context.server.inject('/api/demo/ready');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      count: 1,
+      best: {
+        actionId: 6,
+        status: 'Executed',
+        duplicateProven: true,
+        reservedForManual: true,
+        safeToChallengeNow: true,
+      },
+    });
+    expect(response.json().best.remainingMs).toBeGreaterThanOrEqual(
+      10 * 60 * 1000,
+    );
+    expect(context.arm.arm).not.toHaveBeenCalled();
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('returns a structured no-ready response', async () => {
+    const context = fixture();
+    context.repository.upsertAction({
+      ...context.repository.action(6)!,
+      windowEnd: Date.now() + 60_000,
+    });
+
+    const response = await context.server.inject('/api/demo/ready');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      success: false,
+      code: 'NO_READY_CASE',
+      message: 'No challengeable case is ready yet.',
+      nextStep: 'Run npm run demo:prearm or request a fresh case.',
+      cases: [],
+      count: 0,
+      minRemainingMs: 10 * 60 * 1000,
     });
     await context.server.close();
     context.database.close();

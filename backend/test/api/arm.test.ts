@@ -107,6 +107,37 @@ describe('selectResumablePending', () => {
 });
 
 describe('runArmStep', () => {
+  it('logs start and end duration with the transaction hash', async () => {
+    const logged: unknown[] = [];
+    const hash = 'a'.repeat(64);
+    await expect(
+      runArmStep(
+        'post_bond',
+        {
+          role: 'agent',
+          account: 'account-hash-agent',
+          path: '/keys/agent.pem',
+        },
+        async () => hash,
+        (entry) => logged.push(entry),
+      ),
+    ).resolves.toBe(hash);
+    expect(logged).toEqual([
+      expect.objectContaining({
+        event: 'demo_arm_step_start',
+        step: 'post_bond',
+        signerRole: 'agent',
+      }),
+      expect.objectContaining({
+        event: 'demo_arm_step_end',
+        step: 'post_bond',
+        signerRole: 'agent',
+        transactionHash: hash,
+        durationMs: expect.any(Number),
+      }),
+    ]);
+  });
+
   it('surfaces the exact step, signer, and contract error', async () => {
     const logged: unknown[] = [];
     await expect(
@@ -129,10 +160,17 @@ describe('runArmStep', () => {
     );
     expect(logged).toEqual([
       expect.objectContaining({
+        event: 'demo_arm_step_start',
+        step: 'execute_action',
+        signerRole: 'agent',
+      }),
+      expect.objectContaining({
+        event: 'demo_arm_step_failed',
         step: 'execute_action',
         signerRole: 'agent',
         signerAccount: 'account-hash-agent',
         signerPath: '/keys/agent.pem',
+        durationMs: expect.any(Number),
         reason:
           'Transaction abc failed: User error: 5 (InvoiceAlreadyPaid)',
       }),

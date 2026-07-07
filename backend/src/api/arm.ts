@@ -61,8 +61,28 @@ export async function runArmStep<T>(
   operation: () => Promise<T>,
   log: (entry: Record<string, unknown>) => void = console.error,
 ): Promise<T> {
+  const startedAt = Date.now();
+  log({
+    event: 'demo_arm_step_start',
+    step,
+    signerRole: signer.role,
+    signerAccount: signer.account,
+    signerPath: signer.path,
+  });
   try {
-    return await operation();
+    const result = await operation();
+    log({
+      event: 'demo_arm_step_end',
+      step,
+      signerRole: signer.role,
+      signerAccount: signer.account,
+      signerPath: signer.path,
+      durationMs: Date.now() - startedAt,
+      ...(typeof result === 'string' && /^[0-9a-f]{64}$/.test(result)
+        ? { transactionHash: result }
+        : {}),
+    });
+    return result;
   } catch (error) {
     const reason =
       error instanceof Error ? error.message : String(error);
@@ -72,6 +92,7 @@ export async function runArmStep<T>(
       signerRole: signer.role,
       signerAccount: signer.account,
       signerPath: signer.path,
+      durationMs: Date.now() - startedAt,
       reason,
     });
     throw new Error(

@@ -2,19 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
-import type { ActionDetail, ActionSummary, Watchdog } from '@/lib/types';
+import type { ActionDetail, Watchdog } from '@/lib/types';
 import { BackendDown, SkeletonPanel } from '@/components/ui/States';
 import { Label } from '@/components/ui/Primitives';
 import ManualChallenge from './ManualChallenge';
 import WatchdogEconomy from './WatchdogEconomy';
-
-function isChallengeable(a: ActionSummary): boolean {
-  return (
-    a.status === 'Executed' &&
-    a.windowEnd > Date.now() &&
-    !a.challenger
-  );
-}
 
 export default function ArenaClient({ heading }: { heading?: boolean }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'down'>('loading');
@@ -43,10 +35,10 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         setArmError(err.message);
       } else if (err instanceof BackendUnreachable) {
         setArmError(
-          'The arm request timed out. The Casper testnet may be slow. Try again in a moment.',
+          'The fresh case request is still submitting real Casper testnet transactions. Refresh in a moment or run npm run demo:prearm before a demo.',
         );
       } else {
-        setArmError('Could not arm a challengeable payout.');
+        setArmError('Could not prepare a challengeable payout.');
       }
     } finally {
       setArming(false);
@@ -65,25 +57,28 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
     }
     setStatus('ready');
 
-    // Load actions. Any listing error becomes a soft arm error, not a full page-down.
+    // Load a ready, pre-armed case. Any listing error becomes a soft arm error,
+    // not a full page-down.
     try {
-      const actions = await clientApi.actions();
-      const reserved = actions.find((a) => a.reservedForManual && isChallengeable(a));
-      if (reserved) {
-        try {
-          const detail = await clientApi.action(reserved.actionId);
-          setArmed(detail);
+      const ready = await clientApi.demoReady();
+      if (ready.success) {
+        if (ready.best.safeToChallengeNow) {
+          setArmed(ready.best);
           refresh();
           return;
-        } catch { /* fall through to arm */ }
+        }
+        setArmError('A case was found, but it is not safe to challenge now. Run npm run demo:prearm before a demo.');
+      } else {
+        setArmError(
+          `${ready.message} ${ready.nextStep}`,
+        );
       }
     } catch (err) {
       if (err instanceof ApiError) setArmError(err.message);
+      else setArmError('No ready challengeable payout is loaded yet.');
     }
-
-    await arm();
     refresh();
-  }, [refresh, arm]);
+  }, [refresh]);
 
   useEffect(() => {
     load();
@@ -131,8 +126,12 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
                   onClick={arm}
                   className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
                 >
-                  Arm a fresh payout
+                  Prepare Fresh Case
                 </button>
+                <p className="mt-2 text-xs leading-relaxed text-muted">
+                  This submits real Casper testnet transactions and can take
+                  around two minutes. For demos, run <span className="font-mono text-bone">npm run demo:prearm</span> first.
+                </p>
               </>
             ) : (
               <>
@@ -142,8 +141,13 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
                   onClick={arm}
                   className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
                 >
-                  Arm a fresh payout
+                  Prepare Fresh Case
                 </button>
+                <p className="mt-2 text-xs leading-relaxed text-muted">
+                  This prepares a real bonded payout on Casper testnet. It is
+                  intentionally not auto-started because finality can take a
+                  couple of minutes.
+                </p>
               </>
             )}
           </div>
@@ -151,11 +155,11 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         {status === 'ready' && arming && (
           <div className="rounded-md border border-rule bg-surface px-5 py-6">
             <p className="text-sm text-accent">
-              Arming a fresh payout on Casper testnet. This can take 30 to 60 seconds.
+              Preparing a fresh payout on Casper testnet. This can take around two minutes.
             </p>
             <p className="mt-2 text-xs text-muted">
-              The approver agent has to sign a bond and execute a payout before
-              this action is ready to challenge.
+              The approver agent submits invoice, action, allowance, bond, and
+              execution transactions before the case is ready to challenge.
             </p>
           </div>
         )}

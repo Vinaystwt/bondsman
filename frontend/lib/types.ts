@@ -100,6 +100,31 @@ export interface ActionDetail extends ActionSummary {
   explorerLinks: Partial<Record<keyof ActionTransactions, string>>;
 }
 
+export interface DemoReadyCase extends ActionDetail {
+  demo: true;
+  remainingMs: number;
+  minRemainingMs: number;
+  safeToChallengeNow: boolean;
+}
+
+export type DemoReady =
+  | {
+      success: true;
+      count: number;
+      minRemainingMs: number;
+      best: DemoReadyCase;
+      cases: DemoReadyCase[];
+    }
+  | {
+      success: false;
+      code: 'NO_READY_CASE';
+      message: string;
+      nextStep: string;
+      count: 0;
+      minRemainingMs: number;
+      cases: [];
+    };
+
 export interface AgentReputation {
   agent: string;
   clean: number;

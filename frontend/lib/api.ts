@@ -3,6 +3,7 @@ import type {
   ActionSummary,
   AgentReputation,
   Deployment,
+  DemoReady,
   Health,
   Invoice,
   Reserve,
@@ -122,6 +123,7 @@ export const api = {
   invoices: () => serverGet<Invoice[]>('/api/invoices'),
   actions: () => serverGet<ActionSummary[]>('/api/actions'),
   action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
+  demoReady: () => serverGet<DemoReady>('/api/demo/ready'),
   agent: (address: string) =>
     serverGet<AgentReputation>(`/api/agents/${address}`),
   reserve: () => serverGet<Reserve>('/api/reserve'),
@@ -180,6 +182,7 @@ export const clientApi = {
   health: () => clientGet<Health>('/health'),
   actions: () => clientGet<ActionSummary[]>('/actions'),
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
+  demoReady: () => clientGet<DemoReady>('/demo/ready'),
   reserve: () => clientGet<Reserve>('/reserve'),
   watchdog: () => clientGet<Watchdog>('/watchdog'),
   arm: () => clientPost<ActionDetail>('/demo/arm', undefined, LONG_FETCH_TIMEOUT_MS),
