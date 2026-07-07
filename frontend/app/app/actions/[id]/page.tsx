@@ -11,7 +11,7 @@ import BondCertificate from '@/components/action/BondCertificate';
 import EventTimeline from '@/components/action/EventTimeline';
 import ReasoningReveal from '@/components/action/ReasoningReveal';
 import SlashSplit from '@/components/action/SlashSplit';
-import { serial, truncateHash, formatWindowEnd, resolveDisplayStatus } from '@/lib/format';
+import { serial, truncateHash, formatWindowEnd, resolveDisplayStatus, accountExplorer } from '@/lib/format';
 import type { ActionDetail, Invoice } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Action' };
@@ -111,7 +111,7 @@ export default async function ActionPage({
           {action.challenger && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="serial text-[0.62rem] text-muted">Challenger:</span>
-              <CopyHash value={action.challenger} label={truncateHash(action.challenger)} />
+              <CopyHash value={action.challenger} href={accountExplorer(action.challenger)} label={truncateHash(action.challenger)} />
               {challengerLabel && (
                 <span className="rounded border border-rule bg-surface px-2 py-0.5 text-[0.62rem] text-muted">
                   {challengerLabel}
@@ -183,7 +183,7 @@ export default async function ActionPage({
                 <Row term="Due" desc={invoice.dueDate} />
                 <Row
                   term="Vendor"
-                  desc={<CopyHash value={invoice.vendor} label={truncateHash(invoice.vendor)} />}
+                  desc={<CopyHash value={invoice.vendor} href={accountExplorer(invoice.vendor)} label={truncateHash(invoice.vendor)} />}
                 />
                 <Row
                   term="Claim hash"

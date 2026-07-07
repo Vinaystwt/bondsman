@@ -16,6 +16,7 @@ import type {
 const SERVER_BASE =
   process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 const FETCH_TIMEOUT_MS = 30_000;
+const LONG_FETCH_TIMEOUT_MS = 120_000;
 
 export class BackendUnreachable extends Error {
   constructor() {
@@ -81,9 +82,10 @@ async function serverGet<T>(path: string): Promise<T> {
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},
+  timeoutMs: number = FETCH_TIMEOUT_MS,
 ): Promise<Response> {
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
   try {
     return await fetch(input, {
       ...init,
@@ -136,15 +138,23 @@ async function clientGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function clientPost<T>(path: string, body?: unknown): Promise<T> {
+async function clientPost<T>(
+  path: string,
+  body?: unknown,
+  timeoutMs?: number,
+): Promise<T> {
   let res: Response;
   try {
-    res = await fetchWithTimeout(`/api${path}`, {
-      method: 'POST',
-      ...(body !== undefined
-        ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
-        : {}),
-    });
+    res = await fetchWithTimeout(
+      `/api${path}`,
+      {
+        method: 'POST',
+        ...(body !== undefined
+          ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+          : {}),
+      },
+      timeoutMs,
+    );
   } catch {
     throw new BackendUnreachable();
   }
@@ -162,8 +172,8 @@ export const clientApi = {
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   reserve: () => clientGet<Reserve>('/reserve'),
   watchdog: () => clientGet<Watchdog>('/watchdog'),
-  arm: () => clientPost<ActionDetail>('/demo/arm'),
-  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo'),
+  arm: () => clientPost<ActionDetail>('/demo/arm', undefined, LONG_FETCH_TIMEOUT_MS),
+  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo', undefined, LONG_FETCH_TIMEOUT_MS),
   challenge: (actionId: number) =>
     clientPost<{ challenge: string; resolve: string }>('/challenge', { actionId }),
   deployments: () => clientGet<Deployment>('/deployments'),

@@ -7,7 +7,7 @@ import PageHeader from '@/components/app/PageHeader';
 import ActionRow from '@/components/app/ActionRow';
 import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
-import { truncateHash } from '@/lib/format';
+import { truncateHash, accountExplorer } from '@/lib/format';
 import { resolveRole } from '@/lib/agent-roles';
 import type { AgentReputation, Deployment } from '@/lib/types';
 
@@ -103,7 +103,7 @@ export default async function AgentPage({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Label>Account</Label>
-          <CopyHash value={agent.agent} label={truncateHash(agent.agent)} />
+          <CopyHash value={agent.agent} href={accountExplorer(agent.agent)} label={truncateHash(agent.agent)} />
         </div>
         <div className="rounded-md border border-accent/30 bg-accent/5 px-4 py-3">
           <p className="serial text-[0.62rem] text-accent">{role.label}</p>

@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { clientApi, ApiError } from '@/lib/api';
+import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
 import type { ActionDetail, Watchdog, WatchdogCatch } from '@/lib/types';
 import { serial, truncateHash, txExplorer } from '@/lib/format';
 import Money from '@/components/ui/Money';
@@ -38,7 +38,15 @@ export default function WatchdogEconomy({
       setAction(minted);
       await poll(minted.actionId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'The watchdog demo could not start.');
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err instanceof BackendUnreachable) {
+        setError(
+          'The watchdog demo timed out. The Casper testnet may be slow. Try again in a moment.',
+        );
+      } else {
+        setError('The watchdog demo could not start.');
+      }
       setPhase('error');
     }
   }

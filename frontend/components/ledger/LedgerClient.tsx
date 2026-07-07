@@ -6,7 +6,7 @@ import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
 import { useWallet } from '@/lib/wallet';
 import type { ActionSummary } from '@/lib/types';
 import { accountsMatch } from '@/lib/account';
-import { serial, truncateHash } from '@/lib/format';
+import { serial, truncateHash, accountExplorer } from '@/lib/format';
 import Money from '@/components/ui/Money';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CopyHash from '@/components/ui/CopyHash';
@@ -115,7 +115,7 @@ export default function LedgerClient() {
       <div className="flex flex-wrap items-center gap-3">
         <Label>Connected as</Label>
         {wallet.publicKey && (
-          <CopyHash value={wallet.publicKey} label={truncateHash(wallet.publicKey)} />
+          <CopyHash value={wallet.publicKey} href={accountExplorer(wallet.publicKey)} label={truncateHash(wallet.publicKey)} />
         )}
       </div>
 
@@ -144,10 +144,19 @@ export default function LedgerClient() {
           </p>
         )}
         {mine.length === 0 ? (
-          <EmptyState
-            title="No challenges yet"
-            body="Sign a challenge with your wallet in the Arena and it will show up here."
-          />
+          <div className="rounded-md border border-rule bg-surface p-8">
+            <p className="text-lg font-semibold text-bone">Your Ledger is empty</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              You have not signed a challenge yet. Head to the Arena, catch a
+              wrong payout, and your record starts here.
+            </p>
+            <Link
+              href="/app/arena"
+              className="mt-5 inline-flex rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+            >
+              Head to the Arena
+            </Link>
+          </div>
         ) : (
           <ul className="space-y-2">
             {[...mine]

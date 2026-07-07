@@ -4,7 +4,6 @@ import Hero from '@/components/landing/Hero';
 import EmailCapture from '@/components/landing/EmailCapture';
 import Appear from '@/components/ui/Appear';
 import Diagram from '@/components/Diagram';
-import Roadmap from '@/components/Roadmap';
 import { Label } from '@/components/ui/Primitives';
 import { txExplorer } from '@/lib/format';
 import type { ActionSummary } from '@/lib/types';
@@ -121,28 +120,27 @@ export default async function Home() {
 
       {/* Use case */}
       <Band>
-        <Appear className="max-w-3xl">
-          <Label>The use case</Label>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-            Paying invoices, without paying twice
-          </h2>
-          <p className="mt-5 max-w-prose leading-relaxed text-muted">
-            An agent processing accounts payable approves invoices for payment.
-            The expensive, common failure is paying the same invoice twice: a
-            duplicate slips through and the money is gone. Bondsman gives every
-            invoice a claim hash, a fingerprint of what it claims. When a payout
-            reuses a fingerprint that was already paid, the contract proves the
-            duplicate and slashes the bond. The agent loses its own stake before
-            anyone else loses a cent.
-          </p>
-          <div className="mt-8">
-            <Diagram
-              name="slash-split"
-              alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
-              className="max-w-xl"
-            />
-          </div>
-        </Appear>
+        <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
+          <Appear className="max-w-md">
+            <Label>The use case</Label>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
+              Paying invoices, without paying twice
+            </h2>
+            <p className="mt-5 leading-relaxed text-muted">
+              An agent processing accounts payable approves invoices for payment.
+              The expensive, common failure is paying the same invoice twice: a
+              duplicate slips through and the money is gone. Bondsman gives every
+              invoice a claim hash, a fingerprint of what it claims. When a payout
+              reuses a fingerprint that was already paid, the contract proves the
+              duplicate and slashes the bond. The agent loses its own stake before
+              anyone else loses a cent.
+            </p>
+          </Appear>
+          <Diagram
+            name="slash-split"
+            alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
+          />
+        </div>
       </Band>
 
       {/* Positioning */}
@@ -199,41 +197,35 @@ export default async function Home() {
         </div>
       </Band>
 
-      {/* Roadmap */}
-      <Band>
-        <Appear className="max-w-2xl">
-          <Label>Roadmap</Label>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-            Where this goes next
-          </h2>
-          <p className="mt-4 max-w-prose leading-relaxed text-muted">
-            Built for operators of on-chain invoice financing and factoring
-            pools, then real-world asset payout pools more broadly.
-          </p>
-        </Appear>
-        <div className="mt-10 max-w-2xl">
-          <Roadmap />
-        </div>
-      </Band>
-
       {/* Closing */}
       <Band className="border-t border-rule">
-        <Appear className="max-w-2xl">
+        <Appear className="max-w-3xl">
           <h2 className="text-4xl font-semibold tracking-tight text-bone sm:text-5xl">
             No bond, no action.
           </h2>
-          <p className="mt-4 max-w-prose leading-relaxed text-muted">
+          <p className="mt-5 max-w-prose leading-relaxed text-muted">
             Try the demo now, or leave your email and we will reach out when
             Bondsman moves past testnet.
           </p>
-          <div className="mt-8 space-y-6">
+          <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href="/demo"
-              className="inline-block rounded-md bg-accent px-7 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
+              className="rounded-md bg-accent px-7 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
             >
               Try the live demo
             </Link>
-            <EmailCapture />
+            <Link
+              href="/app/arena"
+              className="rounded-md border border-rule px-7 py-3 text-bone transition-colors hover:border-accent/50"
+            >
+              Open the Arena
+            </Link>
+          </div>
+          <div className="mt-8 border-t border-rule pt-6">
+            <p className="text-xs text-muted">Get updates when Bondsman ships to mainnet.</p>
+            <div className="mt-3 max-w-md">
+              <EmailCapture />
+            </div>
           </div>
         </Appear>
       </Band>

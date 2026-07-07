@@ -47,6 +47,17 @@ export function contractExplorer(hash: string): string {
   return `https://testnet.cspr.live/contract/${stripPrefix(hash)}`;
 }
 
+export function contractPackageExplorer(hash: string): string {
+  return `https://testnet.cspr.live/contract-package/${stripPrefix(hash)}`;
+}
+
+export function accountExplorer(value: string): string {
+  const clean = stripPrefix(value);
+  // Public keys start with 01 or 02, are 66 chars; account hashes are 64.
+  const type = clean.length === 66 ? 'account' : 'account';
+  return `https://testnet.cspr.live/${type}/${clean}`;
+}
+
 /** Certificate-style serial number for an action id, e.g. No. 0002. */
 export function serial(actionId: number): string {
   return `No. ${String(actionId).padStart(4, '0')}`;

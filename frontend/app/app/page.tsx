@@ -223,7 +223,7 @@ function ReservePanel({
                     {s.transactionHash ? (
                       <CopyHash value={s.transactionHash} href={txExplorer(s.transactionHash)} label={truncateHash(s.transactionHash)} />
                     ) : (
-                      <span className="text-xs text-muted">on-chain</span>
+                      <span className="text-xs text-muted">Proof from prior contract</span>
                     )}
                   </li>
                 );

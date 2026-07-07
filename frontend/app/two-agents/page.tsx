@@ -6,7 +6,7 @@ import { BackendDown } from '@/components/ui/States';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
 import TwoAgentsClient from '@/components/two-agents/TwoAgentsClient';
-import { serial, truncateHash, txExplorer } from '@/lib/format';
+import { serial, truncateHash, txExplorer, accountExplorer } from '@/lib/format';
 
 export const metadata: Metadata = {
   title: 'The two-agent economy',
@@ -172,7 +172,7 @@ function AccountCard({
       <div className="mt-3 border-t border-rule pt-3">
         <Label>Public key</Label>
         <div className="mt-1">
-          <CopyHash value={publicKey} label={truncateHash(publicKey)} />
+          <CopyHash value={publicKey} href={accountExplorer(publicKey)} label={truncateHash(publicKey)} />
         </div>
       </div>
     </Panel>

@@ -7,7 +7,7 @@ import { clientApi, ApiError } from '@/lib/api';
 import { useWallet } from '@/lib/wallet';
 import { buildChallengeDeploy, attachSignature } from '@/lib/challenge-deploy';
 import type { ActionDetail, WalletResolveResult } from '@/lib/types';
-import { parseEventData, serial, truncateHash, txExplorer } from '@/lib/format';
+import { parseEventData, serial, truncateHash, txExplorer, accountExplorer } from '@/lib/format';
 import Seal from '@/components/Seal';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
@@ -619,12 +619,12 @@ function ChallengerLine({
       {isYou ? (
         <>
           <span className="font-medium text-accent">Challenger: You</span>
-          <CopyHash value={storedChallenger} label={truncateHash(storedChallenger)} />
+          <CopyHash value={storedChallenger} href={accountExplorer(storedChallenger)} label={truncateHash(storedChallenger)} />
         </>
       ) : (
         <>
           <span className="text-muted">Challenger:</span>
-          <CopyHash value={storedChallenger} label={truncateHash(storedChallenger)} />
+          <CopyHash value={storedChallenger} href={accountExplorer(storedChallenger)} label={truncateHash(storedChallenger)} />
         </>
       )}
     </div>

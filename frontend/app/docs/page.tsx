@@ -6,13 +6,12 @@ import DocSection from '@/components/docs/DocSection';
 import CodeBlock from '@/components/docs/CodeBlock';
 import ContractTable from '@/components/docs/ContractTable';
 import Diagram from '@/components/Diagram';
-import Roadmap from '@/components/Roadmap';
 import { Label } from '@/components/ui/Primitives';
 
 export const metadata: Metadata = {
   title: 'Documentation',
   description:
-    'How Bondsman works, end to end: the lifecycle, the contracts, the economics, and the roadmap.',
+    'How Bondsman works, end to end: the lifecycle, the contracts, the surfaces, and the economics.',
 };
 
 export default async function DocsPage() {
@@ -27,8 +26,8 @@ export default async function DocsPage() {
         </h1>
         <p className="mt-3 max-w-prose leading-relaxed text-muted">
           Everything Bondsman does, in plain language, with the real contracts,
-          real transactions, and production roadmap. Read top to bottom, or jump
-          to a section.
+          real transactions, and every surface a user, operator, or builder
+          touches. Read top to bottom, or jump to a section.
         </p>
       </header>
 
@@ -205,14 +204,61 @@ export default async function DocsPage() {
         </Faq>
       </DocSection>
 
-      <DocSection id="roadmap" title="Roadmap">
+      <DocSection id="surfaces" title="Product surfaces">
         <p>
-          Built for operators of on-chain invoice financing and factoring pools,
-          then real-world asset payout pools more broadly.
+          A user in the product can act, understand what they act on, and come
+          back to their own record. Every surface points to on-chain evidence.
         </p>
-        <div className="mt-6 max-w-2xl">
-          <Roadmap />
-        </div>
+        <h3>Arena</h3>
+        <p>
+          The <Link href="/app/arena">Arena</Link> shows a single case card: a
+          bonded payout in its challenge window. Two paths coexist. The primary
+          path signs the challenge with a Casper Wallet, and the reward goes to
+          the connected account. The fallback path is signed by a backend key
+          for judges without a funded wallet, and it says so.
+        </p>
+        <h3>Docket</h3>
+        <p>
+          The <Link href="/app/actions">Docket</Link> lists every bonded action.
+          Filter by status: challengeable, challenged, slashed, refunded. Each
+          row opens a full detail page with the lifecycle, the invoice, the
+          agent&apos;s reasoning, the reasoning hash you can locally verify,
+          the slash split, and every on-chain transaction.
+        </p>
+        <h3>My Ledger</h3>
+        <p>
+          The <Link href="/app/ledger">Ledger</Link> is the connected wallet&apos;s
+          record: challenges signed, rewards earned, a derived hunter score.
+          Derived client-side from the actions list filtered by challenger. Not
+          on-chain reputation; the contract tracks agents.
+        </p>
+        <h3>Agents</h3>
+        <p>
+          <Link href="/app/agents">Agents</Link> lists every on-chain account
+          that has acted. Two are core: the approver (model-driven, posts bonds)
+          and the watchdog (deterministic, catches duplicates). Each profile
+          shows clean, slashed, and score from the contract&apos;s reputation.
+        </p>
+        <h3>Two-agent economy</h3>
+        <p>
+          <Link href="/two-agents">Two agents</Link> is the standalone showcase:
+          the approver approves, the watchdog catches, the contract settles.
+          Both are real Casper accounts. One button triggers a live end-to-end
+          run.
+        </p>
+        <h3>Invoice pool</h3>
+        <p>
+          <Link href="/rwa">Invoice pool</Link> presents the real-world use case:
+          an invoice-financing pool at risk of paying the same claim twice. The
+          claim hash is the fingerprint the contract uses to prove a duplicate.
+        </p>
+        <h3>Build with MCP</h3>
+        <p>
+          <Link href="/build">Build</Link> shows the six MCP tools any external
+          Casper agent can call: list_actions, get_action, get_reputation,
+          get_bond_requirement, get_deployments, challenge_action. MCP is the
+          interface. There is no SDK by design.
+        </p>
         <p className="mt-8">
           Want to see it run? <Link href="/demo">Try the demo</Link> and slash a
           real bond, or watch the approver and watchdog settle one without you.

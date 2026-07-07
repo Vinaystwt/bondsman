@@ -55,15 +55,14 @@ export default function DemoPage() {
         ))}
       </ol>
 
-      <Appear className="mt-14">
+      <div className="mt-14 max-w-3xl">
         <Diagram
           name="slash-split"
           alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
-          className="max-w-xl"
         />
-      </Appear>
+      </div>
 
-      <Appear className="mt-14 max-w-2xl rounded-lg border border-rule bg-surface p-8">
+      <Appear className="mt-14 max-w-3xl rounded-lg border border-rule bg-surface p-8">
         <h2 className="text-2xl font-semibold text-bone">Ready to try it</h2>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
           The Challenge Arena has a real bonded payout waiting. Challenge it

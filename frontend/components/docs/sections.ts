@@ -11,5 +11,5 @@ export const DOCS_SECTIONS: DocSection[] = [
   { id: 'contracts', title: 'Contracts', keywords: 'controller bond vault invoice pool csprusd hashes architecture table' },
   { id: 'lifecycle', title: 'Lifecycle and transactions', keywords: 'steps on-chain transaction slash split duplicate proof' },
   { id: 'faq', title: 'Economics and security', keywords: 'faq optimistic verification sybil grief custodial wallet x402 window reputation' },
-  { id: 'roadmap', title: 'Roadmap', keywords: 'mainnet pilot fault classes marketplace passport production' },
+  { id: 'surfaces', title: 'Product surfaces', keywords: 'arena docket ledger agents two agents invoice pool mcp build' },
 ];

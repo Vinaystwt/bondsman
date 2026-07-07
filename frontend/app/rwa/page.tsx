@@ -91,7 +91,7 @@ export default async function RWAPage() {
         <div className="flex items-baseline justify-between">
           <Label>Invoices in the pool</Label>
           <span className="text-xs text-muted">
-            Mocked data, real bonds, real slashes.
+            Mocked invoice data, real bonds, real slashes.
           </span>
         </div>
         <ul className="space-y-2">
@@ -115,6 +115,11 @@ export default async function RWAPage() {
             </li>
           ))}
         </ul>
+        <p className="text-xs leading-relaxed text-muted">
+          Invoice numbers, debtors, due dates, and delivery flags are simulated
+          for the testnet demonstration. The claim hash is the fingerprint the
+          contract uses to prove a duplicate; it is not itself a transaction.
+        </p>
       </section>
 
       {reserve && (

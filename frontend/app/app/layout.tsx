@@ -4,6 +4,6 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">{children}</div>
+    <div className="mx-auto max-w-6xl px-6 py-10 sm:py-12">{children}</div>
   );
 }

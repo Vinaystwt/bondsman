@@ -4,7 +4,7 @@ import { Label, Panel } from '@/components/ui/Primitives';
 import { BackendDown, EmptyState } from '@/components/ui/States';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
-import { truncateHash } from '@/lib/format';
+import { truncateHash, accountExplorer } from '@/lib/format';
 
 export const metadata: Metadata = {
   title: 'Challenger leaderboard',
@@ -77,6 +77,7 @@ export default async function LeaderboardPage() {
                 </span>
                 <CopyHash
                   value={r.challenger}
+                  href={accountExplorer(r.challenger)}
                   label={truncateHash(r.challenger)}
                 />
                 <span className="text-xs text-muted">{typeLabel(r.type)}</span>

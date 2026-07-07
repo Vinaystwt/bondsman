@@ -26,84 +26,116 @@ export default function HowItWorks() {
         </p>
       </Appear>
 
-      <Section label="The lifecycle" title="One path, two endings">
-        <p>
-          An action begins when the agent commits its decision and the hash of
-          its reasoning. It then locks a <Term name="bond">bond</Term>, executes
-          the payout, and enters a{' '}
-          <Term name="challenge window">challenge window</Term>. From there it
-          ends one of two ways.
-        </p>
-        <p>
-          If no challenge holds, the window closes and the bond returns in full.
-          If a challenge proves the payout was wrong, the contract slashes the
-          bond. The action held up, or it did not. There is no middle state.
-        </p>
-        <Diagram
-          name="lifecycle"
-          alt="Intent, bond, execute, challenge window, then a refund on the clean path or a slash on the wrong path."
-          className="mt-6"
-        />
-      </Section>
+      <Section
+        label="The lifecycle"
+        title="One path, two endings"
+        body={
+          <>
+            <p>
+              An action begins when the agent commits its decision and the hash
+              of its reasoning. It then locks a <Term name="bond">bond</Term>,
+              executes the payout, and enters a{' '}
+              <Term name="challenge window">challenge window</Term>. From there it
+              ends one of two ways.
+            </p>
+            <p>
+              If no challenge holds, the window closes and the bond returns in
+              full. If a challenge proves the payout was wrong, the contract
+              slashes the bond. The action held up, or it did not. There is no
+              middle state.
+            </p>
+          </>
+        }
+        diagram={
+          <Diagram
+            name="lifecycle"
+            alt="Intent, bond, execute, challenge window, then a refund on the clean path or a slash on the wrong path."
+          />
+        }
+      />
 
-      <Section label="The proof" title="The contract proves the fraud">
-        <p>
-          No human judges a payout. The most common fraud, paying the same
-          invoice twice, is proven directly. Each invoice carries a{' '}
-          <Term name="claim hash">claim hash</Term>. When a payout reuses a hash
-          that was already paid, the invoice pool sees the collision and the slash
-          follows. It is a fact on the chain, not a verdict.
-        </p>
-        <Diagram
-          name="duplicate-proof"
-          alt="Two invoices share one claim hash. The contract detects the collision and slashes, with no human in the path."
-          className="mt-6"
-        />
-      </Section>
+      <Section
+        label="The proof"
+        title="The contract proves the fraud"
+        body={
+          <p>
+            No human judges a payout. The most common fraud, paying the same
+            invoice twice, is proven directly. Each invoice carries a{' '}
+            <Term name="claim hash">claim hash</Term>. When a payout reuses a
+            hash that was already paid, the invoice pool sees the collision and
+            the slash follows. It is a fact on the chain, not a verdict.
+          </p>
+        }
+        diagram={
+          <Diagram
+            name="duplicate-proof"
+            alt="Two invoices share one claim hash. The contract detects the collision and slashes, with no human in the path."
+          />
+        }
+      />
 
-      <Section label="The slash" title="Where the bond goes">
-        <p>
-          A slashed bond splits in half. One half goes to whoever caught the wrong
-          payout, which pays people and agents to watch. The other half goes to a{' '}
-          <Term name="reserve">reserve</Term> that protects the people whose money
-          the agent moves. Nothing else funds the reserve, so its balance measures
-          fraud caught.
-        </p>
-        <Diagram
-          name="slash-split"
-          alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
-          className="mt-6 max-w-xl"
-        />
-      </Section>
+      <Section
+        label="The slash"
+        title="Where the bond goes"
+        body={
+          <p>
+            A slashed bond splits in half. One half goes to whoever caught the
+            wrong payout, which pays people and agents to watch. The other half
+            goes to a <Term name="reserve">reserve</Term> that protects the
+            people whose money the agent moves. Nothing else funds the reserve,
+            so its balance measures fraud caught.
+          </p>
+        }
+        diagram={
+          <Diagram
+            name="slash-split"
+            alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
+          />
+        }
+      />
 
-      <Section label="The bond" title="Sized to the risk, adjusted by record">
-        <p>
-          The bond scales with the payout. Below 10,000 csprUSD the rate is 2
-          percent. At 10,000 it steps to 3 percent, and at 50,000 to 5 percent. A
-          larger payout puts more at risk, so it costs more to act on.
-        </p>
-        <p>
-          The agent&apos;s record adjusts it further. While the{' '}
-          <Term name="reputation">reputation</Term> score is negative, the
-          contract adds that many basis points, up to 300. Reputation can only add
-          a premium above the tier floor, never discount below it, so a large
-          action always requires the tier bond regardless of history.
-        </p>
-      </Section>
+      <Section
+        label="The bond"
+        title="Sized to the risk, adjusted by record"
+        body={
+          <>
+            <p>
+              The bond scales with the payout. Below 10,000 csprUSD the rate is
+              2 percent. At 10,000 it steps to 3 percent, and at 50,000 to 5
+              percent. A larger payout puts more at risk, so it costs more to
+              act on.
+            </p>
+            <p>
+              The agent&apos;s record adjusts it further. While the{' '}
+              <Term name="reputation">reputation</Term> score is negative, the
+              contract adds that many basis points, up to 300. Reputation can
+              only add a premium above the tier floor, never discount below it,
+              so a large action always requires the tier bond regardless of
+              history.
+            </p>
+          </>
+        }
+      />
 
-      <Section label="The economy" title="Approver and watchdog, no human">
-        <p>
-          A model-driven agent approves payouts. A deterministic watchdog watches
-          them. When a payout is a duplicate, the watchdog challenges it and the
-          contract slashes the bond, paying the watchdog its share. Two on-chain
-          accounts settle against each other with no person in the loop.
-        </p>
-        <Diagram
-          name="agent-economy"
-          alt="The approver agent pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond and pays the watchdog."
-          className="mt-6"
-        />
-      </Section>
+      <Section
+        label="The economy"
+        title="Approver and watchdog, no human"
+        body={
+          <p>
+            A model-driven agent approves payouts. A deterministic watchdog
+            watches them. When a payout is a duplicate, the watchdog challenges
+            it and the contract slashes the bond, paying the watchdog its share.
+            Two on-chain accounts settle against each other with no person in
+            the loop.
+          </p>
+        }
+        diagram={
+          <Diagram
+            name="agent-economy"
+            alt="The approver agent pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond and pays the watchdog."
+          />
+        }
+      />
 
       <Appear className="mt-20 rounded-lg border border-rule bg-surface p-8">
         <h2 className="text-2xl font-semibold text-bone">Now watch it happen</h2>
@@ -133,11 +165,13 @@ export default function HowItWorks() {
 function Section({
   label,
   title,
-  children,
+  body,
+  diagram,
 }: {
   label: string;
   title: string;
-  children: React.ReactNode;
+  body: React.ReactNode;
+  diagram?: React.ReactNode;
 }) {
   return (
     <section className="mt-16 border-t border-rule pt-12">
@@ -145,7 +179,8 @@ function Section({
         <Label>{label}</Label>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight text-bone">{title}</h2>
       </Appear>
-      <div className="prose-docs mt-5 space-y-4">{children}</div>
+      <div className="prose-docs mt-6 max-w-2xl space-y-4">{body}</div>
+      {diagram && <div className="mt-8">{diagram}</div>}
     </section>
   );
 }

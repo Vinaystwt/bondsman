@@ -42,7 +42,9 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
       if (err instanceof ApiError) {
         setArmError(err.message);
       } else if (err instanceof BackendUnreachable) {
-        setStatus('down');
+        setArmError(
+          'The arm request timed out. The Casper testnet may be slow. Try again in a moment.',
+        );
       } else {
         setArmError('Could not arm a challengeable payout.');
       }
@@ -52,29 +54,35 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
   }, []);
 
   const load = useCallback(async () => {
+    // Preflight health check. Only "down" if health itself fails.
+    try {
+      await clientApi.health();
+    } catch (err) {
+      if (err instanceof BackendUnreachable) {
+        setStatus('down');
+        return;
+      }
+    }
+    setStatus('ready');
+
+    // Load actions. Any listing error becomes a soft arm error, not a full page-down.
     try {
       const actions = await clientApi.actions();
-      setStatus('ready');
       const reserved = actions.find((a) => a.reservedForManual && isChallengeable(a));
       if (reserved) {
         try {
           const detail = await clientApi.action(reserved.actionId);
           setArmed(detail);
-        } catch {
-          await arm();
-        }
-      } else {
-        await arm();
+          refresh();
+          return;
+        } catch { /* fall through to arm */ }
       }
-      refresh();
     } catch (err) {
-      if (err instanceof BackendUnreachable) {
-        setStatus('down');
-      } else {
-        setStatus('ready');
-        setArmError(err instanceof ApiError ? err.message : 'Could not load actions.');
-      }
+      if (err instanceof ApiError) setArmError(err.message);
     }
+
+    await arm();
+    refresh();
   }, [refresh, arm]);
 
   useEffect(() => {
@@ -140,7 +148,17 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
             )}
           </div>
         )}
-        {status === 'ready' && arming && <SkeletonPanel rows={2} />}
+        {status === 'ready' && arming && (
+          <div className="rounded-md border border-rule bg-surface px-5 py-6">
+            <p className="text-sm text-accent">
+              Arming a fresh payout on Casper testnet. This can take 30 to 60 seconds.
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              The approver agent has to sign a bond and execute a payout before
+              this action is ready to challenge.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Autonomous path */}
