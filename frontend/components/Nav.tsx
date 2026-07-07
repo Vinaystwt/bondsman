@@ -21,7 +21,7 @@ const APP_LINKS = [
   { href: '/app/actions', label: 'Docket' },
   { href: '/app/ledger', label: 'My Ledger' },
   { href: '/app/agents', label: 'Agents' },
-  { href: '/leaderboard', label: 'Leaderboard' },
+  { href: '/app/leaderboard', label: 'Leaderboard' },
 ];
 
 function isActive(pathname: string, href: string) {
