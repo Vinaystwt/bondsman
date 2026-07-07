@@ -9,7 +9,7 @@
 // records the live, deployed contract addresses, so the CLI binary built in
 // the Docker image only calls existing entry points.
 
-import { mkdir, writeFile, symlink, lstat, rm } from 'node:fs/promises';
+import { mkdir, writeFile, symlink, lstat, rm, readFile, access } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve as resolvePath } from 'node:path';
 
@@ -68,6 +68,33 @@ async function ensurePersistentDirs() {
   await linkIntoVolume('.evidence');
 }
 
+// demo-decisions.json (a cached, deterministic approver decision, not a
+// secret) is a hard runtime requirement for the arm flow. seed-invoices.json
+// gives the invoice pool starting fixtures. Both are gitignored under .data
+// locally (runtime state) but are the same static demo content the local
+// dev environment already has, so a copy is committed under seed/ and
+// copied onto the fresh volume on first boot only, never overwriting state
+// a later run may have changed.
+const SEED_FILES = ['demo-decisions.json', 'seed-invoices.json'];
+
+async function seedDataFiles() {
+  for (const name of SEED_FILES) {
+    const target = `.data/${name}`;
+    try {
+      await access(target);
+      continue;
+    } catch {
+      /* not present yet, seed it */
+    }
+    try {
+      const content = await readFile(`seed/${name}`, 'utf8');
+      await writeFile(target, content);
+    } catch {
+      /* no seed shipped for this file; the app treats it as optional or errors clearly */
+    }
+  }
+}
+
 function spawnScript(script) {
   const child = spawn('npm', ['run', script], {
     stdio: 'inherit',
@@ -93,6 +120,7 @@ const script = process.env.START_SCRIPT;
 
 await decodeKeys();
 await ensurePersistentDirs();
+await seedDataFiles();
 
 if (script) {
   if (!['api', 'listener', 'watchdog'].includes(script)) {

@@ -58,6 +58,7 @@ COPY deployments/ ./deployments/
 COPY contracts/resources/ ./contracts/resources/
 COPY contracts/Odra.toml ./contracts/Odra.toml
 COPY scripts/railway-boot.mjs ./scripts/railway-boot.mjs
+COPY seed/ ./seed/
 
 # The compiled CLI binary the backend spawns at runtime, not part of git.
 COPY --from=rust-base /app/contracts/target ./contracts/target

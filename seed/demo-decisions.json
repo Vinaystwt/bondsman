@@ -1,0 +1,17 @@
+{
+  "baseline": {
+    "decision": "approve",
+    "reasoning": "All three criteria are met: (1) delivery is confirmed (delivered=true), (2) amount is positive (50000), and (3) due date (2020-01-01) is on or before the evaluation date (2026-06-29).",
+    "confidence": 1
+  },
+  "duplicate": {
+    "decision": "approve",
+    "reasoning": "All three criteria are met: (1) delivery is confirmed (delivered=true), (2) amount is positive (50000), and (3) due date (2020-01-01) is on or before the evaluation date (2026-06-29).",
+    "confidence": 1
+  },
+  "clean": {
+    "decision": "approve",
+    "reasoning": "All three criteria are met: (1) delivery is confirmed (delivered=true), (2) amount is positive (50000), and (3) due date (2020-01-01) is on or before the evaluation date (2026-06-29).",
+    "confidence": 1
+  }
+}

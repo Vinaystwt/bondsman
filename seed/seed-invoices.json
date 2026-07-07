@@ -1,0 +1,32 @@
+[
+  {
+    "id": 2045,
+    "invoiceNumber": "GBX-8871",
+    "debtor": "Globex Manufacturing",
+    "amount": "50000000000000",
+    "vendor": "account-hash-49d3c32b9e2c38a5b377387882e0926ca9d9d542da1cc739d1572e0a513aeab8",
+    "dueDate": "2020-01-01",
+    "delivered": true,
+    "claimHash": "78a58599f60eb99d6467e1f27a3399327a29710a306bb305abadceeed65a582b"
+  },
+  {
+    "id": 2046,
+    "invoiceNumber": "GBX-8871",
+    "debtor": "Globex Manufacturing",
+    "amount": "50000000000000",
+    "vendor": "account-hash-49d3c32b9e2c38a5b377387882e0926ca9d9d542da1cc739d1572e0a513aeab8",
+    "dueDate": "2020-01-01",
+    "delivered": true,
+    "claimHash": "78a58599f60eb99d6467e1f27a3399327a29710a306bb305abadceeed65a582b"
+  },
+  {
+    "id": 2047,
+    "invoiceNumber": "GBX-8872",
+    "debtor": "Globex Manufacturing",
+    "amount": "50000000000000",
+    "vendor": "account-hash-49d3c32b9e2c38a5b377387882e0926ca9d9d542da1cc739d1572e0a513aeab8",
+    "dueDate": "2020-01-01",
+    "delivered": true,
+    "claimHash": "b0b338f9d4ae7ff6ea8a6912d24616fdc12154cc1a87c15363721069c63169af"
+  }
+]
