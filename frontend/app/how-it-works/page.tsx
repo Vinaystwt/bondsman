@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function HowItWorks() {
   return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
+    <div className="mx-auto max-w-6xl px-6 py-16">
       <Appear className="max-w-2xl">
         <Label>How it works</Label>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-bone sm:text-5xl">

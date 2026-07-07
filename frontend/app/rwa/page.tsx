@@ -22,7 +22,7 @@ export default async function RWAPage() {
 
   if (!invoicesRes.reachable || !actionsRes.reachable) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
+      <div className="mx-auto max-w-6xl px-6 py-16">
         <BackendDown />
       </div>
     );
@@ -37,7 +37,7 @@ export default async function RWAPage() {
   const slashed = actions.filter((a) => a.status === 'ResolvedSlash').length;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-16 px-4 py-16 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-16 px-6 py-16">
       <header className="max-w-3xl space-y-4">
         <Label>The use case</Label>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">

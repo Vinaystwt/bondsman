@@ -36,7 +36,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
   }, [query]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6">
+    <div className="mx-auto max-w-6xl px-6">
       <div className="lg:grid lg:grid-cols-[240px_1fr] lg:gap-10">
         {/* Sidebar */}
         <aside className="lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:py-10">

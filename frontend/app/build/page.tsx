@@ -53,7 +53,7 @@ export default async function BuildPage() {
   const depRes = await safeGet(() => api.deployments());
 
   return (
-    <div className="mx-auto max-w-4xl space-y-16 px-4 py-16 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-16 px-6 py-16">
       <header className="max-w-3xl space-y-4">
         <Label>Build</Label>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">

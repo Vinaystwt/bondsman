@@ -4,7 +4,7 @@ import Seal from './Seal';
 export default function Footer() {
   return (
     <footer className="mt-24 border-t border-rule">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">
             <Seal state="idle" size={28} withText={false} title="Bondsman" />
@@ -46,7 +46,7 @@ export default function Footer() {
         />
       </div>
       <div className="border-t border-rule">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>Built on Casper testnet. Invoice data is mocked; the bond and the slash are real.</span>
           <span className="serial">No bond, no action.</span>
         </div>
