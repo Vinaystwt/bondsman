@@ -13,3 +13,19 @@ dist/
 *.sqlite-shm
 *.sqlite-wal
 .DS_Store
+
+# Local assistant/tooling state
+.claude/
+.clod/
+.codex/
+.cursor/
+
+# Deployment-local metadata
+.vercel/
+.railway/
+
+# Local logs/recordings/submission artifacts
+*.log
+*.mov
+*.mp4
+submission-assets/
