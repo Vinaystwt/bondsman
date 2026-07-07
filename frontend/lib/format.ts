@@ -52,15 +52,26 @@ export function serial(actionId: number): string {
   return `No. ${String(actionId).padStart(4, '0')}`;
 }
 
-/** Human label for each lifecycle status. Plain words, no dashes. */
 export const STATUS_LABEL: Record<string, string> = {
   Initiated: 'Initiated',
   Bonded: 'Bonded',
   Executed: 'Executed',
+  Challengeable: 'Challengeable',
+  Expired: 'Expired',
   Challenged: 'Challenged',
-  ResolvedSlash: 'Bond slashed',
-  ResolvedRefund: 'Bond refunded',
+  ResolvedSlash: 'Resolved Slash',
+  ResolvedRefund: 'Resolved Clean',
 };
+
+export function resolveDisplayStatus(
+  status: string,
+  windowEnd: number,
+  challenger: string | null,
+): string {
+  if (status === 'Executed' && !challenger && windowEnd > Date.now()) return 'Challengeable';
+  if (status === 'Executed' && !challenger && windowEnd <= Date.now()) return 'Expired';
+  return status;
+}
 
 /** Parse the JSON blob carried on a CES event. Returns a flat record. */
 export function parseEventData(data: string): Record<string, unknown> {

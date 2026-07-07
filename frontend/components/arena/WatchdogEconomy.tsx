@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { clientApi } from '@/lib/api';
+import { clientApi, ApiError } from '@/lib/api';
 import type { ActionDetail, Watchdog, WatchdogCatch } from '@/lib/types';
 import { serial, truncateHash, txExplorer } from '@/lib/format';
 import Money from '@/components/ui/Money';
@@ -10,7 +10,7 @@ import CopyHash from '@/components/ui/CopyHash';
 import Diagram from '@/components/Diagram';
 import { Label } from '@/components/ui/Primitives';
 
-type Phase = 'idle' | 'running' | 'done' | 'error';
+type Phase = 'idle' | 'running' | 'done' | 'timeout' | 'error';
 
 export default function WatchdogEconomy({
   initialWatchdog,
@@ -37,8 +37,8 @@ export default function WatchdogEconomy({
       const minted = await clientApi.watchdogDemo();
       setAction(minted);
       await poll(minted.actionId);
-    } catch {
-      setError('The watchdog demo could not start. The backend may be busy.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'The watchdog demo could not start.');
       setPhase('error');
     }
   }
@@ -62,8 +62,7 @@ export default function WatchdogEconomy({
       }
       await new Promise((r) => setTimeout(r, 2500));
     }
-    setPhase('done');
-    onResolved();
+    setPhase('timeout');
   }
 
   const thisCatch: WatchdogCatch | undefined = action
@@ -77,13 +76,14 @@ export default function WatchdogEconomy({
   return (
     <div className="rounded-lg border border-rule bg-surface">
       <div className="border-b border-rule p-6">
-        <Label>The two-agent economy</Label>
+        <Label>Autonomous demo</Label>
         <h3 className="mt-2 text-2xl font-semibold tracking-tight text-bone">
-          Watch two agents transact
+          Watch an approver and a watchdog transact
         </h3>
         <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-          One agent approves. Another agent catches it. The contract settles. No
-          human in the loop. Two on-chain accounts, both signing real transactions.
+          The approver agent (model-driven) approves a duplicate. The watchdog
+          (deterministic) detects and challenges it. The contract settles.
+          Two on-chain accounts, both signing real transactions.
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export default function WatchdogEconomy({
               onClick={run}
               className="rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
             >
-              Watch the agents transact
+              Run the autonomous demo
             </button>
           )}
         </div>
@@ -118,7 +118,7 @@ export default function WatchdogEconomy({
             <Step
               done={executed}
               active={phase === 'running' && !executed}
-              actor="Approver agent"
+              actor="Approver (model-driven)"
               text="Approves and pays a duplicate invoice."
               hash={action?.transactions.execute}
               reduce={!!reduce}
@@ -126,7 +126,7 @@ export default function WatchdogEconomy({
             <Step
               done={challenged}
               active={phase === 'running' && executed && !challenged}
-              actor="Watchdog agent"
+              actor="Watchdog (deterministic)"
               text="Detects the duplicate and challenges it, unprompted."
               hash={action?.transactions.challenge ?? thisCatch?.challengeTx ?? undefined}
               reduce={!!reduce}
@@ -159,6 +159,24 @@ export default function WatchdogEconomy({
               <blockquote className="mt-2 border-l-2 border-accent/40 pl-3 text-sm leading-relaxed text-muted">
                 “{thisCatch.reasoning}”
               </blockquote>
+            )}
+          </div>
+        )}
+
+        {phase === 'timeout' && action && (
+          <div className="mt-5 rounded-md border border-rule bg-surface p-4">
+            <p className="text-sm text-bone">
+              Still finalizing on chain. The transaction was submitted but has not resolved yet.
+            </p>
+            {(action.transactions.challenge ?? action.transactions.resolve) && (
+              <a
+                href={txExplorer(action.transactions.challenge ?? action.transactions.resolve ?? '')}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                View on the explorer
+              </a>
             )}
           </div>
         )}

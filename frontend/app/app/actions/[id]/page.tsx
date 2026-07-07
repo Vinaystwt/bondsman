@@ -9,8 +9,9 @@ import CopyHash from '@/components/ui/CopyHash';
 import Lifecycle from '@/components/action/Lifecycle';
 import BondCertificate from '@/components/action/BondCertificate';
 import EventTimeline from '@/components/action/EventTimeline';
-import ReasoningPanel from '@/components/action/ReasoningPanel';
-import { serial, truncateHash, formatWindowEnd } from '@/lib/format';
+import ReasoningReveal from '@/components/action/ReasoningReveal';
+import SlashSplit from '@/components/action/SlashSplit';
+import { serial, truncateHash, formatWindowEnd, resolveDisplayStatus } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Action' };
@@ -24,6 +25,13 @@ const TX_LABELS: { key: string; label: string }[] = [
   { key: 'resolve', label: 'Resolve' },
 ];
 
+function challengerTypeLabel(type: string | null): string | null {
+  if (type === 'watchdog') return 'Watchdog (deterministic)';
+  if (type === 'manual') return 'Backend key (demo)';
+  if (type === 'external-wallet') return 'External wallet';
+  return null;
+}
+
 export default async function ActionPage({
   params,
 }: {
@@ -36,24 +44,25 @@ export default async function ActionPage({
   }
   const action = result.data;
 
-  // Pull the invoice for context. A failure here is non-fatal.
   let invoice: Invoice | undefined;
   const invoicesResult = await safeGet(() => api.invoices());
   if (invoicesResult.reachable) {
     invoice = invoicesResult.data.find((i) => i.id === action.invoiceId);
   }
 
+  const displayStatus = resolveDisplayStatus(action.status, action.windowEnd, action.challenger);
+  const challengerLabel = challengerTypeLabel(action.challengerType);
+
   return (
     <article className="space-y-10">
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
-        <Link href="/app" className="hover:text-bone">
-          Overview
+        <Link href="/app/actions" className="hover:text-bone">
+          Docket
         </Link>
         <span className="px-2">/</span>
         <span className="text-bone">{serial(action.actionId)}</span>
       </nav>
 
-      {/* Header band */}
       <header className="flex flex-col gap-4 border-b border-rule pb-8 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Label>Bonded action</Label>
@@ -62,23 +71,31 @@ export default async function ActionPage({
           </h1>
           <p className="mt-2 text-sm text-muted">
             {invoice ? (
-              <>
-                Invoice {invoice.invoiceNumber}, {invoice.debtor}
-              </>
+              <>Invoice {invoice.invoiceNumber}, {invoice.debtor}</>
             ) : (
               <>Invoice {action.invoiceId}</>
             )}
           </p>
+          {action.challenger && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="serial text-[0.62rem] text-muted">Challenger:</span>
+              <CopyHash value={action.challenger} label={truncateHash(action.challenger)} />
+              {challengerLabel && (
+                <span className="rounded border border-rule bg-surface px-2 py-0.5 text-[0.62rem] text-muted">
+                  {challengerLabel}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <StatusBadge status={action.status} />
+          <StatusBadge status={displayStatus} />
           <p className="font-mono text-2xl text-bone tabular">
             <Money atomic={action.amount} />
           </p>
         </div>
       </header>
 
-      {/* Lifecycle */}
       <section aria-label="Lifecycle">
         <Label>Lifecycle</Label>
         <div className="mt-5">
@@ -88,7 +105,7 @@ export default async function ActionPage({
 
       <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-8">
-          <ReasoningPanel
+          <ReasoningReveal
             reasoning={action.reasoning}
             reasoningHash={action.reasoningHash}
           />
@@ -98,8 +115,8 @@ export default async function ActionPage({
             bondRequired={action.bondRequired}
             bondPosted={action.bondPosted}
           />
+          <SlashSplit action={action} />
 
-          {/* Lifecycle transactions */}
           <Panel className="p-6">
             <Label>On-chain transactions</Label>
             <ul className="mt-4 divide-y divide-rule">
@@ -110,7 +127,11 @@ export default async function ActionPage({
                 return (
                   <li key={key} className="flex items-center justify-between gap-4 py-2.5">
                     <span className="text-sm text-muted">{label}</span>
-                    <CopyHash value={hash} href={href} label={truncateHash(hash)} />
+                    {href ? (
+                      <CopyHash value={hash} href={href} label={truncateHash(hash)} />
+                    ) : (
+                      <span className="text-xs text-muted">Proof unavailable for this contract version</span>
+                    )}
                   </li>
                 );
               })}
@@ -119,7 +140,6 @@ export default async function ActionPage({
         </div>
 
         <div className="space-y-8">
-          {/* Invoice */}
           <Panel className="p-6">
             <Label>Invoice</Label>
             {invoice ? (
@@ -145,21 +165,11 @@ export default async function ActionPage({
             )}
           </Panel>
 
-          {/* Window */}
           <Panel className="p-6">
             <Label>Challenge window</Label>
             <p className="mt-2 text-sm text-bone">{formatWindowEnd(action.windowEnd)}</p>
-            {action.challenger && (
-              <div className="mt-3">
-                <Label>Challenger</Label>
-                <div className="mt-1">
-                  <CopyHash value={action.challenger} label={truncateHash(action.challenger)} />
-                </div>
-              </div>
-            )}
           </Panel>
 
-          {/* Events */}
           <Panel className="p-6">
             <Label>On-chain events</Label>
             <div className="mt-5">

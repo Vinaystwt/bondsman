@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import Seal from './Seal';
+import WalletButton from './WalletButton';
 
 const PUBLIC_LINKS = [
   { href: '/how-it-works', label: 'How it works' },
@@ -13,7 +14,8 @@ const PUBLIC_LINKS = [
 
 const APP_LINKS = [
   { href: '/app', label: 'Overview' },
-  { href: '/app/arena', label: 'Challenge Arena' },
+  { href: '/app/arena', label: 'Arena' },
+  { href: '/app/actions', label: 'Docket' },
   { href: '/app/agents', label: 'Agents' },
 ];
 
@@ -59,6 +61,7 @@ export default function Nav() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <WalletButton />
           <Link
             href={inApp ? '/' : '/app'}
             className="hidden rounded border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"

@@ -46,7 +46,7 @@ export interface ActionSummary {
   windowEnd: number;
   status: ActionStatus;
   challenger: string | null;
-  challengerType: 'watchdog' | 'manual' | null;
+  challengerType: 'watchdog' | 'manual' | 'external-wallet' | null;
   reservedForManual: boolean;
   transactions: ActionTransactions;
 }
@@ -134,4 +134,24 @@ export interface ChallengeResult {
 
 export interface ResolveResult {
   resolve: string;
+}
+
+export interface TransactionStatus {
+  status: string;
+  final: boolean;
+  success: boolean;
+  error: string | null;
+}
+
+export interface WalletResolveResult {
+  success: boolean;
+  challenger: string;
+  challengerType: 'external-wallet';
+  rewardAmount: string;
+  challengerShare: string;
+  reserveShare: string;
+  challengeDeployHash: string;
+  resolveDeployHash: string;
+  challengeExplorerLink: string;
+  resolveExplorerLink: string;
 }

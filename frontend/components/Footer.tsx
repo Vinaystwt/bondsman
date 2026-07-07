@@ -23,7 +23,7 @@ export default function Footer() {
           links={[
             { href: '/app', label: 'Overview' },
             { href: '/app/arena', label: 'Challenge Arena' },
-            { href: '/app/reserve', label: 'Reserve' },
+            { href: '/app/agents', label: 'Agents' },
           ]}
         />
         <FooterCol

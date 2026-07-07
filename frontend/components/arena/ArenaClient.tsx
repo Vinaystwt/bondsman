@@ -1,20 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { clientApi } from '@/lib/api';
+import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
 import type { ActionDetail, ActionSummary, Watchdog } from '@/lib/types';
 import { BackendDown, SkeletonPanel } from '@/components/ui/States';
 import { Label } from '@/components/ui/Primitives';
 import ManualChallenge from './ManualChallenge';
 import WatchdogEconomy from './WatchdogEconomy';
 
-function challengeable(a: ActionSummary) {
-  return a.status === 'Executed' || a.status === 'Bonded' || a.status === 'Challenged';
+function isChallengeable(a: ActionSummary): boolean {
+  return (
+    a.status === 'Executed' &&
+    a.windowEnd > Date.now() &&
+    !a.challenger
+  );
 }
 
 export default function ArenaClient({ heading }: { heading?: boolean }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'down'>('loading');
   const [armed, setArmed] = useState<ActionDetail | null>(null);
+  const [arming, setArming] = useState(false);
   const [armError, setArmError] = useState('');
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
@@ -27,25 +32,50 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
     }
   }, []);
 
+  const arm = useCallback(async () => {
+    setArming(true);
+    setArmError('');
+    try {
+      const detail = await clientApi.arm();
+      setArmed(detail);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setArmError(err.message);
+      } else if (err instanceof BackendUnreachable) {
+        setStatus('down');
+      } else {
+        setArmError('Could not arm a challengeable payout.');
+      }
+    } finally {
+      setArming(false);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const actions = await clientApi.actions();
       setStatus('ready');
-      // Prefer an already reserved, still open action; otherwise arm a fresh one.
-      const reserved = actions.find((a) => a.reservedForManual && challengeable(a));
-      try {
-        const detail = reserved
-          ? await clientApi.action(reserved.actionId)
-          : await clientApi.arm();
-        setArmed(detail);
-      } catch {
-        setArmError('Could not arm a challengeable payout. The backend may be busy.');
+      const reserved = actions.find((a) => a.reservedForManual && isChallengeable(a));
+      if (reserved) {
+        try {
+          const detail = await clientApi.action(reserved.actionId);
+          setArmed(detail);
+        } catch {
+          await arm();
+        }
+      } else {
+        await arm();
       }
       refresh();
-    } catch {
-      setStatus('down');
+    } catch (err) {
+      if (err instanceof BackendUnreachable) {
+        setStatus('down');
+      } else {
+        setStatus('ready');
+        setArmError(err instanceof ApiError ? err.message : 'Could not load actions.');
+      }
     }
-  }, [refresh]);
+  }, [refresh, arm]);
 
   useEffect(() => {
     load();
@@ -63,29 +93,54 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
           </h1>
           <p className="mt-4 leading-relaxed text-muted">
             Every action below was bonded before it could move money. When one is
-            wrong, anyone can challenge it and the contract takes the bond. Do it
-            yourself in one click, or watch two agents settle it without a human.
+            wrong, a challenge proves it and the contract takes the bond. Connect
+            your wallet to sign the challenge and earn the reward, or use the demo
+            key to see it happen.
           </p>
         </header>
       )}
 
-      {/* Manual path */}
+      {/* Challenge path */}
       <section aria-label="Challenge a payout" className="max-w-3xl">
         <div className="mb-4">
-          <Label>Challenge it yourself</Label>
+          <Label>Challenge a Payout</Label>
           <p className="mt-1 text-sm text-muted">
-            No wallet, no account, no setup. One click slashes a real bond on Casper testnet.
+            Sign with your Casper Wallet and the slash reward goes to your account.
+            No wallet? The backend key demo still works.
           </p>
         </div>
         {status === 'loading' && <SkeletonPanel rows={3} />}
         {status === 'ready' && armed && (
           <ManualChallenge initial={armed} onResolved={refresh} />
         )}
-        {status === 'ready' && !armed && armError && (
-          <div className="rounded-md border border-slash/30 bg-slash/5 px-5 py-4 text-sm text-bone">
-            {armError}
+        {status === 'ready' && !armed && !arming && (
+          <div className="rounded-md border border-rule bg-surface px-5 py-6">
+            {armError ? (
+              <>
+                <p className="text-sm text-bone">{armError}</p>
+                <button
+                  type="button"
+                  onClick={arm}
+                  className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+                >
+                  Arm a fresh payout
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted">No challengeable payout ready.</p>
+                <button
+                  type="button"
+                  onClick={arm}
+                  className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+                >
+                  Arm a fresh payout
+                </button>
+              </>
+            )}
           </div>
         )}
+        {status === 'ready' && arming && <SkeletonPanel rows={2} />}
       </section>
 
       {/* Autonomous path */}

@@ -38,7 +38,7 @@ export default async function Home() {
   const explorerHref =
     featuredSlash?.transactions.resolve
       ? txExplorer(featuredSlash.transactions.resolve)
-      : 'https://testnet.cspr.live';
+      : null;
 
   return (
     <>
@@ -98,12 +98,13 @@ export default async function Home() {
             className="order-2 lg:order-1"
           />
           <Appear className="order-1 max-w-md lg:order-2">
-            <Label>The two-agent economy</Label>
+            <Label>Approver and watchdog</Label>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              One agent approves. Another catches it.
+              One agent approves. A watchdog catches it.
             </h2>
             <p className="mt-4 leading-relaxed text-muted">
-              A watchdog agent watches every payout. When one is a duplicate, it
+              A model-driven agent approves payouts. A deterministic watchdog
+              monitors every payout. When one is a duplicate, the watchdog
               challenges and the contract settles. No human in the loop, two
               on-chain accounts, real transactions.
             </p>
@@ -111,7 +112,7 @@ export default async function Home() {
               href="/demo"
               className="mt-6 inline-block rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
             >
-              Watch the agents transact
+              See it in action
             </Link>
           </Appear>
         </div>
@@ -159,14 +160,16 @@ export default async function Home() {
               Every slash here is a real transaction you can open on the explorer.
               Accountability that never executes is a simulation.
             </p>
-            <a
-              href={explorerHref}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-block text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
-            >
-              Open a real slash on the explorer
-            </a>
+            {explorerHref && (
+              <a
+                href={explorerHref}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-block text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                Open a real slash on the explorer
+              </a>
+            )}
           </Appear>
         </div>
       </Band>

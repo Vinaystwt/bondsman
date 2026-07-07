@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "blakejs": "^1.2.1",
+    "casper-js-sdk": "^5.0.12",
     "framer-motion": "^11.15.0",
     "next": "15.1.6",
     "react": "19.0.0",

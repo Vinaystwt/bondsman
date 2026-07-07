@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import type { ActionSummary } from '@/lib/types';
-import { serial } from '@/lib/format';
+import { serial, resolveDisplayStatus } from '@/lib/format';
 import Money from '@/components/ui/Money';
 import StatusBadge from '@/components/ui/StatusBadge';
 
-/** A dense, clickable ledger row for an action. Used across the dashboard. */
 export default function ActionRow({ action }: { action: ActionSummary }) {
+  const displayStatus = resolveDisplayStatus(action.status, action.windowEnd, action.challenger);
   return (
     <Link
       href={`/app/actions/${action.actionId}`}
@@ -24,7 +24,7 @@ export default function ActionRow({ action }: { action: ActionSummary }) {
           </span>
         </span>
       </div>
-      <StatusBadge status={action.status} />
+      <StatusBadge status={displayStatus} />
     </Link>
   );
 }

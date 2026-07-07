@@ -1,12 +1,13 @@
-import type { ActionStatus } from '@/lib/types';
 import { STATUS_LABEL } from '@/lib/format';
 
 type Tone = 'accent' | 'slash' | 'muted';
 
-const TONE: Record<ActionStatus, Tone> = {
+const TONE: Record<string, Tone> = {
   Initiated: 'muted',
-  Bonded: 'accent',
+  Bonded: 'muted',
   Executed: 'accent',
+  Challengeable: 'accent',
+  Expired: 'muted',
   Challenged: 'accent',
   ResolvedSlash: 'slash',
   ResolvedRefund: 'accent',
@@ -18,8 +19,7 @@ const TONE_CLASS: Record<Tone, string> = {
   muted: 'border-rule text-muted bg-bone/5',
 };
 
-// Icons carry the meaning so color is never the only signal.
-function Icon({ status }: { status: ActionStatus }) {
+function Icon({ status }: { status: string }) {
   if (status === 'ResolvedSlash') {
     return (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -48,12 +48,13 @@ export function StatusBadge({
   status,
   className,
 }: {
-  status: ActionStatus;
+  status: string;
   className?: string;
 }) {
+  const tone = TONE[status] ?? 'muted';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium ${TONE_CLASS[TONE[status]]} ${className ?? ''}`}
+      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium ${TONE_CLASS[tone]} ${className ?? ''}`}
     >
       <Icon status={status} />
       {STATUS_LABEL[status] ?? status}

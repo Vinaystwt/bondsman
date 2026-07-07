@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 
-// Forwards the resolve mutation. Resolves a challenged action or an expired
-// clean action. Async and on-chain.
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -13,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/resolve`, {
+    const res = await fetch(`${API_BASE}/api/challenge/wallet-resolve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),

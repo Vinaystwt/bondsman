@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json(data, { status: res.status });
   } catch {
     return NextResponse.json(
-      { error: 'backend unreachable' },
+      { success: false, code: 'BACKEND_UNREACHABLE', message: 'Backend not reachable' },
       { status: 502 },
     );
   }

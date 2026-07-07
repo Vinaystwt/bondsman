@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Seal from '@/components/Seal';
 import Money from '@/components/ui/Money';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { serial, truncateHash, txExplorer } from '@/lib/format';
+import { serial, truncateHash, txExplorer, resolveDisplayStatus } from '@/lib/format';
 import type { ActionSummary } from '@/lib/types';
 
 interface HeroProps {
@@ -80,7 +80,7 @@ export default function Hero({
                 <span className="serial text-[0.62rem] text-muted">
                   Most recent action
                 </span>
-                <StatusBadge status={recent.status} />
+                <StatusBadge status={resolveDisplayStatus(recent.status, recent.windowEnd, recent.challenger)} />
               </div>
               <p className="mt-5 font-mono text-4xl text-bone tabular">
                 <Money atomic={recent.amount} />

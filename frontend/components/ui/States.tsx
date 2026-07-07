@@ -26,9 +26,9 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-dashed border-rule bg-surface/40 px-6 py-12 text-center">
+    <div className="rounded-md border border-dashed border-rule bg-surface/40 px-6 py-12">
       <h3 className="font-display text-lg text-bone">{title}</h3>
-      <p className="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-muted">
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
         {body}
       </p>
       {action && <div className="mt-5">{action}</div>}
@@ -39,8 +39,8 @@ export function EmptyState({
 /** Shown whenever the backend cannot be reached. Tells the person exactly what to do. */
 export function BackendDown() {
   return (
-    <div className="mx-auto max-w-xl rounded-md border border-slash/30 bg-slash/5 px-6 py-10 text-center">
-      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full border border-slash/40 text-slash">
+    <div className="max-w-xl rounded-md border border-slash/30 bg-slash/5 px-6 py-10">
+      <div className="mb-4 grid h-12 w-12 place-items-center rounded-full border border-slash/40 text-slash">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 8v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <circle cx="12" cy="16.5" r="1.2" fill="currentColor" />
@@ -48,7 +48,7 @@ export function BackendDown() {
         </svg>
       </div>
       <h3 className="font-display text-xl text-bone">Backend not reachable</h3>
-      <p className="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-muted">
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
         Bondsman reads live testnet state from the local API. Start it from the
         repository root, then reload this page.
       </p>

@@ -1,10 +1,12 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { clientApi } from '@/lib/api';
-import type { ActionDetail } from '@/lib/types';
+import { clientApi, ApiError } from '@/lib/api';
+import { useWallet } from '@/lib/wallet';
+import { buildChallengeDeploy, attachSignature } from '@/lib/challenge-deploy';
+import type { ActionDetail, WalletResolveResult } from '@/lib/types';
 import { parseEventData, serial, truncateHash, txExplorer } from '@/lib/format';
 import Seal from '@/components/Seal';
 import Money from '@/components/ui/Money';
@@ -12,7 +14,22 @@ import CopyHash from '@/components/ui/CopyHash';
 import { Label } from '@/components/ui/Primitives';
 import Countdown from './Countdown';
 
-type Phase = 'ready' | 'submitting' | 'pending' | 'resolved' | 'error';
+type Phase =
+  | 'idle'
+  | 'building'
+  | 'signing'
+  | 'submitted'
+  | 'finalizing'
+  | 'resolving'
+  | 'success'
+  | 'rejected'
+  | 'timeout'
+  | 'resolve_error'
+  | 'error'
+  | 'expired'
+  | 'backend_submitting'
+  | 'backend_pending'
+  | 'backend_resolved';
 
 function asAmount(v: unknown): string | null {
   return typeof v === 'string' && /^\d+$/.test(v) ? v : null;
@@ -26,45 +43,210 @@ export default function ManualChallenge({
   onResolved: () => void;
 }) {
   const reduce = useReducedMotion();
+  const wallet = useWallet();
   const [action, setAction] = useState<ActionDetail>(initial);
-  const [phase, setPhase] = useState<Phase>(
-    initial.status === 'ResolvedSlash' ? 'resolved' : 'ready',
-  );
-  const [challengeTx, setChallengeTx] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (initial.status === 'ResolvedSlash') return 'backend_resolved';
+    if (initial.status !== 'Executed' || initial.windowEnd <= Date.now() || initial.challenger)
+      return 'expired';
+    return 'idle';
+  });
+  const [deployHash, setDeployHash] = useState<string | null>(null);
+  const [walletResult, setWalletResult] = useState<WalletResolveResult | null>(null);
   const [error, setError] = useState('');
+  const [controllerHash, setControllerHash] = useState('');
+  const pollAbort = useRef<AbortController | null>(null);
 
-  async function challenge() {
-    setPhase('submitting');
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    if (action.windowEnd <= Date.now()) {
+      setPhase('expired');
+      return;
+    }
+    const timer = setTimeout(() => setPhase('expired'), action.windowEnd - Date.now());
+    return () => clearTimeout(timer);
+  }, [phase, action.windowEnd]);
+
+  useEffect(() => {
+    return () => { pollAbort.current?.abort(); };
+  }, []);
+
+  const walletChallenge = useCallback(async () => {
+    if (action.windowEnd <= Date.now()) {
+      setPhase('expired');
+      return;
+    }
+    setError('');
+    setDeployHash(null);
+    setWalletResult(null);
+
+    try {
+      setPhase('building');
+      const deployments = await clientApi.deployments();
+      const pkgHash = deployments.contracts?.controller?.packageHash ?? '';
+      setControllerHash(pkgHash);
+      if (!pkgHash) throw new Error('Controller contract not found');
+
+      const { deployJson, deployHash: hash } = buildChallengeDeploy(
+        wallet.publicKey!,
+        pkgHash,
+        action.actionId,
+      );
+      setDeployHash(hash);
+
+      setPhase('signing');
+      const signResult = await wallet.sign(JSON.stringify(deployJson));
+      if (signResult.cancelled) {
+        setPhase('rejected');
+        return;
+      }
+
+      const signedDeploy = attachSignature(
+        deployJson,
+        signResult.signatureHex,
+        wallet.publicKey!,
+      );
+
+      setPhase('submitted');
+      const putResult = await clientApi.putDeploy(
+        signedDeploy,
+        deployments.nodeRpcUrl,
+      );
+      const finalHash = putResult.deploy_hash || hash;
+      setDeployHash(finalHash);
+
+      setPhase('finalizing');
+      const controller = new AbortController();
+      pollAbort.current = controller;
+      const startTime = Date.now();
+
+      while (!controller.signal.aborted) {
+        if (Date.now() - startTime > 120_000) {
+          setPhase('timeout');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+        if (controller.signal.aborted) return;
+        try {
+          const tx = await clientApi.transactionStatus(finalHash);
+          if (tx.final && tx.success) break;
+          if (tx.final && !tx.success) {
+            setError(tx.error || 'The challenge deploy failed on chain.');
+            setPhase('error');
+            return;
+          }
+        } catch {
+          // keep polling
+        }
+      }
+      if (controller.signal.aborted) return;
+
+      setPhase('resolving');
+      let resolveResult: WalletResolveResult | null = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          resolveResult = await clientApi.walletResolve(action.actionId, finalHash);
+          break;
+        } catch (err) {
+          if (err instanceof ApiError && err.code === 'CHALLENGE_NOT_FINAL') {
+            await new Promise((r) => setTimeout(r, 3000));
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!resolveResult) {
+        setPhase('resolve_error');
+        return;
+      }
+
+      setWalletResult(resolveResult);
+      setPhase('success');
+      onResolved();
+    } catch (err) {
+      const msg = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : 'The challenge could not be completed.';
+      setError(msg);
+      setPhase('error');
+    }
+  }, [action, wallet, onResolved]);
+
+  const retryResolve = useCallback(async () => {
+    if (!deployHash) return;
+    setPhase('resolving');
+    try {
+      const result = await clientApi.walletResolve(action.actionId, deployHash);
+      setWalletResult(result);
+      setPhase('success');
+      onResolved();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Resolution is still delayed.';
+      setError(msg);
+      setPhase('resolve_error');
+    }
+  }, [action.actionId, deployHash, onResolved]);
+
+  const recheckFinality = useCallback(async () => {
+    if (!deployHash) return;
+    setPhase('finalizing');
+    try {
+      const tx = await clientApi.transactionStatus(deployHash);
+      if (tx.final && tx.success) {
+        setPhase('resolving');
+        const result = await clientApi.walletResolve(action.actionId, deployHash);
+        setWalletResult(result);
+        setPhase('success');
+        onResolved();
+        return;
+      }
+      if (tx.final && !tx.success) {
+        setError(tx.error || 'The challenge deploy failed on chain.');
+        setPhase('error');
+        return;
+      }
+    } catch {
+      // still not final
+    }
+    setPhase('timeout');
+  }, [action.actionId, deployHash, onResolved]);
+
+  // Backend-signed challenge (fallback path, existing behavior)
+  const [backendChallengeTx, setBackendChallengeTx] = useState<string | null>(null);
+
+  const backendChallenge = useCallback(async () => {
+    if (action.windowEnd <= Date.now()) {
+      setPhase('expired');
+      return;
+    }
+    setPhase('backend_submitting');
     setError('');
     try {
       const { challenge: cTx } = await clientApi.challenge(action.actionId);
-      setChallengeTx(cTx ?? null);
-      setPhase('pending');
-      await poll();
-    } catch {
-      setError('The challenge could not be submitted. The backend may be busy.');
+      setBackendChallengeTx(cTx ?? null);
+      setPhase('backend_pending');
+      for (let i = 0; i < 40; i++) {
+        try {
+          const fresh = await clientApi.action(action.actionId);
+          setAction(fresh);
+          if (fresh.status === 'ResolvedSlash' || fresh.status === 'ResolvedRefund') {
+            setPhase('backend_resolved');
+            onResolved();
+            return;
+          }
+        } catch { /* keep polling */ }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+      setPhase('timeout');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'The challenge could not be submitted.';
+      setError(msg);
       setPhase('error');
     }
-  }
-
-  async function poll() {
-    for (let i = 0; i < 40; i += 1) {
-      try {
-        const fresh = await clientApi.action(action.actionId);
-        setAction(fresh);
-        if (fresh.status === 'ResolvedSlash' || fresh.status === 'ResolvedRefund') {
-          setPhase('resolved');
-          onResolved();
-          return;
-        }
-      } catch {
-        /* keep polling */
-      }
-      await new Promise((r) => setTimeout(r, 2500));
-    }
-    setPhase('resolved');
-    onResolved();
-  }
+  }, [action, onResolved]);
 
   const slash = action.events.find((e) => e.eventType === 'BondSlashed');
   const data = slash ? parseEventData(slash.data) : {};
@@ -72,7 +254,13 @@ export default function ManualChallenge({
   const reserveAmount = asAmount(data.pool_amount) ?? asAmount(data.reserve_amount);
   const resolvedSlash = action.status === 'ResolvedSlash';
 
-  const sealState = phase === 'resolved' && resolvedSlash ? 'strike' : 'stamp';
+  const sealState =
+    (phase === 'success' || (phase === 'backend_resolved' && resolvedSlash)) ? 'strike' : 'stamp';
+
+  const isWalletPhase = [
+    'building', 'signing', 'submitted', 'finalizing',
+    'resolving', 'success', 'rejected', 'timeout', 'resolve_error',
+  ].includes(phase);
 
   return (
     <div className="overflow-hidden rounded-lg border border-rule bg-surface">
@@ -80,7 +268,7 @@ export default function ManualChallenge({
         <motion.div
           className="grid place-items-center"
           animate={
-            phase === 'pending' && !reduce
+            (phase === 'finalizing' || phase === 'backend_pending' || phase === 'resolving') && !reduce
               ? { scale: [1, 1.03, 1], transition: { repeat: Infinity, duration: 1.6 } }
               : { scale: 1 }
           }
@@ -90,7 +278,7 @@ export default function ManualChallenge({
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="serial text-[0.62rem] text-muted">{serial(action.actionId)}</span>
-            {phase === 'ready' && <Countdown windowEnd={action.windowEnd} />}
+            {phase === 'idle' && <Countdown windowEnd={action.windowEnd} />}
           </div>
           <p className="mt-2 font-mono text-3xl text-bone tabular">
             <Money atomic={action.amount} />
@@ -115,68 +303,291 @@ export default function ManualChallenge({
         </p>
 
         <AnimatePresence mode="wait">
-          {phase === 'ready' && (
+          {/* IDLE: dual buttons */}
+          {phase === 'idle' && (
             <motion.div
-              key="ready"
+              key="idle"
               initial={reduce ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mt-5"
+              className="mt-5 space-y-4"
             >
+              {wallet.connected && wallet.publicKey ? (
+                <>
+                  <div className="flex items-center gap-2 rounded border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                    Connected as {truncateHash(wallet.publicKey)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={walletChallenge}
+                    className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
+                  >
+                    Challenge with My Wallet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={backendChallenge}
+                    className="w-full rounded-md border border-rule px-5 py-2.5 text-sm text-muted transition-colors hover:border-accent/50 hover:text-bone"
+                  >
+                    or use the demo key
+                  </button>
+                  <p className="text-xs text-muted">
+                    Your wallet signs the challenge deploy. The slash reward goes to your account.
+                  </p>
+                </>
+              ) : (
+                <>
+                  {wallet.available ? (
+                    <button
+                      type="button"
+                      onClick={wallet.connect}
+                      className="w-full rounded-md bg-accent/20 border border-accent/40 px-5 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <WalletIcon />
+                        Connect Wallet to Challenge
+                      </span>
+                    </button>
+                  ) : (
+                    <a
+                      href="https://www.casperwallet.io"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex w-full items-center justify-center gap-2 rounded-md bg-accent/20 border border-accent/40 px-5 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30"
+                    >
+                      <WalletIcon />
+                      Install Casper Wallet to Challenge
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={backendChallenge}
+                    className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
+                  >
+                    Demo Challenge (Backend Key)
+                  </button>
+                  <p className="text-xs text-muted">
+                    A funded backend key signs this challenge. The reward goes to
+                    that key, not your wallet.
+                  </p>
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {/* BUILDING */}
+          {phase === 'building' && (
+            <PhaseBox key="building">
+              <StatusLine icon="spinner" text="Preparing the challenge transaction..." />
+              <Detail label="Action" value={serial(action.actionId)} />
+              {controllerHash && (
+                <Detail label="Controller" value={truncateHash(controllerHash)} />
+              )}
+            </PhaseBox>
+          )}
+
+          {/* SIGNING */}
+          {phase === 'signing' && (
+            <PhaseBox key="signing">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  animate={reduce ? {} : { scale: [1, 1.08, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.2 }}
+                >
+                  <WalletIcon size={20} />
+                </motion.div>
+                <p className="text-sm text-accent">Confirm in your Casper Wallet.</p>
+              </div>
+              <Detail label="Action" value={serial(action.actionId)} />
+              <Detail label="Estimated gas" value="~50 CSPR" />
+            </PhaseBox>
+          )}
+
+          {/* REJECTED */}
+          {phase === 'rejected' && (
+            <PhaseBox key="rejected">
+              <p className="rounded-md border border-rule bg-ink px-4 py-3 text-sm text-muted">
+                Challenge cancelled. No transaction was sent and no gas was spent.
+              </p>
               <button
                 type="button"
-                onClick={challenge}
-                className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
+                onClick={() => setPhase('idle')}
+                className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
               >
-                Challenge this payout
+                Back
               </button>
-              <p className="mt-2 text-center text-xs text-muted">
-                No wallet or account needed. The backend signs the challenge for you.
+            </PhaseBox>
+          )}
+
+          {/* SUBMITTED */}
+          {phase === 'submitted' && (
+            <PhaseBox key="submitted">
+              <StatusLine icon="spinner" text="Challenge broadcast to Casper testnet." />
+              {deployHash && <TxLine label="Challenge" hash={deployHash} />}
+            </PhaseBox>
+          )}
+
+          {/* FINALIZING */}
+          {phase === 'finalizing' && (
+            <PhaseBox key="finalizing">
+              <StatusLine
+                icon="spinner"
+                text="Waiting for block finality. This usually takes 30 to 90 seconds on testnet."
+              />
+              {deployHash && <TxLine label="Challenge" hash={deployHash} />}
+            </PhaseBox>
+          )}
+
+          {/* TIMEOUT */}
+          {phase === 'timeout' && (
+            <PhaseBox key="timeout">
+              <p className="rounded-md border border-rule bg-ink px-4 py-3 text-sm text-bone">
+                Finality is taking longer than expected. Your transaction is live on the explorer.
+              </p>
+              {deployHash && <TxLine label="Challenge" hash={deployHash} />}
+              <button
+                type="button"
+                onClick={recheckFinality}
+                className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
+              >
+                Check again
+              </button>
+            </PhaseBox>
+          )}
+
+          {/* RESOLVING */}
+          {phase === 'resolving' && (
+            <PhaseBox key="resolving">
+              <StatusLine icon="spinner" text="Resolving on contract..." />
+              {deployHash && <TxLine label="Challenge" hash={deployHash} />}
+            </PhaseBox>
+          )}
+
+          {/* RESOLVE_ERROR */}
+          {phase === 'resolve_error' && (
+            <PhaseBox key="resolve_error">
+              <p className="rounded-md border border-rule bg-ink px-4 py-3 text-sm text-bone">
+                Your challenge is confirmed on chain, but resolution is delayed.
+                The protocol will settle within minutes.
+              </p>
+              {deployHash && <TxLine label="Challenge" hash={deployHash} />}
+              <button
+                type="button"
+                onClick={retryResolve}
+                className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
+              >
+                Try resolving again
+              </button>
+            </PhaseBox>
+          )}
+
+          {/* SUCCESS (wallet) */}
+          {phase === 'success' && walletResult && (
+            <motion.div
+              key="success"
+              initial={reduce ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-5 space-y-4"
+            >
+              <p className="text-lg font-medium text-slash">Bond slashed.</p>
+              <p className="text-sm text-bone">
+                You claimed <Money atomic={walletResult.rewardAmount} /> csprUSD.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <SplitCard
+                  label="To you, the challenger"
+                  amount={walletResult.challengerShare}
+                  delay={0.05}
+                  reduce={!!reduce}
+                />
+                <SplitCard
+                  label="To the reserve"
+                  amount={walletResult.reserveShare}
+                  delay={0.15}
+                  reduce={!!reduce}
+                />
+              </div>
+              <ChallengerLine
+                storedChallenger={walletResult.challenger}
+                connectedKey={wallet.publicKey}
+              />
+              <div className="space-y-2 border-t border-rule pt-3">
+                <TxLine label="Challenge" hash={walletResult.challengeDeployHash} />
+                <TxLine label="Resolve" hash={walletResult.resolveDeployHash} />
+              </div>
+              <Link
+                href="/app/arena"
+                className="inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+              >
+                Find the next case
+              </Link>
+            </motion.div>
+          )}
+
+          {/* ERROR */}
+          {phase === 'error' && (
+            <PhaseBox key="error">
+              <p className="rounded-md border border-slash/30 bg-slash/5 px-4 py-3 text-sm text-bone">
+                {error}
+              </p>
+              {deployHash && <TxLine label="Deploy" hash={deployHash} />}
+              <button
+                type="button"
+                onClick={() => setPhase('idle')}
+                className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
+              >
+                Try again
+              </button>
+            </PhaseBox>
+          )}
+
+          {/* EXPIRED */}
+          {phase === 'expired' && (
+            <motion.div
+              key="expired"
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-5"
+            >
+              <p className="rounded-md border border-rule bg-surface px-4 py-3 text-sm text-muted">
+                The challenge window for this action has closed.
               </p>
             </motion.div>
           )}
 
-          {(phase === 'submitting' || phase === 'pending') && (
+          {/* BACKEND submitting/pending (fallback path) */}
+          {(phase === 'backend_submitting' || phase === 'backend_pending') && (
             <motion.div
-              key="pending"
+              key="backend_pending"
               initial={reduce ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               className="mt-5 space-y-3"
             >
               <p className="flex items-center gap-2 text-sm text-accent">
                 <Spinner />
-                {phase === 'submitting'
+                {phase === 'backend_submitting'
                   ? 'Submitting the challenge to Casper testnet'
-                  : 'Waiting for the slash to confirm on-chain'}
+                  : 'Waiting for the slash to confirm on chain'}
               </p>
-              {challengeTx && <TxLine label="Challenge" hash={challengeTx} />}
-              <p className="text-xs text-muted">This is a real transaction. It resolves in a few seconds.</p>
+              {backendChallengeTx && <TxLine label="Challenge" hash={backendChallengeTx} />}
+              <p className="text-xs text-muted">
+                Demo Challenge (Backend Key). The reward goes to the backend key.
+              </p>
             </motion.div>
           )}
 
-          {phase === 'resolved' && (
-            <BondSplit
+          {/* BACKEND resolved (fallback path) */}
+          {phase === 'backend_resolved' && (
+            <BackendBondSplit
               resolvedSlash={resolvedSlash}
               challengerAmount={challengerAmount}
               reserveAmount={reserveAmount}
-              challengeTx={challengeTx ?? action.transactions.challenge ?? null}
+              challengeTx={backendChallengeTx ?? action.transactions.challenge ?? null}
               resolveTx={action.transactions.resolve ?? null}
               actionId={action.actionId}
               reduce={!!reduce}
             />
-          )}
-
-          {phase === 'error' && (
-            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-5 space-y-3">
-              <p className="rounded-md border border-slash/30 bg-slash/5 px-4 py-3 text-sm text-bone">{error}</p>
-              <button
-                type="button"
-                onClick={challenge}
-                className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
-              >
-                Try again
-              </button>
-            </motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -184,7 +595,65 @@ export default function ManualChallenge({
   );
 }
 
-function BondSplit({
+function ChallengerLine({
+  storedChallenger,
+  connectedKey,
+}: {
+  storedChallenger: string;
+  connectedKey: string | null;
+}) {
+  const isYou =
+    connectedKey &&
+    storedChallenger.toLowerCase().includes(connectedKey.toLowerCase().slice(0, 20));
+  return (
+    <div className="flex items-center gap-2 rounded border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+      {isYou ? (
+        <>
+          <span className="font-medium text-accent">Challenger: You</span>
+          <CopyHash value={storedChallenger} label={truncateHash(storedChallenger)} />
+        </>
+      ) : (
+        <>
+          <span className="text-muted">Challenger:</span>
+          <CopyHash value={storedChallenger} label={truncateHash(storedChallenger)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function PhaseBox({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="mt-5 space-y-3"
+      {...props}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function StatusLine({ icon, text }: { icon: 'spinner'; text: string }) {
+  return (
+    <p className="flex items-center gap-2 text-sm text-accent">
+      {icon === 'spinner' && <Spinner />}
+      {text}
+    </p>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="text-xs text-muted">
+      {label}: <span className="font-mono text-bone">{value}</span>
+    </p>
+  );
+}
+
+function BackendBondSplit({
   resolvedSlash,
   challengerAmount,
   reserveAmount,
@@ -203,7 +672,7 @@ function BondSplit({
 }) {
   return (
     <motion.div
-      key="resolved"
+      key="backend_resolved"
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       className="mt-5 space-y-4"
@@ -214,12 +683,14 @@ function BondSplit({
           : 'The window closed clean. The bond returned in full.'}
       </p>
       {resolvedSlash && (
-        <p className="text-sm text-muted">The contract found the duplicate. The bond is gone.</p>
+        <p className="text-sm text-muted">
+          Demo Challenge (Backend Key). The reward went to the backend key.
+        </p>
       )}
 
       {resolvedSlash && (challengerAmount || reserveAmount) && (
         <div className="grid grid-cols-2 gap-3">
-          <SplitCard label="To you, the challenger" amount={challengerAmount} delay={0.05} reduce={reduce} />
+          <SplitCard label="To the backend key" amount={challengerAmount} delay={0.05} reduce={reduce} />
           <SplitCard label="To the reserve" amount={reserveAmount} delay={0.15} reduce={reduce} />
         </div>
       )}
@@ -279,6 +750,16 @@ function Spinner() {
     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function WalletIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-accent">
+      <rect x="2" y="5" width="20" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M17 13.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor" />
+      <path d="M6 5V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }

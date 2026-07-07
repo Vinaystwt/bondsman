@@ -8,7 +8,7 @@ import Term from '@/components/ui/Term';
 export const metadata: Metadata = {
   title: 'How it works',
   description:
-    'The full mechanic: the risk-weighted bond, the contract-proven slash, the reputation effect, and the two-agent economy.',
+    'The full mechanic: the risk-weighted bond, the contract-proven slash, the reputation effect, and the approver and watchdog economy.',
 };
 
 export default function HowItWorks() {
@@ -91,12 +91,12 @@ export default function HowItWorks() {
         </p>
       </Section>
 
-      <Section label="The economy" title="Two agents, no human">
+      <Section label="The economy" title="Approver and watchdog, no human">
         <p>
-          One agent approves payouts. A second watchdog agent watches them. When a
-          payout is a duplicate, the watchdog challenges it and the contract
-          slashes the bond, paying the watchdog its share. Two on-chain accounts
-          settle against each other with no person in the loop.
+          A model-driven agent approves payouts. A deterministic watchdog watches
+          them. When a payout is a duplicate, the watchdog challenges it and the
+          contract slashes the bond, paying the watchdog its share. Two on-chain
+          accounts settle against each other with no person in the loop.
         </p>
         <Diagram
           name="agent-economy"

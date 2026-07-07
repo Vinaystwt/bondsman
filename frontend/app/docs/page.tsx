@@ -215,7 +215,7 @@ export default async function DocsPage() {
         </div>
         <p className="mt-8">
           Want to see it run? <Link href="/demo">Try the demo</Link> and slash a
-          real bond, or watch the two agents settle one without you.
+          real bond, or watch the approver and watchdog settle one without you.
         </p>
       </DocSection>
     </DocsLayout>

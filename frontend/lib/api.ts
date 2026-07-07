@@ -5,6 +5,8 @@ import type {
   Deployment,
   Invoice,
   Reserve,
+  TransactionStatus,
+  WalletResolveResult,
   Watchdog,
 } from './types';
 
@@ -20,6 +22,42 @@ export class BackendUnreachable extends Error {
   }
 }
 
+export class ApiError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+  }
+}
+
+const FRIENDLY: Record<string, string> = {
+  NOT_OWNER: 'The backend key is not the contract owner. The contract needs to be redeployed or the key updated.',
+  CHALLENGE_WINDOW_CLOSED: "This action's challenge window has closed.",
+  NO_ELIGIBLE_ACTION: 'No eligible action is available right now. Try arming a new one.',
+  NOT_EXECUTABLE: 'This action is not in an executable state.',
+  ALREADY_CHALLENGED: 'This action has already been challenged.',
+  STALE_CONTRACT_VERSION: 'The contract version has changed. Evidence from the previous version cannot be used.',
+  ARM_FAILED: 'Could not arm a new action. The backend encountered an on-chain error.',
+  CHALLENGE_NOT_FINAL: 'The challenge transaction has not reached finality yet.',
+  NODE_UNREACHABLE: 'The Casper testnet node is not reachable.',
+  RPC_ERROR: 'The Casper node rejected the deploy.',
+};
+
+export function friendlyError(code: string, fallback: string): string {
+  return FRIENDLY[code] ?? fallback;
+}
+
+async function parseErrorBody(res: Response): Promise<{ code: string; message: string } | null> {
+  try {
+    const body = await res.json();
+    if (body && typeof body.code === 'string' && typeof body.message === 'string') {
+      return { code: body.code as string, message: body.message as string };
+    }
+  } catch { /* not JSON */ }
+  return null;
+}
+
 async function serverGet<T>(path: string): Promise<T> {
   let res: Response;
   try {
@@ -28,13 +66,14 @@ async function serverGet<T>(path: string): Promise<T> {
     throw new BackendUnreachable();
   }
   if (!res.ok) {
+    const err = await parseErrorBody(res);
+    if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
     if (res.status === 404) throw new Error('not found');
     throw new Error(`request failed: ${res.status}`);
   }
   return (await res.json()) as T;
 }
 
-/** Wrap a server read so a page can render the backend-down state instead of crashing. */
 export async function safeGet<T>(
   fn: () => Promise<T>,
 ): Promise<{ data: T; reachable: true } | { data: null; reachable: false }> {
@@ -62,18 +101,42 @@ export const api = {
 
 // Client-side reads, proxied through Next at /api/*.
 async function clientGet<T>(path: string): Promise<T> {
-  const res = await fetch(`/api${path}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`request failed: ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { cache: 'no-store' });
+  } catch {
+    throw new BackendUnreachable();
+  }
+  if (!res.ok) {
+    const err = await parseErrorBody(res);
+    if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
+    throw new Error(`request failed: ${res.status}`);
+  }
   return (await res.json()) as T;
 }
 
 async function clientPost<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(`request failed: ${res.status}`);
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method: 'POST',
+      signal: abort.signal,
+      ...(body !== undefined
+        ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+        : {}),
+    });
+  } catch {
+    throw new BackendUnreachable();
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const err = await parseErrorBody(res);
+    if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
+    throw new Error(`request failed: ${res.status}`);
+  }
   return (await res.json()) as T;
 }
 
@@ -82,9 +145,18 @@ export const clientApi = {
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   reserve: () => clientGet<Reserve>('/reserve'),
   watchdog: () => clientGet<Watchdog>('/watchdog'),
-  // Mutations, forwarded to the backend through Next route handlers.
   arm: () => clientPost<ActionDetail>('/demo/arm'),
   watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo'),
   challenge: (actionId: number) =>
     clientPost<{ challenge: string; resolve: string }>('/challenge', { actionId }),
+  deployments: () => clientGet<Deployment>('/deployments'),
+  transactionStatus: (hash: string) =>
+    clientGet<TransactionStatus>(`/transactions/${hash}`),
+  walletResolve: (actionId: number, challengeDeployHash: string) =>
+    clientPost<WalletResolveResult>('/challenge/wallet-resolve', {
+      actionId,
+      challengeDeployHash,
+    }),
+  putDeploy: (deploy: unknown, nodeUrl?: string) =>
+    clientPost<{ deploy_hash: string }>('/rpc/put-deploy', { deploy, nodeUrl }),
 };

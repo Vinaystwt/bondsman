@@ -43,8 +43,9 @@ export default async function OverviewPage() {
   const reserve = reserveRes.data;
   const watchdog = watchdogRes.reachable ? watchdogRes.data : null;
 
+  const now = Date.now();
   const open = actions.filter(
-    (a) => a.status === 'Executed' || a.status === 'Bonded' || a.status === 'Challenged',
+    (a) => a.status === 'Executed' && a.windowEnd > now && !a.challenger,
   );
   const slashedActions = actions.filter((a) => a.status === 'ResolvedSlash');
   const heldBonds = sum(open.map((a) => a.bondPosted));

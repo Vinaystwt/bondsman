@@ -7,11 +7,10 @@ export async function POST() {
   try {
     const res = await fetch(`${API_BASE}/api/watchdog/demo`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch {
-    return NextResponse.json({ error: 'backend unreachable' }, { status: 502 });
+    return NextResponse.json({ success: false, code: 'BACKEND_UNREACHABLE', message: 'Backend not reachable' }, { status: 502 });
   }
 }
