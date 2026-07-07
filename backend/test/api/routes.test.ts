@@ -49,6 +49,50 @@ function fixture() {
     reservedForManual: false,
     transactions: { execute: 'c'.repeat(64) },
   });
+  repository.upsertAction({
+    actionId: 3,
+    invoiceId: 1045,
+    agent: `account-hash-${account.accountHash}`,
+    amount: '100',
+    claimHash: 'slash-current',
+    reasoning: 'Duplicate',
+    reasoningHash: 'cc',
+    bondRequired: '2',
+    bondPosted: '2',
+    windowEnd: Date.now() - 1_800_000,
+    status: 'ResolvedSlash',
+    challenger: `account-hash-${account.accountHash}`,
+    challengerType: 'watchdog',
+    challengeSigning: 'watchdog-key',
+    controllerHash: deployment.contracts.controller.contractHash,
+    duplicateProven: true,
+    reservedForManual: false,
+    transactions: {
+      execute: 'e'.repeat(64),
+      challenge: 'f'.repeat(64),
+      resolve: 'd'.repeat(64),
+    },
+  });
+  repository.upsertAction({
+    actionId: 2,
+    invoiceId: 1044,
+    agent: `account-hash-${account.accountHash}`,
+    amount: '100',
+    claimHash: 'slash-stale',
+    reasoning: 'Old controller',
+    reasoningHash: 'dd',
+    bondRequired: '2',
+    bondPosted: '2',
+    windowEnd: Date.now() - 1_800_000,
+    status: 'ResolvedSlash',
+    challenger: `account-hash-${account.accountHash}`,
+    challengerType: 'watchdog',
+    challengeSigning: 'watchdog-key',
+    controllerHash: `hash-${'9'.repeat(64)}`,
+    duplicateProven: true,
+    reservedForManual: false,
+    transactions: {},
+  });
   repository.setReputation(
     `account-hash-${account.accountHash}`,
     1,
@@ -152,7 +196,10 @@ describe('REST routes', () => {
       ).json().explorerLinks.execute,
     ).toContain('testnet.cspr.live');
     expect(
-      (await context.server.inject('/api/actions')).json()[0],
+      (await context.server.inject('/api/actions')).json(),
+    ).toHaveLength(2);
+    expect(
+      (await context.server.inject('/api/actions')).json()[1],
     ).toMatchObject({
       challengerType: null,
       reservedForManual: false,

@@ -49,7 +49,7 @@ export function registerRoutes(
     repository
       .listActions()
       .filter((action) =>
-        isChallengeEligible(action, currentController),
+        action.controllerHash === currentController,
       ),
   );
   server.get('/api/actions/:id', async (request, reply) => {
