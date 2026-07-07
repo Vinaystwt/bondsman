@@ -9,9 +9,30 @@
 // records the live, deployed contract addresses, so the CLI binary built in
 // the Docker image only calls existing entry points.
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, symlink, lstat, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve as resolvePath } from 'node:path';
+
+// Railway attaches exactly one volume per service. The backend hardcodes
+// two persistent directories, .data (SQLite projection) and .evidence
+// (evidence store), both relative to the repo root. Symlink both into
+// subdirectories of the single mounted volume so both survive restarts
+// and redeploys without any change to the backend's path resolution.
+const VOLUME_ROOT = process.env.RAILWAY_VOLUME_MOUNT_PATH || '.railway-volume';
+
+async function linkIntoVolume(relativeDir) {
+  const target = resolvePath(VOLUME_ROOT, relativeDir);
+  await mkdir(target, { recursive: true });
+  let stat;
+  try {
+    stat = await lstat(relativeDir);
+  } catch {
+    stat = null;
+  }
+  if (stat?.isSymbolicLink()) return;
+  if (stat) await rm(relativeDir, { recursive: true, force: true });
+  await symlink(target, relativeDir);
+}
 
 const KEY_VARS = {
   DEPLOYER_KEY_B64: 'deployer.pem',
@@ -42,8 +63,9 @@ async function decodeKeys() {
   }
 }
 
-async function ensureDataDir() {
-  await mkdir('.data', { recursive: true });
+async function ensurePersistentDirs() {
+  await linkIntoVolume('.data');
+  await linkIntoVolume('.evidence');
 }
 
 function spawnScript(script) {
@@ -70,7 +92,7 @@ function spawnScript(script) {
 const script = process.env.START_SCRIPT;
 
 await decodeKeys();
-await ensureDataDir();
+await ensurePersistentDirs();
 
 if (script) {
   if (!['api', 'listener', 'watchdog'].includes(script)) {
