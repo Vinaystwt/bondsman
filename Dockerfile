@@ -33,7 +33,11 @@ WORKDIR /app
 COPY contracts/ ./contracts/
 COPY rust-toolchain.toml ./rust-toolchain.toml
 
-RUN cd contracts && cargo odra build
+# cargo odra build compiles the four contract crates to release-mode wasm.
+# The backend spawns a separate debug-profile binary of the cli crate
+# (contracts/target/debug/bondsman_cli) to call entry points at runtime;
+# that is a plain cargo build, not part of cargo odra build.
+RUN cd contracts && cargo odra build && cargo build -p bondsman_cli
 
 # ---
 
