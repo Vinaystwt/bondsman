@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+.keys/
+.data/
+.evidence/
+node_modules/
+frontend/
+mcp-package/
+contracts/target/
+contracts/wasm/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store

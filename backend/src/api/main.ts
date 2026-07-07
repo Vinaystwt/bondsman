@@ -108,8 +108,9 @@ const server = buildServer(
   ),
   walletChallenge,
 );
-await server.listen({ host: '127.0.0.1', port });
-console.log(`Bondsman API listening on http://127.0.0.1:${port}`);
+const host = process.env.HOST || '0.0.0.0';
+await server.listen({ host, port });
+console.log(`Bondsman API listening on http://${host}:${port}`);
 console.log('Initial chain reconciliation running in the background.');
 void reconcile().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
