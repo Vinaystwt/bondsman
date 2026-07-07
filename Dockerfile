@@ -6,8 +6,16 @@
 
 FROM rust:1-bookworm AS rust-base
 
-RUN apt-get update && apt-get install -y --no-install-recommends binaryen \
-  && rm -rf /var/lib/apt/lists/*
+# Debian bookworm's apt binaryen package is too old for the wasm-opt flags
+# cargo-odra passes (missing --signext-lowering). Install a recent release
+# directly, matching the version used locally.
+RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils \
+  && rm -rf /var/lib/apt/lists/* \
+  && curl -fsSL -o /tmp/binaryen.tar.gz \
+    https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz \
+  && tar -xzf /tmp/binaryen.tar.gz -C /tmp \
+  && cp /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt \
+  && rm -rf /tmp/binaryen.tar.gz /tmp/binaryen-version_130
 
 RUN rustup toolchain install nightly-2026-01-01 \
   && rustup target add wasm32-unknown-unknown --toolchain nightly-2026-01-01 \
