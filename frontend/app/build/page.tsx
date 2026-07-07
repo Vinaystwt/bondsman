@@ -60,40 +60,44 @@ export default async function BuildPage() {
           Adopt bonded accountability
         </h1>
         <p className="text-lg leading-relaxed text-muted">
-          Bondsman exposes a local Model Context Protocol server. Casper agents
-          and MCP clients can call these six tools to check reputation, quote a
-          bond, submit a challenge, and settle on chain from this repository.
+          Bondsman publishes a Model Context Protocol server on npm. Casper
+          agents and MCP clients can call these six tools to check reputation,
+          quote a bond, submit a challenge, and settle on chain.
         </p>
       </header>
 
       <section aria-label="Install the MCP server" className="space-y-4">
         <Label>Install</Label>
         <h2 className="text-2xl font-semibold text-bone">
-          @vinaystwt/bondsman-mcp
+          <a
+            href="https://www.npmjs.com/package/@vinaystwt/bondsman-mcp"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+          >
+            @vinaystwt/bondsman-mcp
+          </a>
         </h2>
         <p className="text-sm leading-relaxed text-muted">
-          A publish-ready MCP server that talks to a running Bondsman backend
-          over HTTP. Install once, point it at your backend, and any MCP client
-          gets the six tools over stdio.
+          Published and installable now. Point it at any running Bondsman
+          backend and any MCP client gets the six tools over stdio.
         </p>
         <Panel className="overflow-hidden">
           <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
             <code className="font-mono text-bone">
-{`# Run without installing
-BONDSMAN_API_BASE=http://127.0.0.1:3001 \\
-  npx @vinaystwt/bondsman-mcp
-
-# Or install globally
+{`# Install globally
 npm install -g @vinaystwt/bondsman-mcp
-bondsman-mcp`}
+bondsman-mcp
+
+# Or run without installing
+npx @vinaystwt/bondsman-mcp`}
             </code>
           </pre>
         </Panel>
         <p className="text-xs text-muted">
-          Requires a running Bondsman backend. Clone the repository and run
-          <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">npm run api</code>
-          from the root, or point <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">BONDSMAN_API_BASE</code>
-          at a hosted instance.
+          Requires a running Bondsman backend. Point it at one with
+          <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">BONDSMAN_API_BASE</code>.
+          Defaults to <code className="rounded bg-surface px-1 py-0.5 text-bone">http://127.0.0.1:3001</code>.
         </p>
       </section>
 
@@ -203,7 +207,14 @@ for (const a of actions) {
           </li>
           <li>
             The npm package is published at{' '}
-            <code className="rounded bg-surface px-1 py-0.5 text-bone">@vinaystwt/bondsman-mcp</code>
+            <a
+              href="https://www.npmjs.com/package/@vinaystwt/bondsman-mcp"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+            >
+              npmjs.com/package/@vinaystwt/bondsman-mcp
+            </a>
             . Its source lives in
             <code className="ml-1 rounded bg-surface px-1 py-0.5 text-bone">mcp-package/</code>
             in this repository.

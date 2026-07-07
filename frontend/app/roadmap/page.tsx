@@ -21,7 +21,7 @@ const TIMELINE: Milestone[] = [
       'Bonded invoice actions on Casper testnet.',
       'Wallet signed challenges with backend resolution.',
       'Deterministic watchdog catches duplicate claims.',
-      'Local MCP server exposes action, reputation, deployment, bond quote, and challenge tools.',
+      'Published MCP server (@vinaystwt/bondsman-mcp) exposes action, reputation, deployment, bond quote, and challenge tools.',
     ],
   },
   {
@@ -30,7 +30,6 @@ const TIMELINE: Milestone[] = [
     items: [
       'Operator console for action review, reserve health, and slash economics.',
       'Proof center with replayable action timelines and explorer evidence.',
-      'Publish ready MCP package with bin, README, and examples.',
       'Sandbox x402 verification path documented for service integration.',
     ],
   },
