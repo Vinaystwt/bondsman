@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { api, safeGet } from '@/lib/api';
-import { BackendDown } from '@/components/ui/States';
+import { ApiError, api, safeGet } from '@/lib/api';
+import { BackendDown, EmptyState } from '@/components/ui/States';
 import { Label, Panel } from '@/components/ui/Primitives';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Money from '@/components/ui/Money';
@@ -12,7 +12,7 @@ import EventTimeline from '@/components/action/EventTimeline';
 import ReasoningReveal from '@/components/action/ReasoningReveal';
 import SlashSplit from '@/components/action/SlashSplit';
 import { serial, truncateHash, formatWindowEnd, resolveDisplayStatus } from '@/lib/format';
-import type { Invoice } from '@/lib/types';
+import type { ActionDetail, Invoice } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Action' };
 
@@ -38,7 +38,39 @@ export default async function ActionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = await safeGet(() => api.action(id));
+  let result:
+    | { data: ActionDetail; reachable: true }
+    | { data: null; reachable: false };
+  try {
+    result = await safeGet(() => api.action(id));
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'NOT_FOUND') {
+      return (
+        <div className="space-y-8">
+          <nav aria-label="Breadcrumb" className="text-sm text-muted">
+            <Link href="/app/actions" className="hover:text-bone">
+              Docket
+            </Link>
+            <span className="px-2">/</span>
+            <span className="text-bone">{id}</span>
+          </nav>
+          <EmptyState
+            title="Action not found"
+            body="This action is not in the current controller projection. Open the docket to choose a live action."
+            action={
+              <Link
+                href="/app/actions"
+                className="text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                Open the docket
+              </Link>
+            }
+          />
+        </div>
+      );
+    }
+    throw error;
+  }
   if (!result.reachable) {
     return <BackendDown />;
   }

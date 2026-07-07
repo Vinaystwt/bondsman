@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { api, safeGet } from '@/lib/api';
+import { ApiError, api, safeGet } from '@/lib/api';
 import { BackendDown, EmptyState } from '@/components/ui/States';
 import { Label, Stat } from '@/components/ui/Primitives';
 import PageHeader from '@/components/app/PageHeader';
@@ -9,6 +9,7 @@ import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
 import { truncateHash } from '@/lib/format';
 import { resolveRole } from '@/lib/agent-roles';
+import type { AgentReputation, Deployment } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Agent' };
 
@@ -19,10 +20,50 @@ export default async function AgentPage({
 }) {
   const { address } = await params;
   const decoded = decodeURIComponent(address);
-  const [res, depRes] = await Promise.all([
-    safeGet(() => api.agent(decoded)),
-    safeGet(() => api.deployments()),
-  ]);
+  let res:
+    | { data: AgentReputation; reachable: true }
+    | { data: null; reachable: false };
+  let depRes:
+    | { data: Deployment; reachable: true }
+    | { data: null; reachable: false };
+  try {
+    [res, depRes] = await Promise.all([
+      safeGet(() => api.agent(decoded)),
+      safeGet(() => api.deployments()),
+    ]);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'NOT_FOUND') {
+      return (
+        <div className="space-y-8">
+          <nav aria-label="Breadcrumb" className="text-sm text-muted">
+            <Link href="/app/agents" className="hover:text-bone">
+              Agents
+            </Link>
+            <span className="px-2">/</span>
+            <span className="text-bone">{truncateHash(decoded)}</span>
+          </nav>
+          <PageHeader
+            label="Agent"
+            title="Agent not found"
+            intro="This address has no current action history in the Bondsman projection."
+          />
+          <EmptyState
+            title="No agent record"
+            body="Agents appear after they submit, execute, challenge, or resolve actions on the current controller."
+            action={
+              <Link
+                href="/app/agents"
+                className="text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                Open agents
+              </Link>
+            }
+          />
+        </div>
+      );
+    }
+    throw error;
+  }
 
   if (!res.reachable) {
     return (
