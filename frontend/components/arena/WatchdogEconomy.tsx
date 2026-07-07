@@ -121,6 +121,13 @@ export default function WatchdogEconomy({
           )}
         </div>
 
+        {phase === 'running' && (
+          <p className="mt-4 text-xs text-muted">
+            Each step is a real Casper testnet transaction. This can take up
+            to a minute end to end. Expected, not a hang.
+          </p>
+        )}
+
         {phase !== 'idle' && (
           <ol className="mt-6 space-y-3">
             <Step

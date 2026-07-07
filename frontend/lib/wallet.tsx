@@ -9,7 +9,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { publicKeyToAccountHashHex } from './account';
+
+// casper-js-sdk is heavy (~50kB). Loaded lazily so it never lands in the
+// shared bundle every route pays for through the root-layout WalletProvider.
+async function derivePublicKeyAccountHash(publicKeyHex: string): Promise<string> {
+  const { publicKeyToAccountHashHex } = await import('./account-hash');
+  return publicKeyToAccountHashHex(publicKeyHex);
+}
 
 export interface WalletSignResult {
   cancelled: boolean;
@@ -64,6 +70,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
+  const [accountHash, setAccountHash] = useState<string | null>(null);
 
   useEffect(() => {
     const check = () => {
@@ -146,10 +153,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return { cancelled: false, signatureHex: parsed.signatureHex ?? '' };
   }, [publicKey]);
 
-  const accountHash = useMemo(
-    () => (publicKey ? publicKeyToAccountHashHex(publicKey) : null),
-    [publicKey],
-  );
+  useEffect(() => {
+    if (!publicKey) {
+      setAccountHash(null);
+      return;
+    }
+    let cancelled = false;
+    derivePublicKeyAccountHash(publicKey).then((hash) => {
+      if (!cancelled) setAccountHash(hash);
+    });
+    return () => { cancelled = true; };
+  }, [publicKey]);
 
   const value = useMemo(
     () => ({ available, connected, connecting, publicKey, accountHash, balance, connect, disconnect, sign }),

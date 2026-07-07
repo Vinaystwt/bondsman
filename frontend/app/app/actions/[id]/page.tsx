@@ -41,8 +41,12 @@ export default async function ActionPage({
   let result:
     | { data: ActionDetail; reachable: true }
     | { data: null; reachable: false };
+  let invoicesResult: Awaited<ReturnType<typeof safeGet<Invoice[]>>>;
   try {
-    result = await safeGet(() => api.action(id));
+    [result, invoicesResult] = await Promise.all([
+      safeGet(() => api.action(id)),
+      safeGet(() => api.invoices()),
+    ]);
   } catch (error) {
     if (error instanceof ApiError && error.code === 'NOT_FOUND') {
       return (
@@ -77,7 +81,6 @@ export default async function ActionPage({
   const action = result.data;
 
   let invoice: Invoice | undefined;
-  const invoicesResult = await safeGet(() => api.invoices());
   if (invoicesResult.reachable) {
     invoice = invoicesResult.data.find((i) => i.id === action.invoiceId);
   }

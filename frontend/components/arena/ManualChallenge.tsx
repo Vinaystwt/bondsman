@@ -576,12 +576,13 @@ export default function ManualChallenge({
               <p className="flex items-center gap-2 text-sm text-accent">
                 <Spinner />
                 {phase === 'backend_submitting'
-                  ? 'Submitting the challenge to Casper testnet'
+                  ? 'Submitting a real transaction to Casper testnet'
                   : 'Waiting for the slash to confirm on chain'}
               </p>
               {backendChallengeTx && <TxLine label="Challenge" hash={backendChallengeTx} />}
               <p className="text-xs text-muted">
-                Demo Challenge (Backend Key). The reward goes to the backend key.
+                This can take up to a minute on testnet. Expected, not a hang.
+                Demo Challenge (Backend Key); the reward goes to the backend key.
               </p>
             </motion.div>
           )}

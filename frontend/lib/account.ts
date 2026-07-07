@@ -1,21 +1,8 @@
-import { PublicKey } from 'casper-js-sdk';
-
-// Casper account hash format: prefixed with "account-hash-" when stored on chain.
-// Wallet public key form: hex starting with 01 (Ed25519) or 02 (Secp256k1).
-
-export function publicKeyToAccountHashHex(publicKeyHex: string): string {
-  try {
-    const pk = PublicKey.newPublicKey(publicKeyHex);
-    return pk.accountHash().toHex().toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-export function publicKeyToPrefixedAccountHash(publicKeyHex: string): string {
-  const hex = publicKeyToAccountHashHex(publicKeyHex);
-  return hex ? `account-hash-${hex}` : '';
-}
+// Pure string helpers for Casper account hashes. No casper-js-sdk dependency,
+// so this stays cheap to import from any route (Ledger, Leaderboard, agent
+// cards). For deriving an account hash from a public key, see
+// account-hash.ts, which pulls in casper-js-sdk and should be dynamically
+// imported.
 
 export function normalizeAccountHash(value: string | null | undefined): string {
   if (!value) return '';
