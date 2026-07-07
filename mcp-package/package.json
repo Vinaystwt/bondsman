@@ -1,0 +1,50 @@
+{
+  "name": "@vinaystwt/bondsman-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Bondsman on Casper. Six tools an agent can call to check reputation, quote a bond, submit a challenge, and settle on chain.",
+  "keywords": [
+    "mcp",
+    "bondsman",
+    "casper",
+    "agent",
+    "accountability",
+    "model-context-protocol"
+  ],
+  "author": "Vinay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vinaystwt/bondsman.git",
+    "directory": "mcp-package"
+  },
+  "homepage": "https://github.com/vinaystwt/bondsman#readme",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "bondsman-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

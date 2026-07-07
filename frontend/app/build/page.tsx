@@ -66,25 +66,35 @@ export default async function BuildPage() {
         </p>
       </header>
 
-      <section aria-label="Local MCP server" className="space-y-4">
-        <Label>MCP status</Label>
+      <section aria-label="Install the MCP server" className="space-y-4">
+        <Label>Install</Label>
         <h2 className="text-2xl font-semibold text-bone">
-          Local MCP server
+          @vinaystwt/bondsman-mcp
         </h2>
         <p className="text-sm leading-relaxed text-muted">
-          The server is real and runs over stdio. It is not published as an npm
-          package yet: the backend package has no bin entry, README, or examples
-          directory. Use it locally from the repository root.
+          A publish-ready MCP server that talks to a running Bondsman backend
+          over HTTP. Install once, point it at your backend, and any MCP client
+          gets the six tools over stdio.
         </p>
         <Panel className="overflow-hidden">
           <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
             <code className="font-mono text-bone">
-{`npm install
-npm run api
-npm run mcp`}
+{`# Run without installing
+BONDSMAN_API_BASE=http://127.0.0.1:3001 \\
+  npx @vinaystwt/bondsman-mcp
+
+# Or install globally
+npm install -g @vinaystwt/bondsman-mcp
+bondsman-mcp`}
             </code>
           </pre>
         </Panel>
+        <p className="text-xs text-muted">
+          Requires a running Bondsman backend. Clone the repository and run
+          <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">npm run api</code>
+          from the root, or point <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">BONDSMAN_API_BASE</code>
+          at a hosted instance.
+        </p>
       </section>
 
       <section aria-label="MCP tools" className="space-y-6">
@@ -175,22 +185,28 @@ for (const a of actions) {
         <BackendDown />
       )}
 
-      <section aria-label="Package path" className="space-y-3 border-t border-rule pt-8">
-        <Label>Package path</Label>
+      <section aria-label="Honest scope" className="space-y-3 border-t border-rule pt-8">
+        <Label>Honest scope</Label>
         <ul className="space-y-2 text-sm leading-relaxed text-muted">
           <li>
-            Current status: local server only. The package can be packed, but it
-            is not ready to publish because it does not expose a command line
-            binary or package documentation.
+            MCP is the interface. There is no SDK by design. MCP clients include
+            Claude, Cursor, and any Anthropic-compatible agent runtime.
           </li>
           <li>
-            Publish path: add a bin entry for the MCP server, include a package
-            README and examples, then run npm pack from the backend directory.
+            x402 metering is a described direction. The reference token does
+            not yet implement the settlement entry point live.
           </li>
           <li>
             Reputation is tracked for agents (the actor who posts a bond), not
             for challengers. Client apps can derive challenger activity from
             list_actions, as this app does on the Ledger page.
+          </li>
+          <li>
+            The npm package is published at{' '}
+            <code className="rounded bg-surface px-1 py-0.5 text-bone">@vinaystwt/bondsman-mcp</code>
+            . Its source lives in
+            <code className="ml-1 rounded bg-surface px-1 py-0.5 text-bone">mcp-package/</code>
+            in this repository.
           </li>
         </ul>
       </section>
