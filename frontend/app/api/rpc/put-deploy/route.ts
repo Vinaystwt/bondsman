@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const DEFAULT_NODE = 'https://node.testnet.casper.network/rpc';
+const TIMEOUT_MS = 30_000;
 
 export async function POST(request: Request) {
   let deployJson: unknown;
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(rpcBody),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const data = await res.json();
     if (data.error) {

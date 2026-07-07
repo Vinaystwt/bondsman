@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
+const TIMEOUT_MS = 30_000;
 
 // Forwards the challenge mutation to the backend, which fires a real testnet
 // challenge then slash. This is async and on-chain, so it can take time.
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

@@ -15,6 +15,7 @@ import type {
 // Client components fetch the same paths through the Next proxy ("/api/*").
 const SERVER_BASE =
   process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
+const FETCH_TIMEOUT_MS = 30_000;
 
 export class BackendUnreachable extends Error {
   constructor() {
@@ -62,7 +63,9 @@ async function parseErrorBody(res: Response): Promise<{ code: string; message: s
 async function serverGet<T>(path: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${SERVER_BASE}${path}`, { cache: 'no-store' });
+    res = await fetchWithTimeout(`${SERVER_BASE}${path}`, {
+      cache: 'no-store',
+    });
   } catch {
     throw new BackendUnreachable();
   }
@@ -73,6 +76,22 @@ async function serverGet<T>(path: string): Promise<T> {
     throw new Error(`request failed: ${res.status}`);
   }
   return (await res.json()) as T;
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init.signal ?? abort.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function safeGet<T>(
@@ -105,7 +124,7 @@ export const api = {
 async function clientGet<T>(path: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, { cache: 'no-store' });
+    res = await fetchWithTimeout(`/api${path}`, { cache: 'no-store' });
   } catch {
     throw new BackendUnreachable();
   }
@@ -118,21 +137,16 @@ async function clientGet<T>(path: string): Promise<T> {
 }
 
 async function clientPost<T>(path: string, body?: unknown): Promise<T> {
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), 30_000);
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetchWithTimeout(`/api${path}`, {
       method: 'POST',
-      signal: abort.signal,
       ...(body !== undefined
         ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
         : {}),
     });
   } catch {
     throw new BackendUnreachable();
-  } finally {
-    clearTimeout(timer);
   }
   if (!res.ok) {
     const err = await parseErrorBody(res);
