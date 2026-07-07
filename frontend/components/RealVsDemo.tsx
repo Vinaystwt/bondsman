@@ -10,7 +10,7 @@ const REAL = [
 
 const MOCK = [
   'Invoice data is mocked. Vendors, debtors, and delivery flags are fixtures.',
-  'x402 metering is not live. The reference token does not yet implement the settlement entry point.',
+  'x402 verification uses a sandbox payment envelope until the token settlement path is production ready.',
   'The approver runs on the seed set of invoices, not a live pool.',
 ];
 

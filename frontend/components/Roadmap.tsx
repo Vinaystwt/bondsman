@@ -1,23 +1,23 @@
 const QUARTERS = [
   {
-    q: 'Q3 2026',
-    title: 'Mainnet',
-    body: 'Mainnet contracts and real csprUSD, with oracle-backed delivery attestation replacing the mocked delivery flag.',
+    q: 'Now',
+    title: 'Testnet accountability loop',
+    body: 'Bonded invoice actions, wallet signed challenges, deterministic watchdog catches, and local MCP tools.',
   },
   {
-    q: 'Q4 2026',
-    title: 'First pilot',
-    body: 'A pilot with one invoice financing pool operator, and x402-metered verification once the token implements the settlement entry point the facilitator needs.',
+    q: 'Next',
+    title: 'Operator tools',
+    body: 'Operator console, proof center, publish ready MCP package, and sandbox x402 verification documentation.',
   },
   {
-    q: 'Q1 2027',
-    title: 'More fault classes',
-    body: 'Proofs beyond duplicate claims: delivery that never happened, fraud surfaced by later attestations, and claims resubmitted under different identifiers.',
+    q: 'Later',
+    title: 'Underwriting and policy',
+    body: 'Reserve analytics, policy templates, more proof adapters, and portable agent reputation.',
   },
   {
-    q: 'Q2 2027',
-    title: 'Policy marketplace',
-    body: 'Pool-configurable windows and tiers, and a portable agent reputation passport other Casper protocols can read. We are seeking a grant and incubation to reach this point.',
+    q: 'Mainnet path',
+    title: 'Production settlement',
+    body: 'Mainnet contracts, production csprUSD, oracle backed delivery attestation, and x402 settlement.',
   },
 ];
 

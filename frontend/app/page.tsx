@@ -95,7 +95,7 @@ export default async function Home() {
         <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <Diagram
             name="agent-economy"
-            alt="One agent approves and pays a duplicate. A second watchdog agent detects it, challenges, and the contract slashes the bond."
+            alt="One agent approves and pays a duplicate. A deterministic watchdog detects it, challenges, and the contract slashes the bond."
             className="order-2 lg:order-1"
           />
           <Appear className="order-1 max-w-md lg:order-2">

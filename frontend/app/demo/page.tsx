@@ -19,7 +19,7 @@ const STEPS = [
   {
     num: '02',
     title: 'Someone spots a duplicate',
-    body: 'A watchdog agent, or you, notices the invoice was already paid. The claim hash matches one that already settled.',
+    body: 'The deterministic watchdog, or you, notices the invoice was already paid. The claim hash matches one that already settled.',
   },
   {
     num: '03',

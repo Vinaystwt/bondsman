@@ -90,7 +90,7 @@ export default function WatchdogEconomy({
       <div className="p-6">
         <Diagram
           name="agent-economy"
-          alt="The approver agent approves and pays a duplicate. The watchdog agent detects it, challenges, and the contract slashes the bond, paying the watchdog."
+          alt="The approver agent approves and pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond, paying the watchdog."
         />
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">

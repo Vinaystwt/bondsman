@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/Primitives';
 export const metadata: Metadata = {
   title: 'Documentation',
   description:
-    'How Bondsman works, end to end: the lifecycle, the contracts, the economics, and the honest limits.',
+    'How Bondsman works, end to end: the lifecycle, the contracts, the economics, and the roadmap.',
 };
 
 export default async function DocsPage() {
@@ -27,8 +27,8 @@ export default async function DocsPage() {
         </h1>
         <p className="mt-3 max-w-prose leading-relaxed text-muted">
           Everything Bondsman does, in plain language, with the real contracts,
-          the real transactions, and the honest limits. Read top to bottom, or
-          jump to a section.
+          real transactions, and production roadmap. Read top to bottom, or jump
+          to a section.
         </p>
       </header>
 
@@ -64,13 +64,13 @@ export default async function DocsPage() {
         />
         <h3>The two-agent economy</h3>
         <p>
-          One agent approves payouts. A second watchdog agent watches them and
-          challenges duplicates on its own. One agent approves, another agent
-          catches it, the contract settles, and no human is in the loop.
+          One agent approves payouts. A deterministic watchdog service monitors
+          them and challenges duplicates on its own. The agent approves, the
+          watchdog catches it, the contract settles, and no human is in the loop.
         </p>
         <Diagram
           name="agent-economy"
-          alt="The approver agent pays a duplicate. The watchdog agent detects it, challenges, and the contract slashes the bond and pays the watchdog."
+          alt="The approver agent pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond and pays the watchdog."
         />
       </DocSection>
 
@@ -79,7 +79,7 @@ export default async function DocsPage() {
           Four contracts run Bondsman. The controller owns the lifecycle and calls
           the others. The bond vault holds and releases or slashes the stake. The
           invoice pool approves payouts and detects duplicate claims. The csprUSD
-          token settles value and is mocked for testnet.
+          token settles value and uses a fixture implementation on testnet.
         </p>
         <Diagram
           name="architecture"
@@ -194,13 +194,13 @@ export default async function DocsPage() {
             constant, not a fixed rule.
           </p>
         </Faq>
-        <Faq q="Is x402 live?">
+        <Faq q="Is x402 settlement live?">
           <p>
             The Casper x402 facilitator supports testnet, but the demo mock token
             lacks the settlement entry point the facilitator requires, so
             verification as a service payment runs as a labeled sandbox here. Real
-            csprUSD implements what a facilitator needs. This is a roadmap item,
-            not a claim of live settlement.
+            csprUSD implements what a facilitator needs. Production x402
+            settlement is on the roadmap.
           </p>
         </Faq>
       </DocSection>

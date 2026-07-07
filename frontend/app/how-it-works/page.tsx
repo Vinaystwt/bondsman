@@ -100,7 +100,7 @@ export default function HowItWorks() {
         </p>
         <Diagram
           name="agent-economy"
-          alt="The approver agent pays a duplicate. The watchdog agent detects it, challenges, and the contract slashes the bond and pays the watchdog."
+          alt="The approver agent pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond and pays the watchdog."
           className="mt-6"
         />
       </Section>

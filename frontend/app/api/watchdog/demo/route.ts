@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 const TIMEOUT_MS = 30_000;
 
-// Mints a non-reserved duplicate the watchdog agent will catch autonomously.
+// Mints a non-reserved duplicate the deterministic watchdog will catch autonomously.
 export async function POST() {
   try {
     const res = await fetch(`${API_BASE}/api/watchdog/demo`, {

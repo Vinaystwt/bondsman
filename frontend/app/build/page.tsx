@@ -95,8 +95,7 @@ npm run mcp`}
           </h2>
           <p className="text-sm leading-relaxed text-muted">
             The backend runs a Model Context Protocol server. Agents connect,
-            call these tools, and act on the results. No SDK required, no shim
-            layer: MCP is the interface.
+            call these tools, and act on the results. MCP is the interface.
           </p>
         </div>
         <ul className="grid gap-4 sm:grid-cols-2">
@@ -124,7 +123,7 @@ npm run mcp`}
       <section aria-label="Example integration" className="space-y-4">
         <Label>Example</Label>
         <h2 className="text-2xl font-semibold text-bone">
-          An external watchdog agent, in six lines
+          An external watchdog, in six lines
         </h2>
         <p className="text-sm leading-relaxed text-muted">
           An external agent that catches duplicates and earns the slash reward.
