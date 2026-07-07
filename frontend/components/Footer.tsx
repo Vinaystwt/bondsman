@@ -23,6 +23,8 @@ export default function Footer() {
           links={[
             { href: '/app', label: 'Overview' },
             { href: '/app/arena', label: 'Challenge Arena' },
+            { href: '/app/actions', label: 'Action Docket' },
+            { href: '/app/ledger', label: 'My Ledger' },
             { href: '/app/agents', label: 'Agents' },
           ]}
         />
@@ -30,6 +32,7 @@ export default function Footer() {
           title="Learn"
           links={[
             { href: '/how-it-works', label: 'How it works' },
+            { href: '/rwa', label: 'Invoice Pool' },
             { href: '/docs', label: 'Documentation' },
             { href: '/demo', label: 'Try the demo' },
           ]}

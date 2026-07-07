@@ -58,6 +58,9 @@ export function attachSignature(
   signatureHex: string,
   signerPublicKeyHex: string,
 ): Record<string, unknown> {
+  if (!signatureHex || !/^[0-9a-f]+$/i.test(signatureHex)) {
+    throw new Error('Cannot submit challenge deploy without a valid wallet signature.');
+  }
   const signed = { ...deployJson };
   const approvals = Array.isArray(signed.approvals)
     ? [...signed.approvals]

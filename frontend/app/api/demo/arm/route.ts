@@ -8,6 +8,19 @@ const TIMEOUT_MS = 55_000;
 // timeout a few seconds under this so our own error message returns first.
 export const maxDuration = 60;
 
+function timeoutMessage() {
+  return [
+    'The backend is reachable, but arming a fresh demo payout did not finish before the Vercel request limit.',
+    'This endpoint submits real Casper testnet transactions and can continue on-chain after the browser request times out.',
+    'Refresh the Arena or try again in a moment to load the newly armed case.',
+  ].join(' ');
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError');
+}
+
 // Mints a duplicate action reserved for a manual challenge in the Arena.
 export async function POST() {
   try {
@@ -17,7 +30,17 @@ export async function POST() {
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ success: false, code: 'BACKEND_UNREACHABLE', message: 'Backend not reachable' }, { status: 502 });
+  } catch (error) {
+    if (isTimeout(error)) {
+      return NextResponse.json(
+        { success: false, code: 'ARM_TIMEOUT', message: timeoutMessage() },
+        { status: 504 },
+      );
+    }
+    const message = error instanceof Error ? error.message : 'Backend not reachable';
+    return NextResponse.json(
+      { success: false, code: 'BACKEND_UNREACHABLE', message },
+      { status: 502 },
+    );
   }
 }

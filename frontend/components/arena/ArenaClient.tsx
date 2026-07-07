@@ -113,8 +113,8 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         <div className="mb-4">
           <Label>Challenge a Payout</Label>
           <p className="mt-1 text-sm text-muted">
-            Sign with your Casper Wallet and the slash reward goes to your account.
-            No wallet? The backend key demo still works.
+            Use the funded demo key for a reliable challenge-to-slash flow.
+            Wallet-signed challenges remain available as an experimental testnet path.
           </p>
         </div>
         {status === 'loading' && <SkeletonPanel rows={3} />}

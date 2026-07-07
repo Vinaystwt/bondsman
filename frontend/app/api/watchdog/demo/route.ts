@@ -9,6 +9,19 @@ const TIMEOUT_MS = 55_000;
 // returns first.
 export const maxDuration = 60;
 
+function timeoutMessage() {
+  return [
+    'The backend is reachable, but the autonomous watchdog demo did not finish before the Vercel request limit.',
+    'This endpoint submits real Casper testnet transactions and the watchdog can still catch the action after the browser request times out.',
+    'Refresh the Arena in a moment to see the latest watchdog catch.',
+  ].join(' ');
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError');
+}
+
 // Mints a non-reserved duplicate the deterministic watchdog will catch autonomously.
 export async function POST() {
   try {
@@ -18,7 +31,17 @@ export async function POST() {
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ success: false, code: 'BACKEND_UNREACHABLE', message: 'Backend not reachable' }, { status: 502 });
+  } catch (error) {
+    if (isTimeout(error)) {
+      return NextResponse.json(
+        { success: false, code: 'WATCHDOG_DEMO_TIMEOUT', message: timeoutMessage() },
+        { status: 504 },
+      );
+    }
+    const message = error instanceof Error ? error.message : 'Backend not reachable';
+    return NextResponse.json(
+      { success: false, code: 'BACKEND_UNREACHABLE', message },
+      { status: 502 },
+    );
   }
 }

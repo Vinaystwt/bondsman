@@ -16,7 +16,14 @@ import type {
 const SERVER_BASE =
   process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 const FETCH_TIMEOUT_MS = 30_000;
-const LONG_FETCH_TIMEOUT_MS = 120_000;
+const LONG_FETCH_TIMEOUT_MS = 300_000;
+const DIRECT_BACKEND_WRITE_PATHS = new Set([
+  '/challenge',
+  '/challenge/wallet-resolve',
+  '/demo/arm',
+  '/resolve',
+  '/watchdog/demo',
+]);
 
 export class BackendUnreachable extends Error {
   constructor() {
@@ -41,10 +48,10 @@ const FRIENDLY: Record<string, string> = {
   NOT_EXECUTABLE: 'This action is not in an executable state.',
   ALREADY_CHALLENGED: 'This action has already been challenged.',
   STALE_CONTRACT_VERSION: 'The contract version has changed. Evidence from the previous version cannot be used.',
-  ARM_FAILED: 'Could not arm a new action. The backend encountered an on-chain error.',
   CHALLENGE_NOT_FINAL: 'The challenge transaction has not reached finality yet.',
   NODE_UNREACHABLE: 'The Casper testnet node is not reachable.',
-  RPC_ERROR: 'The Casper node rejected the deploy.',
+  ARM_TIMEOUT: 'Arming is still submitting real Casper testnet transactions. Refresh or try again in a moment.',
+  WATCHDOG_DEMO_TIMEOUT: 'The autonomous demo is still submitting real Casper testnet transactions. Refresh or try again in a moment.',
 };
 
 export function friendlyError(code: string, fallback: string): string {
@@ -145,8 +152,11 @@ async function clientPost<T>(
 ): Promise<T> {
   let res: Response;
   try {
+    const target = DIRECT_BACKEND_WRITE_PATHS.has(path)
+      ? `${SERVER_BASE}/api${path}`
+      : `/api${path}`;
     res = await fetchWithTimeout(
-      `/api${path}`,
+      target,
       {
         method: 'POST',
         ...(body !== undefined

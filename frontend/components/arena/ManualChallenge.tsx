@@ -320,21 +320,22 @@ export default function ManualChallenge({
                   </div>
                   <button
                     type="button"
-                    onClick={walletChallenge}
+                    onClick={backendChallenge}
                     className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
                   >
-                    Challenge with My Wallet
+                    Demo Challenge (Backend Key)
                   </button>
                   <button
                     type="button"
-                    onClick={backendChallenge}
+                    onClick={walletChallenge}
                     className="w-full rounded-md border border-rule px-5 py-2.5 text-sm text-muted transition-colors hover:border-accent/50 hover:text-bone"
                   >
-                    or use the demo key
+                    Experimental wallet challenge
                   </button>
                   <p className="text-xs text-muted">
-                    Your wallet signs the challenge deploy. The slash reward
-                    goes to your account. Signing costs ~50 CSPR gas.{' '}
+                    The primary demo uses a funded backend key so the contract
+                    slash is reliable during judging. Wallet signing is available
+                    for testnet users and costs ~50 CSPR gas.{' '}
                     <a
                       href="https://testnet.cspr.live/tools/faucet"
                       target="_blank"

@@ -3,6 +3,16 @@ import { NextResponse } from 'next/server';
 const DEFAULT_NODE = 'https://node.testnet.casper.network/rpc';
 const TIMEOUT_MS = 30_000;
 
+function stringifyRpcData(data: unknown): string {
+  if (data === undefined || data === null) return '';
+  if (typeof data === 'string') return data;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return String(data);
+  }
+}
+
 export async function POST(request: Request) {
   let deployJson: unknown;
   try {
@@ -30,15 +40,31 @@ export async function POST(request: Request) {
     });
     const data = await res.json();
     if (data.error) {
+      const rpcData = stringifyRpcData(data.error.data);
+      const message = [
+        `Casper RPC rejected the challenge deploy at account_put_deploy`,
+        data.error.code !== undefined ? `(code ${data.error.code})` : '',
+        data.error.message ? `: ${data.error.message}` : '',
+        rpcData ? `; data=${rpcData}` : '',
+      ].join('');
       return NextResponse.json(
-        { success: false, code: 'RPC_ERROR', message: data.error.message || 'RPC call failed' },
+        {
+          success: false,
+          code: 'RPC_ERROR',
+          message,
+          rpcCode: data.error.code,
+          rpcData: data.error.data,
+        },
         { status: 502 },
       );
     }
     return NextResponse.json(data.result);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'TimeoutError'
+      ? `Casper node did not answer account_put_deploy within ${TIMEOUT_MS / 1000}s`
+      : 'Casper node not reachable';
     return NextResponse.json(
-      { success: false, code: 'NODE_UNREACHABLE', message: 'Casper node not reachable' },
+      { success: false, code: 'NODE_UNREACHABLE', message },
       { status: 502 },
     );
   }

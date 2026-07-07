@@ -22,6 +22,19 @@ export interface WalletSignResult {
   signatureHex: string;
 }
 
+type WalletSignResponse =
+  | string
+  | {
+      cancelled?: boolean;
+      canceled?: boolean;
+      signatureHex?: string;
+      signature?: string;
+      approval?: { signature?: string };
+      deploy?: { approvals?: Array<{ signer?: string; signature?: string }> };
+      signedDeploy?: { approvals?: Array<{ signer?: string; signature?: string }> };
+      approvals?: Array<{ signer?: string; signature?: string }>;
+    };
+
 interface WalletState {
   available: boolean;
   connected: boolean;
@@ -59,6 +72,79 @@ function getProvider(): unknown | null {
     /* extension not installed */
   }
   return null;
+}
+
+function parseMaybeJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function firstApprovalSignature(
+  approvals: Array<{ signer?: string; signature?: string }> | undefined,
+  publicKey: string,
+): string | undefined {
+  if (!Array.isArray(approvals)) return undefined;
+  return approvals.find((approval) => approval.signer === publicKey)?.signature
+    ?? approvals[0]?.signature;
+}
+
+export function normalizeWalletSignature(
+  signature: string,
+  publicKey: string,
+): string {
+  const clean = signature
+    .trim()
+    .replace(/^signature-/, '')
+    .replace(/^0x/, '')
+    .toLowerCase();
+  if (!/^[0-9a-f]+$/.test(clean)) {
+    throw new Error('Casper Wallet returned a non-hex signature.');
+  }
+  if ((clean.startsWith('01') || clean.startsWith('02')) && clean.length > 128) {
+    return clean;
+  }
+  const algorithm = publicKey.slice(0, 2).toLowerCase();
+  if (algorithm !== '01' && algorithm !== '02') {
+    throw new Error('Casper Wallet public key has an unknown signature algorithm.');
+  }
+  return `${algorithm}${clean}`;
+}
+
+export function extractWalletSignature(
+  raw: WalletSignResponse,
+  publicKey: string,
+): WalletSignResult {
+  const parsed = typeof raw === 'string' ? parseMaybeJson(raw) : raw;
+  if (typeof parsed === 'string') {
+    return {
+      cancelled: false,
+      signatureHex: normalizeWalletSignature(parsed, publicKey),
+    };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Casper Wallet returned an empty signing response.');
+  }
+  const response = parsed as Exclude<WalletSignResponse, string>;
+  if (response.cancelled || response.canceled) {
+    return { cancelled: true, signatureHex: '' };
+  }
+  const signature =
+    response.signatureHex
+    ?? response.signature
+    ?? response.approval?.signature
+    ?? firstApprovalSignature(response.approvals, publicKey)
+    ?? firstApprovalSignature(response.deploy?.approvals, publicKey)
+    ?? firstApprovalSignature(response.signedDeploy?.approvals, publicKey);
+  if (!signature) {
+    throw new Error('Casper Wallet returned no deploy signature.');
+  }
+  return {
+    cancelled: false,
+    signatureHex: normalizeWalletSignature(signature, publicKey),
+  };
 }
 
 // Balance fetch omitted: the testnet RPC requires a purse URef lookup that
@@ -146,11 +232,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return { cancelled: true, signatureHex: '' };
     }
     const raw = await provider.sign(deployJson, publicKey);
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (parsed.cancelled) {
-      return { cancelled: true, signatureHex: '' };
-    }
-    return { cancelled: false, signatureHex: parsed.signatureHex ?? '' };
+    return extractWalletSignature(raw, publicKey);
   }, [publicKey]);
 
   useEffect(() => {
