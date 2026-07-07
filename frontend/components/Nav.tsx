@@ -11,6 +11,7 @@ const PUBLIC_LINKS = [
   { href: '/two-agents', label: 'Two agents' },
   { href: '/rwa', label: 'Invoice pool' },
   { href: '/build', label: 'Build' },
+  { href: '/roadmap', label: 'Roadmap' },
   { href: '/docs', label: 'Docs' },
 ];
 
