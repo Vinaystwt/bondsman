@@ -17,6 +17,10 @@ import { clearLegacyEvidence } from '../evidence/store.js';
 import { createWalletChallengeService } from './wallet-challenge.js';
 import { getTransaction } from '../casper/transactions.js';
 import { readContract } from '../casper/odra-cli.js';
+import {
+  inspectStartupPort,
+  startupDiagnostic,
+} from './startup.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -33,6 +37,16 @@ const deployment = deploymentSchema.parse(
     ),
   ),
 );
+const port = Number(process.env.PORT ?? 3001);
+const startupState = await inspectStartupPort(
+  port,
+  deployment.contracts.controller.contractHash,
+);
+const diagnostic = startupDiagnostic(startupState);
+if (diagnostic) {
+  console.log(diagnostic);
+  process.exit(startupState.kind === 'own-api' ? 0 : 1);
+}
 const database = openDatabase(
   deploymentDatabasePath(
     dataDirectory,
@@ -48,7 +62,6 @@ const reconcile = () => reconcileChain({
   deployment,
   repository,
 });
-await reconcile();
 const resolution = createResolutionService(
   repositoryPath,
   config,
@@ -95,6 +108,10 @@ const server = buildServer(
   ),
   walletChallenge,
 );
-const port = Number(process.env.PORT ?? 3001);
 await server.listen({ host: '127.0.0.1', port });
 console.log(`Bondsman API listening on http://127.0.0.1:${port}`);
+console.log('Initial chain reconciliation running in the background.');
+void reconcile().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`Initial chain reconciliation failed: ${message}`);
+});

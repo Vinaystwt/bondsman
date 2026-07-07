@@ -67,6 +67,15 @@ export interface Watchdog {
   totalRewardEarned: string;
 }
 
+export interface Health {
+  ok: true;
+  version: string;
+  controller: string;
+  watchdog: { running: boolean };
+  uptimeSec: number;
+  deploymentsPath: string;
+}
+
 export interface ActionTransactions {
   initiate?: string;
   approve?: string;

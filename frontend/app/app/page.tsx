@@ -27,13 +27,14 @@ const TIERS = [
 ];
 
 export default async function OverviewPage() {
-  const [actionsRes, reserveRes, watchdogRes] = await Promise.all([
+  const [healthRes, actionsRes, reserveRes, watchdogRes] = await Promise.all([
+    safeGet(() => api.health()),
     safeGet(() => api.actions()),
     safeGet(() => api.reserve()),
     safeGet(() => api.watchdog()),
   ]);
 
-  if (!actionsRes.reachable || !reserveRes.reachable) {
+  if (!healthRes.reachable) {
     return (
       <div className="space-y-8">
         <PageHeader label="Product" title="Overview" />
@@ -42,8 +43,10 @@ export default async function OverviewPage() {
     );
   }
 
-  const actions = actionsRes.data;
-  const reserve = reserveRes.data;
+  const actions = actionsRes.reachable ? actionsRes.data : [];
+  const reserve = reserveRes.reachable
+    ? reserveRes.data
+    : { balance: '0', slashes: [] };
   const watchdog = watchdogRes.reachable ? watchdogRes.data : null;
 
   const now = Date.now();

@@ -3,6 +3,7 @@ import type {
   ActionSummary,
   AgentReputation,
   Deployment,
+  Health,
   Invoice,
   Reserve,
   TransactionStatus,
@@ -89,6 +90,7 @@ export async function safeGet<T>(
 
 // Server-side reads.
 export const api = {
+  health: () => serverGet<Health>('/api/health'),
   invoices: () => serverGet<Invoice[]>('/api/invoices'),
   actions: () => serverGet<ActionSummary[]>('/api/actions'),
   action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
@@ -141,6 +143,7 @@ async function clientPost<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const clientApi = {
+  health: () => clientGet<Health>('/health'),
   actions: () => clientGet<ActionSummary[]>('/actions'),
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   reserve: () => clientGet<Reserve>('/reserve'),

@@ -109,7 +109,7 @@ export default function Hero({
                 )}
               </div>
             </div>
-          ) : (
+          ) : !reachable ? (
             <div className="rounded-lg border border-dashed border-rule bg-surface/40 p-8 text-sm leading-relaxed text-muted">
               <p className="text-bone">Backend not reachable</p>
               <p className="mt-2">
@@ -118,6 +118,20 @@ export default function Hero({
               <p className="mt-3 inline-flex items-center gap-2 rounded border border-rule bg-ink px-3 py-1.5 font-mono text-accent">
                 <span className="text-muted">$</span> npm run api
               </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-rule bg-surface/40 p-8 text-sm leading-relaxed text-muted">
+              <p className="text-bone">No actions yet</p>
+              <p className="mt-2">
+                The backend is reachable. Run the demo to create the first
+                bonded action and it will appear here.
+              </p>
+              <Link
+                href="/demo"
+                className="mt-4 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                Open the demo
+              </Link>
             </div>
           )}
         </div>

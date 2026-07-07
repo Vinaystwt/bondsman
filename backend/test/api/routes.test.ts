@@ -135,6 +135,7 @@ describe('REST routes', () => {
   it('serves actions, detail, agent, reserve, and deployment state', async () => {
     const context = fixture();
     for (const path of [
+      '/api/health',
       '/api/actions',
       '/api/actions/4',
       `/api/agents/account-hash-${account.accountHash}`,
@@ -155,6 +156,13 @@ describe('REST routes', () => {
     ).toMatchObject({
       challengerType: null,
       reservedForManual: false,
+    });
+    expect((await context.server.inject('/api/health')).json()).toMatchObject({
+      ok: true,
+      version: '0.1.0',
+      controller: deployment.contracts.controller.contractHash,
+      watchdog: { running: false },
+      deploymentsPath: 'deployments/testnet.json',
     });
     await context.server.close();
     context.database.close();

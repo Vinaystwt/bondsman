@@ -14,13 +14,14 @@ function sum(values: string[]): string {
 }
 
 export default async function Home() {
-  const [actionsRes, reserveRes, watchdogRes] = await Promise.all([
+  const [healthRes, actionsRes, reserveRes, watchdogRes] = await Promise.all([
+    safeGet(() => api.health()),
     safeGet(() => api.actions()),
     safeGet(() => api.reserve()),
     safeGet(() => api.watchdog()),
   ]);
 
-  const reachable = actionsRes.reachable;
+  const reachable = healthRes.reachable;
   const actions: ActionSummary[] = actionsRes.reachable ? actionsRes.data : [];
   const slashedActions = actions.filter((a) => a.status === 'ResolvedSlash');
 

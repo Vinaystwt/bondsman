@@ -30,9 +30,21 @@ export function registerRoutes(
   arm: DemoArmService,
   walletChallenge: WalletChallengeService,
 ): void {
-  server.get('/api/invoices', async () => repository.listInvoices());
+  const startedAt = Date.now();
   const currentController =
     deployment.contracts.controller.contractHash;
+  server.get('/api/health', async () => {
+    const watchdog = repository.watchdogSummary();
+    return {
+      ok: true,
+      version: '0.1.0',
+      controller: currentController,
+      watchdog: { running: watchdog.running },
+      uptimeSec: Math.max(0, Math.floor((Date.now() - startedAt) / 1000)),
+      deploymentsPath: 'deployments/testnet.json',
+    };
+  });
+  server.get('/api/invoices', async () => repository.listInvoices());
   server.get('/api/actions', async () =>
     repository
       .listActions()
