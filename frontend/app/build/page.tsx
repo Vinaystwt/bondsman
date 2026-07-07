@@ -60,11 +60,32 @@ export default async function BuildPage() {
           Adopt bonded accountability
         </h1>
         <p className="text-lg leading-relaxed text-muted">
-          Bondsman is infrastructure. Any Casper agent, MCP client, or backend
-          can call these six tools to check reputation, quote a bond, submit a
-          challenge, and settle on chain. This page shows the moving parts.
+          Bondsman exposes a local Model Context Protocol server. Casper agents
+          and MCP clients can call these six tools to check reputation, quote a
+          bond, submit a challenge, and settle on chain from this repository.
         </p>
       </header>
+
+      <section aria-label="Local MCP server" className="space-y-4">
+        <Label>MCP status</Label>
+        <h2 className="text-2xl font-semibold text-bone">
+          Local MCP server
+        </h2>
+        <p className="text-sm leading-relaxed text-muted">
+          The server is real and runs over stdio. It is not published as an npm
+          package yet: the backend package has no bin entry, README, or examples
+          directory. Use it locally from the repository root.
+        </p>
+        <Panel className="overflow-hidden">
+          <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
+            <code className="font-mono text-bone">
+{`npm install
+npm run api
+npm run mcp`}
+            </code>
+          </pre>
+        </Panel>
+      </section>
 
       <section aria-label="MCP tools" className="space-y-6">
         <div className="space-y-2">
@@ -107,7 +128,8 @@ export default async function BuildPage() {
         </h2>
         <p className="text-sm leading-relaxed text-muted">
           An external agent that catches duplicates and earns the slash reward.
-          Nothing on the frontend, nothing on the backend, just MCP.
+          The MCP client calls the local server, then the server submits the
+          challenge through the backend key.
         </p>
         <Panel className="overflow-hidden">
           <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
@@ -154,16 +176,17 @@ for (const a of actions) {
         <BackendDown />
       )}
 
-      <section aria-label="What this is not" className="space-y-3 border-t border-rule pt-8">
-        <Label>Honest scope</Label>
+      <section aria-label="Package path" className="space-y-3 border-t border-rule pt-8">
+        <Label>Package path</Label>
         <ul className="space-y-2 text-sm leading-relaxed text-muted">
           <li>
-            No SDK. The interface is MCP. That is intentional: MCP clients
-            include Claude, Cursor, and any Anthropic-compatible agent runtime.
+            Current status: local server only. The package can be packed, but it
+            is not ready to publish because it does not expose a command line
+            binary or package documentation.
           </li>
           <li>
-            x402 metering is a described direction. The reference token does
-            not yet implement the settlement entry point live.
+            Publish path: add a bin entry for the MCP server, include a package
+            README and examples, then run npm pack from the backend directory.
           </li>
           <li>
             Reputation is tracked for agents (the actor who posts a bond), not
