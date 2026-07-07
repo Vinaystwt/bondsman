@@ -154,10 +154,10 @@ export default async function Home() {
             </p>
           </Appear>
           <Appear delay={0.08} className="rounded-lg border border-rule bg-surface p-7">
-            <Label>Real, not simulated</Label>
+            <Label>Live on chain</Label>
             <p className="mt-3 text-xl leading-snug text-bone">
               Every slash here is a real transaction you can open on the explorer.
-              Accountability that never executes is a simulation.
+              Accountability only matters when the contract can execute it.
             </p>
             {explorerHref && (
               <a

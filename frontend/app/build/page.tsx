@@ -189,16 +189,17 @@ for (const a of actions) {
         <BackendDown />
       )}
 
-      <section aria-label="Honest scope" className="space-y-3 border-t border-rule pt-8">
-        <Label>Honest scope</Label>
+      <section aria-label="Current deployment scope" className="space-y-3 border-t border-rule pt-8">
+        <Label>Current deployment scope</Label>
         <ul className="space-y-2 text-sm leading-relaxed text-muted">
           <li>
             MCP is the interface. There is no SDK by design. MCP clients include
             Claude, Cursor, and any Anthropic-compatible agent runtime.
           </li>
           <li>
-            x402 metering is a described direction. The reference token does
-            not yet implement the settlement entry point live.
+            x402 metering runs as a sandbox in the current deployment. The
+            production path is facilitator-compatible settlement once the token
+            and payment flow are connected.
           </li>
           <li>
             Reputation is tracked for agents (the actor who posts a bond), not

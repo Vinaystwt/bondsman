@@ -6,7 +6,7 @@ const LABELS: Record<string, { name: string; owns: string }> = {
   controller: { name: 'Controller', owns: 'Initiates actions, holds the lifecycle, resolves' },
   bondVault: { name: 'Bond vault', owns: 'Locks the bond, releases it or slashes it' },
   invoicePool: { name: 'Invoice pool', owns: 'Approves payouts, detects duplicate claims' },
-  mockCsprUsd: { name: 'csprUSD', owns: 'The settlement token (mocked for testnet)' },
+  mockCsprUsd: { name: 'csprUSD', owns: 'The CEP-18 settlement token for this testnet deployment' },
 };
 
 // A live table of the four contracts, read from /api/deployments.

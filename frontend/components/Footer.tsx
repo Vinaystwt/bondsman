@@ -50,7 +50,7 @@ export default function Footer() {
       </div>
       <div className="border-t border-rule">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>Built on Casper testnet. Invoice data is mocked; the bond and the slash are real.</span>
+          <span>Casper Testnet deployment. Controlled invoice fixtures; bond and slash execution live on chain.</span>
           <span className="serial">No bond, no action.</span>
         </div>
       </div>

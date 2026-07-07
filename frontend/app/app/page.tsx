@@ -133,8 +133,8 @@ export default async function OverviewPage() {
         <ReservePanel slashes={reserve.slashes} balance={reserve.balance} />
       </div>
 
-      <section aria-label="Real vs demo">
-        <h2 className="serial mb-3 text-[0.68rem] text-muted">What is real, what is mocked</h2>
+      <section aria-label="Current testnet deployment">
+        <h2 className="serial mb-3 text-[0.68rem] text-muted">Current testnet deployment</h2>
         <RealVsDemo />
       </section>
     </div>

@@ -70,11 +70,11 @@ Anyone can also challenge a bad payout by hand: connect a Casper wallet, inspect
 
 The required bond scales with the size of the payout, and rises further if the agent's on-chain reputation is negative. A clean action adds to reputation; a slash subtracts far more. The bond floor by amount tier never discounts below the base rate, so there is no way to grind a good reputation on small actions and then defect on a large one.
 
-### What is real, what is mocked
+### Current testnet deployment
 
-Real, on Casper Testnet, and verifiable on the explorer: every bond lock, payout, duplicate detection, slash, refund, and reputation update; the approver's live model call and its committed reasoning hash; the watchdog's autonomous, self-signed challenge and slash.
+Bondsman is deployed as a live Casper Testnet prototype with real on-chain execution. The core accountability loop is active today: agents post bonds, payouts execute through the invoice pool, duplicate claims can be challenged, bonds can be slashed, reserves update, and agent reputation changes on chain.
 
-Mocked, and labeled as such in the product: the invoice data itself and its delivery flag; the stablecoin, a testnet mock rather than live csprUSD; the x402 metered verification path, a sandbox that validates payload shape without executing on-chain settlement, because the current mock token does not implement the settlement entry point a facilitator requires.
+The invoice dataset uses controlled testnet fixtures so duplicate-claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP-18 asset, and the x402 verification flow is implemented as a metering sandbox for future paid verification. The production path is direct: connect a real invoice/oracle feed, replace the testnet token with a production asset, and connect x402 settlement to a facilitator-compatible payment flow.
 
 ---
 
@@ -108,7 +108,7 @@ Tools exposed: `get_action`, `list_actions`, `get_reputation`, `get_bond_require
 
 ## Roadmap
 
-- **Q3 2026.** Harden the bond and slash logic through external review. Replace the mock stablecoin with live csprUSD. Sign a first design partner running a real invoice or private credit pool on Casper.
+- **Q3 2026.** Harden the bond and slash logic through external review. Replace the testnet stablecoin with live csprUSD. Sign a first design partner running a real invoice or private credit pool on Casper.
 - **Q4 2026.** Agent operator tools and a proof center. The x402 metered verification path documented for real service integration.
 - **Q1 2027.** An underwriting and policy layer: reserve analytics, policy templates for challenge windows and risk tiers, and a portable agent reputation passport other Casper protocols can read.
 - **Q2 2027 and the mainnet path.** Production contracts with production csprUSD, oracle backed delivery attestation, x402 settlement once the token and facilitator support production payments, and reputation APIs for integrators.

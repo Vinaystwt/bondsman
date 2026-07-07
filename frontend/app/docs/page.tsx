@@ -195,11 +195,10 @@ export default async function DocsPage() {
         </Faq>
         <Faq q="Is x402 settlement live?">
           <p>
-            The Casper x402 facilitator supports testnet, but the demo mock token
-            lacks the settlement entry point the facilitator requires, so
-            verification as a service payment runs as a labeled sandbox here. Real
-            csprUSD implements what a facilitator needs. Production x402
-            settlement is on the roadmap.
+            The Casper x402 facilitator supports testnet, while this deployment
+            keeps verification metering in a labeled sandbox until the token and
+            facilitator-compatible settlement path are connected. Production
+            x402 settlement remains on the planned mainnet path.
           </p>
         </Faq>
       </DocSection>
