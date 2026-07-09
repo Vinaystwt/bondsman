@@ -35,6 +35,37 @@ function asAmount(v: unknown): string | null {
   return typeof v === 'string' && /^\d+$/.test(v) ? v : null;
 }
 
+function pendingChallengeKey(actionId: number): string {
+  return `bondsman.walletChallenge.${actionId}`;
+}
+
+function savePendingChallenge(actionId: number, deployHash: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(
+    pendingChallengeKey(actionId),
+    JSON.stringify({ deployHash, savedAt: Date.now() }),
+  );
+}
+
+function loadPendingChallenge(actionId: number): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(pendingChallengeKey(actionId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { deployHash?: unknown };
+    return typeof parsed.deployHash === 'string'
+      ? parsed.deployHash
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingChallenge(actionId: number): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(pendingChallengeKey(actionId));
+}
+
 export default function ManualChallenge({
   initial,
   onResolved,
@@ -70,6 +101,22 @@ export default function ManualChallenge({
   useEffect(() => {
     return () => { pollAbort.current?.abort(); };
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const pendingHash = loadPendingChallenge(action.actionId);
+    if (!pendingHash) return;
+    if (
+      action.status !== 'Executed' ||
+      action.windowEnd <= Date.now() ||
+      action.challenger
+    ) {
+      clearPendingChallenge(action.actionId);
+      return;
+    }
+    setDeployHash(pendingHash);
+    setPhase('timeout');
+  }, [action.actionId, action.challenger, action.status, action.windowEnd, phase]);
 
   const walletChallenge = useCallback(async () => {
     if (action.windowEnd <= Date.now()) {
@@ -114,6 +161,7 @@ export default function ManualChallenge({
       );
       const finalHash = putResult.deploy_hash || hash;
       setDeployHash(finalHash);
+      savePendingChallenge(action.actionId, finalHash);
 
       setPhase('finalizing');
       const controller = new AbortController();
@@ -121,7 +169,7 @@ export default function ManualChallenge({
       const startTime = Date.now();
 
       while (!controller.signal.aborted) {
-        if (Date.now() - startTime > 120_000) {
+        if (Date.now() - startTime > 300_000) {
           setPhase('timeout');
           return;
         }
@@ -132,6 +180,7 @@ export default function ManualChallenge({
           if (tx.final && tx.success) break;
           if (tx.final && !tx.success) {
             setError(tx.error || 'The challenge deploy failed on chain.');
+            clearPendingChallenge(action.actionId);
             setPhase('error');
             return;
           }
@@ -162,6 +211,7 @@ export default function ManualChallenge({
       }
 
       setWalletResult(resolveResult);
+      clearPendingChallenge(action.actionId);
       setPhase('success');
       onResolved();
     } catch (err) {
@@ -181,6 +231,7 @@ export default function ManualChallenge({
     try {
       const result = await clientApi.walletResolve(action.actionId, deployHash);
       setWalletResult(result);
+      clearPendingChallenge(action.actionId);
       setPhase('success');
       onResolved();
     } catch (err) {
@@ -199,12 +250,14 @@ export default function ManualChallenge({
         setPhase('resolving');
         const result = await clientApi.walletResolve(action.actionId, deployHash);
         setWalletResult(result);
+        clearPendingChallenge(action.actionId);
         setPhase('success');
         onResolved();
         return;
       }
       if (tx.final && !tx.success) {
         setError(tx.error || 'The challenge deploy failed on chain.');
+        clearPendingChallenge(action.actionId);
         setPhase('error');
         return;
       }
@@ -225,21 +278,38 @@ export default function ManualChallenge({
     setPhase('backend_submitting');
     setError('');
     try {
-      const { challenge: cTx } = await clientApi.challenge(action.actionId);
-      setBackendChallengeTx(cTx ?? null);
+      let challengeError: unknown = null;
+      const challengeRequest = clientApi
+        .challenge(action.actionId)
+        .then((result) => {
+          setBackendChallengeTx(result.challenge ?? null);
+          return result;
+        })
+        .catch((err) => {
+          challengeError = err;
+          return null;
+        });
       setPhase('backend_pending');
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 120; i++) {
         try {
           const fresh = await clientApi.action(action.actionId);
           setAction(fresh);
+          if (fresh.transactions.challenge) {
+            setBackendChallengeTx(fresh.transactions.challenge);
+          }
           if (fresh.status === 'ResolvedSlash' || fresh.status === 'ResolvedRefund') {
             setPhase('backend_resolved');
             onResolved();
             return;
           }
         } catch { /* keep polling */ }
+        if (challengeError) {
+          throw challengeError;
+        }
         await new Promise((r) => setTimeout(r, 2500));
       }
+      const result = await challengeRequest;
+      if (result?.challenge) setBackendChallengeTx(result.challenge);
       setPhase('timeout');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'The challenge could not be submitted.';
@@ -453,7 +523,9 @@ export default function ManualChallenge({
           {phase === 'timeout' && (
             <PhaseBox key="timeout">
               <p className="rounded-md border border-rule bg-ink px-4 py-3 text-sm text-bone">
-                Finality is taking longer than expected. Your transaction is live on the explorer.
+                Still pending on Casper testnet. Your challenge transaction was
+                accepted by the node and is recoverable from this screen; if it
+                finalized already, the check below will resolve the slash.
               </p>
               {deployHash && <TxLine label="Challenge" hash={deployHash} />}
               <button
@@ -461,7 +533,7 @@ export default function ManualChallenge({
                 onClick={recheckFinality}
                 className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
               >
-                Check again
+                Check status again
               </button>
             </PhaseBox>
           )}
@@ -582,7 +654,7 @@ export default function ManualChallenge({
               </p>
               {backendChallengeTx && <TxLine label="Challenge" hash={backendChallengeTx} />}
               <p className="text-xs text-muted">
-                This can take up to a minute on testnet. Expected, not a hang.
+                This can take a few minutes on testnet. Expected, not a hang.
                 Demo Challenge (Backend Key); the reward goes to the backend key.
               </p>
             </motion.div>

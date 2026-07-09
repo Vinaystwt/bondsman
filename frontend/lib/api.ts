@@ -188,7 +188,11 @@ export const clientApi = {
   arm: () => clientPost<ActionDetail>('/demo/arm', undefined, LONG_FETCH_TIMEOUT_MS),
   watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo', undefined, LONG_FETCH_TIMEOUT_MS),
   challenge: (actionId: number) =>
-    clientPost<{ challenge: string; resolve: string }>('/challenge', { actionId }),
+    clientPost<{ challenge: string; resolve: string }>(
+      '/challenge',
+      { actionId },
+      LONG_FETCH_TIMEOUT_MS,
+    ),
   deployments: () => clientGet<Deployment>('/deployments'),
   transactionStatus: (hash: string) =>
     clientGet<TransactionStatus>(`/transactions/${hash}`),

@@ -15,6 +15,10 @@ import { buildServer } from './server.js';
 import { createDemoArmService } from './arm.js';
 import { clearLegacyEvidence } from '../evidence/store.js';
 import { createWalletChallengeService } from './wallet-challenge.js';
+import {
+  createDemoReadyPool,
+  demoReadyPoolConfig,
+} from './ready-pool.js';
 import { getTransaction } from '../casper/transactions.js';
 import { readContract } from '../casper/odra-cli.js';
 import {
@@ -95,22 +99,29 @@ const walletChallenge = createWalletChallengeService({
   resolve: (actionId, evidence) =>
     resolution.resolve(actionId, evidence),
 });
+const armService = createDemoArmService(
+  repositoryPath,
+  config,
+  deployment,
+  repository,
+  reconcile,
+);
 const server = buildServer(
   repository,
   deployment,
   resolution,
-  createDemoArmService(
-    repositoryPath,
-    config,
-    deployment,
-    repository,
-    reconcile,
-  ),
+  armService,
   walletChallenge,
 );
 const host = process.env.HOST || '0.0.0.0';
 await server.listen({ host, port });
 console.log(`Bondsman API listening on http://${host}:${port}`);
+createDemoReadyPool({
+  config: demoReadyPoolConfig(),
+  repository,
+  controllerHash: deployment.contracts.controller.contractHash,
+  arm: armService,
+}).start();
 console.log('Initial chain reconciliation running in the background.');
 void reconcile().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);

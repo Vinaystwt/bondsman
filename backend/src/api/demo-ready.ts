@@ -7,6 +7,7 @@ export function isReadyDemoCase(
   action: ReturnType<Repository['listActions']>[number],
   controllerHash: string,
   now: number = Date.now(),
+  minRemainingMs: number = READY_CASE_MIN_REMAINING_MS,
 ): boolean {
   return (
     action.controllerHash === controllerHash &&
@@ -14,7 +15,7 @@ export function isReadyDemoCase(
     action.challenger === null &&
     action.duplicateProven === true &&
     action.reservedForManual === true &&
-    action.windowEnd - now >= READY_CASE_MIN_REMAINING_MS
+    action.windowEnd - now >= minRemainingMs
   );
 }
 
@@ -22,10 +23,13 @@ export function demoReadyCases(
   repository: Repository,
   controllerHash: string,
   now: number = Date.now(),
+  minRemainingMs: number = READY_CASE_MIN_REMAINING_MS,
 ) {
   return repository
     .listActions()
-    .filter((action) => isReadyDemoCase(action, controllerHash, now))
+    .filter((action) =>
+      isReadyDemoCase(action, controllerHash, now, minRemainingMs),
+    )
     .sort(
       (left, right) =>
         Number(right.reservedForManual) -
@@ -40,18 +44,37 @@ export function demoReadyCases(
         ...detail,
         demo: true,
         remainingMs,
-        minRemainingMs: READY_CASE_MIN_REMAINING_MS,
+        minRemainingMs,
         safeToChallengeNow: true,
       };
     });
+}
+
+export function readyDemoCaseCount(
+  repository: Repository,
+  controllerHash: string,
+  now: number = Date.now(),
+  minRemainingMs: number = READY_CASE_MIN_REMAINING_MS,
+): number {
+  return repository
+    .listActions()
+    .filter((action) =>
+      isReadyDemoCase(action, controllerHash, now, minRemainingMs),
+    ).length;
 }
 
 export function demoReadyResponse(
   repository: Repository,
   controllerHash: string,
   now: number = Date.now(),
+  minRemainingMs: number = READY_CASE_MIN_REMAINING_MS,
 ) {
-  const cases = demoReadyCases(repository, controllerHash, now);
+  const cases = demoReadyCases(
+    repository,
+    controllerHash,
+    now,
+    minRemainingMs,
+  );
   if (cases.length === 0) {
     return {
       success: false as const,
@@ -60,13 +83,13 @@ export function demoReadyResponse(
       nextStep: 'Run npm run demo:prearm or request a fresh case.',
       cases,
       count: 0,
-      minRemainingMs: READY_CASE_MIN_REMAINING_MS,
+      minRemainingMs,
     };
   }
   return {
     success: true as const,
     count: cases.length,
-    minRemainingMs: READY_CASE_MIN_REMAINING_MS,
+    minRemainingMs,
     best: cases[0],
     cases,
   };

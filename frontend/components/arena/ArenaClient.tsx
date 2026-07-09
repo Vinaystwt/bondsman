@@ -69,9 +69,7 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         }
         setArmError('A case was found, but it is not safe to challenge now. Run npm run demo:prearm before a demo.');
       } else {
-        setArmError(
-          `${ready.message} ${ready.nextStep}`,
-        );
+        setArmError(ready.message);
       }
     } catch (err) {
       if (err instanceof ApiError) setArmError(err.message);
@@ -118,38 +116,37 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         )}
         {status === 'ready' && !armed && !arming && (
           <div className="rounded-md border border-rule bg-surface px-5 py-6">
-            {armError ? (
-              <>
-                <p className="text-sm text-bone">{armError}</p>
-                <button
-                  type="button"
-                  onClick={arm}
-                  className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
-                >
-                  Prepare Fresh Case
-                </button>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  This submits real Casper testnet transactions and can take
-                  around two minutes. For demos, run <span className="font-mono text-bone">npm run demo:prearm</span> first.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted">No challengeable payout ready.</p>
-                <button
-                  type="button"
-                  onClick={arm}
-                  className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
-                >
-                  Prepare Fresh Case
-                </button>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  This prepares a real bonded payout on Casper testnet. It is
-                  intentionally not auto-started because finality can take a
-                  couple of minutes.
-                </p>
-              </>
-            )}
+            <p className="text-sm font-medium text-bone">Case pool warming</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              {armError || 'No prepared challenge case is open right now.'}
+              {' '}The backend keeps a small pool of already-executed duplicate
+              claims ready for the Arena, so a public demo does not depend on
+              waiting through a fresh multi-transaction setup flow.
+            </p>
+            <button
+              type="button"
+              onClick={load}
+              className="mt-4 rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
+            >
+              Refresh ready cases
+            </button>
+            <details className="mt-5 rounded-md border border-rule bg-ink px-4 py-3">
+              <summary className="cursor-pointer text-sm text-muted">
+                Advanced / Admin demo setup
+              </summary>
+              <button
+                type="button"
+                onClick={arm}
+                className="mt-4 rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
+              >
+                Admin: Prepare Fresh Case
+              </button>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                This submits real Casper testnet transactions and can take
+                around two minutes. It is intended for operators, not the
+                primary judge path.
+              </p>
+            </details>
           </div>
         )}
         {status === 'ready' && arming && (
