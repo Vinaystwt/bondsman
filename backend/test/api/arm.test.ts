@@ -6,6 +6,7 @@ import {
   DEMO_GAS_TARGET_MOTES,
   isInsufficientFundsError,
   isTransientRpcError,
+  resolveActionCursor,
   runFundedDemoAction,
   pollArmReadiness,
   selectResumablePending,
@@ -188,6 +189,56 @@ describe('isTransientRpcError', () => {
     expect(
       isTransientRpcError(new Error('contract reverted: NotDuplicate')),
     ).toBe(false);
+    expect(isTransientRpcError(new Error('HTTP 429 Too Many Requests'))).toBe(
+      true,
+    );
+  });
+});
+
+describe('resolveActionCursor', () => {
+  it('probes only the action immediately after the local projection', async () => {
+    const readAction = vi.fn().mockRejectedValue(new Error('ActionNotFound'));
+    const cursor = await resolveActionCursor(
+      [
+        { actionId: 0, invoiceId: 1, windowEnd: 1, status: 'ResolvedSlash' },
+        { actionId: 94, invoiceId: 95, windowEnd: 2, status: 'ResolvedRefund' },
+      ],
+      readAction,
+    );
+
+    expect(cursor.nextActionId).toBe(95);
+    expect(readAction).toHaveBeenCalledTimes(1);
+    expect(readAction).toHaveBeenCalledWith(95);
+  });
+
+  it('includes a small unprojected tail before choosing the next action id', async () => {
+    const readAction = vi
+      .fn()
+      .mockResolvedValueOnce({
+        agent: 'agent',
+        invoice_id: '96',
+        claim_hash: '[]',
+        amount: '1',
+        reasoning_hash: '[]',
+        bond_required: '1',
+        bond_posted: '0',
+        window_end: '1800000',
+        status: 'Initiated',
+        challenger: 'None',
+      })
+      .mockRejectedValueOnce(new Error('ActionNotFound'));
+    const cursor = await resolveActionCursor(
+      [{ actionId: 94, invoiceId: 95, windowEnd: 2, status: 'ResolvedRefund' }],
+      readAction,
+    );
+
+    expect(cursor.nextActionId).toBe(96);
+    expect(cursor.actions).toContainEqual({
+      actionId: 95,
+      invoiceId: 96,
+      windowEnd: 1_800_000,
+      status: 'Initiated',
+    });
   });
 });
 

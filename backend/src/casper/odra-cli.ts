@@ -6,6 +6,10 @@ import { publicFallbackConfig } from '../config/env.js';
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
 const TRANSACTION_PATTERN =
   /Transaction "([0-9a-f]{64})" successfully executed\./;
+const RATE_LIMIT_BASE_DELAY_MS = 5_000;
+const RATE_LIMIT_MAX_DELAY_MS = 60_000;
+const rateLimitUntilByEndpoint = new Map<string, number>();
+const rateLimitFailuresByEndpoint = new Map<string, number>();
 
 export interface OdraCommandOptions {
   repository: string;
@@ -27,13 +31,43 @@ export function transactionHash(output: string): string {
   return hash;
 }
 
+export function isRateLimitedError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /\b429\b|too many requests|rate.?limit/i.test(error.message);
+}
+
+function endpointCooldownError(endpoint: string, retryAt: number): Error {
+  return new Error(
+    `Casper RPC rate limited at ${endpoint}; retry after ${new Date(retryAt).toISOString()}`,
+  );
+}
+
+function recordRateLimit(endpoint: string): void {
+  const failures = (rateLimitFailuresByEndpoint.get(endpoint) ?? 0) + 1;
+  const delay = Math.min(
+    RATE_LIMIT_BASE_DELAY_MS * 2 ** (failures - 1),
+    RATE_LIMIT_MAX_DELAY_MS,
+  );
+  const jitter = Math.round(delay * Math.random() * 0.2);
+  rateLimitFailuresByEndpoint.set(endpoint, failures);
+  rateLimitUntilByEndpoint.set(endpoint, Date.now() + delay + jitter);
+}
+
+function clearRateLimit(endpoint: string): void {
+  rateLimitFailuresByEndpoint.delete(endpoint);
+  rateLimitUntilByEndpoint.delete(endpoint);
+}
+
 export function canFallbackTransaction(
   error: unknown,
   config: BondsmanConfig,
 ): boolean {
   if (!config.cloudApiKey || !(error instanceof Error)) return false;
-  return /HTTP status client error \((401 Unauthorized|403 Forbidden)\)/.test(
-    error.message,
+  return (
+    isRateLimitedError(error) ||
+    /HTTP status client error \((401 Unauthorized|403 Forbidden)\)/.test(
+      error.message,
+    )
   );
 }
 
@@ -41,6 +75,11 @@ export function runOdraCommand(
   options: OdraCommandOptions,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    const retryAt = rateLimitUntilByEndpoint.get(options.config.nodeAddress);
+    if (retryAt && retryAt > Date.now()) {
+      reject(endpointCooldownError(options.config.nodeAddress, retryAt));
+      return;
+    }
     const output: Buffer[] = [];
     const errors: Buffer[] = [];
     const child = spawn(
@@ -76,16 +115,20 @@ export function runOdraCommand(
     child.once('exit', (code) => {
       const stdout = Buffer.concat(output).toString('utf8');
       const stderr = Buffer.concat(errors).toString('utf8');
-      if (code === 0) resolve(stdout);
-      else {
-        reject(
-          new Error(
-            (stderr || stdout)
-              .replace(ANSI_PATTERN, '')
-              .trim() || `Odra exited with code ${code}`,
-          ),
-        );
+      if (code === 0) {
+        clearRateLimit(options.config.nodeAddress);
+        resolve(stdout);
+        return;
       }
+      const error = new Error(
+        (stderr || stdout)
+          .replace(ANSI_PATTERN, '')
+          .trim() || `Odra exited with code ${code}`,
+      );
+      if (isRateLimitedError(error)) {
+        recordRateLimit(options.config.nodeAddress);
+      }
+      reject(error);
     });
   });
 }

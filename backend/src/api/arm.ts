@@ -4,16 +4,17 @@ import type { AgentDecision } from '../agent/decision.js';
 import { blake2b256 } from '../agent/hashing.js';
 import { persistAgentRun } from '../agent/runner.js';
 import {
-  chainActions,
   type ChainActionView,
 } from '../casper/actions.js';
 import {
   bytesArgument,
   callContract,
+  isRateLimitedError,
   readContract,
 } from '../casper/odra-cli.js';
 import {
   fundToTarget,
+  transferableTopUp,
 } from '../casper/funding.js';
 import {
   loadPrivateKey,
@@ -35,6 +36,9 @@ const POOL_TOKEN_TARGET = 500_000n * TOKEN_UNIT;
 const THIRTY_MINUTES_MS = 1_800_000;
 const FIFTEEN_MINUTES_MS = 900_000;
 export const DEMO_GAS_TARGET_MOTES = 300_000_000_000n;
+const DEMO_TRANSFER_GAS_RESERVE_MOTES = 50_000_000_000n;
+const DEMO_OWNER_GAS_RESERVE_MOTES = 50_000_000_000n;
+const MAX_UNPROJECTED_ACTION_PROBES = 3;
 
 export function demoSignerPlan(
   deployerPath: string,
@@ -203,13 +207,57 @@ interface RawInvoice {
   paid: string | boolean;
 }
 
+export function projectedActionViews(
+  repository: Repository,
+): ChainActionView[] {
+  return repository.listActions().map((action) => ({
+    actionId: action.actionId,
+    invoiceId: action.invoiceId,
+    windowEnd: action.windowEnd,
+    status: action.status,
+  }));
+}
+
+export async function resolveActionCursor(
+  projected: ChainActionView[],
+  readAction: (actionId: number) => Promise<RawAction>,
+): Promise<{ actions: ChainActionView[]; nextActionId: number }> {
+  const actions = [...projected];
+  let actionId = Math.max(-1, ...actions.map((action) => action.actionId)) + 1;
+  for (
+    let attempt = 0;
+    attempt < MAX_UNPROJECTED_ACTION_PROBES;
+    attempt += 1
+  ) {
+    try {
+      const action = await readAction(actionId);
+      actions.push({
+        actionId,
+        invoiceId: Number(action.invoice_id),
+        windowEnd: Number(action.window_end),
+        status: action.status,
+      });
+      actionId += 1;
+    } catch (error) {
+      if (isTransientRpcError(error)) throw error;
+      return { actions, nextActionId: actionId };
+    }
+  }
+  throw new Error(
+    'action cursor is more than three actions ahead of the local projection',
+  );
+}
+
 export function isTransientRpcError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return [
-    'Timeout waiting for transaction',
-    'failed to get response',
-    'error sending request',
-  ].some((message) => error.message.includes(message));
+  return (
+    isRateLimitedError(error) ||
+    [
+      'Timeout waiting for transaction',
+      'failed to get response',
+      'error sending request',
+    ].some((message) => error.message.includes(message))
+  );
 }
 
 export function isInsufficientFundsError(error: unknown): boolean {
@@ -220,8 +268,8 @@ export function isInsufficientFundsError(error: unknown): boolean {
 class DemoFundingUnavailableError extends Error {
   readonly statusCode = 503;
 
-  constructor(cause: unknown) {
-    super('demo funding is temporarily unavailable', { cause });
+  constructor(message: string, cause?: unknown) {
+    super(message, { cause });
     this.name = 'DemoFundingUnavailableError';
   }
 }
@@ -243,7 +291,10 @@ export async function runFundedDemoAction<T>(
     return await attempt();
   } catch (error) {
     if (isInsufficientFundsError(error)) {
-      throw new DemoFundingUnavailableError(error);
+      throw new DemoFundingUnavailableError(
+        'demo CSPR funding is temporarily unavailable after one top-up retry',
+        error,
+      );
     }
     throw error;
   }
@@ -287,7 +338,7 @@ export function createDemoArmService(
   config: BondsmanConfig,
   deployment: Deployment,
   repository: Repository,
-  reconcile?: () => Promise<void>,
+  _reconcile?: () => Promise<void>,
 ): DemoArmService {
   const nextInvoiceId = createInvoiceIdGenerator();
   let queue: Promise<void> = Promise.resolve();
@@ -300,17 +351,70 @@ export function createDemoArmService(
       join(repositoryPath, '.keys/agent.pem'),
     );
     const rpc = createRpcClient(config);
-    await fundToTarget(
-      rpc,
-      deployer,
-      agent.publicKey,
+    let agentBalance: bigint;
+    let deployerBalance: bigint;
+    try {
+      agentBalance = await accountBalanceMotes(rpc, agent.publicKey);
+      deployerBalance = await accountBalanceMotes(rpc, deployer.publicKey);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error({
+        event: 'demo_funding_rpc_unavailable',
+        agent: agent.publicKey.toHex(),
+        deployer: deployer.publicKey.toHex(),
+        reason,
+      });
+      throw new Error(`demo CSPR balance check failed: ${reason}`, {
+        cause: error,
+      });
+    }
+    const topUpMotes = transferableTopUp(
+      agentBalance,
       DEMO_GAS_TARGET_MOTES,
     );
-    const balance = await accountBalanceMotes(rpc, agent.publicKey);
-    if (balance < DEMO_GAS_TARGET_MOTES) {
-      throw new Error(
-        'Insufficient funds: demo agent top-up did not reach target',
+    const deployerRequiredMotes =
+      topUpMotes +
+      DEMO_TRANSFER_GAS_RESERVE_MOTES +
+      DEMO_OWNER_GAS_RESERVE_MOTES;
+    console.log({
+      event: 'demo_funding_check',
+      asset: 'CSPR',
+      agent: agent.publicKey.toHex(),
+      agentBalanceMotes: agentBalance.toString(),
+      agentTargetMotes: DEMO_GAS_TARGET_MOTES.toString(),
+      deployer: deployer.publicKey.toHex(),
+      deployerBalanceMotes: deployerBalance.toString(),
+      deployerRequiredMotes: deployerRequiredMotes.toString(),
+    });
+    if (deployerBalance < deployerRequiredMotes) {
+      const shortfall = deployerRequiredMotes - deployerBalance;
+      console.error({
+        event: 'demo_funding_insufficient',
+        asset: 'CSPR',
+        account: deployer.publicKey.toHex(),
+        balanceMotes: deployerBalance.toString(),
+        requiredMotes: deployerRequiredMotes.toString(),
+        shortfallMotes: shortfall.toString(),
+        agent: agent.publicKey.toHex(),
+        agentTopUpMotes: topUpMotes.toString(),
+      });
+      throw new DemoFundingUnavailableError(
+        `demo CSPR funding unavailable: deployer ${deployer.publicKey.toHex()} has ${deployerBalance.toString()} motes but needs ${deployerRequiredMotes.toString()} motes; shortfall ${shortfall.toString()} motes to fund agent ${agent.publicKey.toHex()} and submit one demo invoice`,
       );
+    }
+    if (topUpMotes > 0n) {
+      await fundToTarget(
+        rpc,
+        deployer,
+        agent.publicKey,
+        DEMO_GAS_TARGET_MOTES,
+      );
+      agentBalance = await accountBalanceMotes(rpc, agent.publicKey);
+      if (agentBalance < DEMO_GAS_TARGET_MOTES) {
+        throw new DemoFundingUnavailableError(
+          `demo CSPR funding unavailable: agent ${agent.publicKey.toHex()} remains at ${agentBalance.toString()} motes after top-up; target ${DEMO_GAS_TARGET_MOTES.toString()} motes`,
+        );
+      }
     }
   };
 
@@ -368,13 +472,23 @@ export function createDemoArmService(
       POOL_TOKEN_TARGET,
     );
 
-    const chain = await chainActions({
-      repository: repositoryPath,
-      config,
-      deployment,
-    });
+    const readRawAction = async (actionId: number) =>
+      JSON.parse(
+        await readContract<string>({
+          repository: repositoryPath,
+          config,
+          signerPath: agentPath,
+          contract: 'BondsmanController',
+          entrypoint: 'get_action',
+          arguments: ['--action_id', String(actionId)],
+        }),
+      ) as RawAction;
+    const cursor = await resolveActionCursor(
+      projectedActionViews(repository),
+      readRawAction,
+    );
     const pending = await selectResumablePending(
-      chain,
+      cursor.actions,
       async (candidateInvoiceId) => {
         const serialized = await readContract<string>({
           repository: repositoryPath,
@@ -459,19 +573,9 @@ export function createDemoArmService(
     const reasoningHash = blake2b256(
       decisions.baseline.reasoning,
     ).toString('hex');
-    const actionId = pending?.actionId ?? chain.length;
+    const actionId = pending?.actionId ?? cursor.nextActionId;
     const transactions: Record<string, string> = {};
-    const getAction = async () =>
-      JSON.parse(
-        await readContract<string>({
-          repository: repositoryPath,
-          config,
-          signerPath: signers.initiate,
-          contract: 'BondsmanController',
-          entrypoint: 'get_action',
-          arguments: ['--action_id', String(actionId)],
-        }),
-      ) as RawAction;
+    const getAction = () => readRawAction(actionId);
     if (!pending) {
       try {
         transactions.initiate = await transact(
@@ -658,13 +762,6 @@ export function createDemoArmService(
         transactions,
       },
     );
-    if (reconcile) {
-      void reconcile().catch((error) => {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        console.error(`Demo arm background reconciliation failed: ${message}`);
-      });
-    }
     raw = await pollArmReadiness(getAction, getDuplicate, {
       attempts: 1,
     });

@@ -54,6 +54,14 @@ describe('demoReadyPoolConfig', () => {
       intervalMs: 60 * 1000,
     });
   });
+
+  it('uses a three-case, fifteen-minute reserve by default', () => {
+    expect(demoReadyPoolConfig({})).toMatchObject({
+      target: 3,
+      minWindowMs: 15 * 60 * 1000,
+      intervalMs: 300 * 1000,
+    });
+  });
 });
 
 describe('createDemoReadyPool', () => {
@@ -144,6 +152,49 @@ describe('createDemoReadyPool', () => {
       expect.objectContaining({
         event: 'demo_ready_pool_skip',
         cause: 'already_running',
+      }),
+    );
+    database.close();
+  });
+
+  it('backs off after a failed arm instead of retrying every tick', async () => {
+    const { database, repository } = repositoryWithReadyActions(0);
+    const arm = {
+      arm: vi.fn().mockRejectedValue(new Error('HTTP 429 Too Many Requests')),
+    };
+    const log = vi.fn();
+    let now = 1_000_000;
+    const pool = createDemoReadyPool({
+      config: {
+        enabled: true,
+        target: 3,
+        minWindowMs: 15 * 60 * 1000,
+        intervalMs: 300 * 1000,
+      },
+      repository,
+      controllerHash,
+      arm: arm as unknown as DemoArmService,
+      now: () => now,
+      random: () => 0,
+      log,
+    });
+
+    await pool.tick('first');
+    now += 60_000;
+    await pool.tick('second');
+
+    expect(arm.arm).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'demo_ready_pool_failed',
+        cause: 'rpc_rate_limited',
+        nextAttemptAt: new Date(1_300_000).toISOString(),
+      }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'demo_ready_pool_skip',
+        cause: 'backoff',
       }),
     );
     database.close();
