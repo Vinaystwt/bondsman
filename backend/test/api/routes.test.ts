@@ -336,6 +336,26 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('marks a challenge job resolved when projected chain state is resolved', async () => {
+    const context = fixture();
+    const job = context.repository.createDemoJob({
+      id: 'resolved-job',
+      kind: 'challenge',
+      actionId: 3,
+      status: 'resolving',
+    });
+    const response = await context.server.inject(`/api/jobs/${job.id}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: 'resolved',
+      challengeTx: 'f'.repeat(64),
+      resolveTx: 'd'.repeat(64),
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
   it('arms one fresh challengeable action', async () => {
     const context = fixture();
     const response = await context.server.inject({

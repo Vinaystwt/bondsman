@@ -80,6 +80,16 @@ export function createDemoJobService(options: {
       return job;
     },
     startArm,
-    job: (id) => options.repository.demoJob(id),
+    job: (id) => {
+      const job = options.repository.demoJob(id);
+      if (job?.kind !== 'challenge' || job.actionId === null) return job;
+      const action = options.repository.action(job.actionId);
+      if (action?.status !== 'ResolvedSlash') return job;
+      return options.repository.updateDemoJob(job.id, {
+        status: 'resolved',
+        challengeTx: job.challengeTx ?? action.transactions.challenge ?? null,
+        resolveTx: job.resolveTx ?? action.transactions.resolve ?? null,
+      });
+    },
   };
 }
