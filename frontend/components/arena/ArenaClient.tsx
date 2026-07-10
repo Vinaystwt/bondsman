@@ -5,9 +5,32 @@ import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
 import type { ActionDetail, DemoJob, DemoProofs, Watchdog } from '@/lib/types';
 import { BackendDown, SkeletonPanel } from '@/components/ui/States';
 import { Label } from '@/components/ui/Primitives';
-import ManualChallenge from './ManualChallenge';
+import ManualChallenge, { ACTIVE_JOB_KEY } from './ManualChallenge';
 import ProofHero from './ProofHero';
 import WatchdogEconomy from './WatchdogEconomy';
+
+// Restore an in-flight challenge after a reload. The challenged action has
+// left the ready pool, so without this the pending job would be invisible.
+async function recoverActiveChallenge(): Promise<ActionDetail | null> {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(ACTIVE_JOB_KEY);
+  if (!raw) return null;
+  try {
+    const { jobId, actionId } = JSON.parse(raw) as { jobId: string; actionId: number };
+    const job = await clientApi.job(jobId);
+    if (job.status === 'failed') {
+      window.localStorage.removeItem(ACTIVE_JOB_KEY);
+      return null;
+    }
+    // Pending or already resolved: either way, showing this action is right.
+    // ManualChallenge picks the job back up (pending) or shows the split
+    // (resolved) from the action status.
+    return await clientApi.action(actionId);
+  } catch {
+    window.localStorage.removeItem(ACTIVE_JOB_KEY);
+    return null;
+  }
+}
 
 export default function ArenaClient({ heading }: { heading?: boolean }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'down'>('loading');
@@ -69,14 +92,21 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
     }
     setStatus('ready');
 
-    // Load the ready case and persisted proofs in parallel. Any listing error becomes a soft arm error,
-    // not a full page-down.
+    // Load the ready case, persisted proofs, and any in-flight challenge in
+    // parallel. Any listing error becomes a soft arm error, not a full
+    // page-down.
     try {
-      const [ready, latestProofs] = await Promise.all([
+      const [ready, latestProofs, recovered] = await Promise.all([
         clientApi.demoReady(),
         clientApi.demoProofs().catch(() => null),
+        recoverActiveChallenge(),
       ]);
       if (latestProofs) setProofs(latestProofs);
+      if (recovered) {
+        setArmed(recovered);
+        refresh();
+        return;
+      }
       if (ready.success) {
         if (ready.best.safeToChallengeNow) {
           setArmed(ready.best);

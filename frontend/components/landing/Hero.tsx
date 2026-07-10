@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Seal from '@/components/Seal';
 import Money from '@/components/ui/Money';
+import MoneyCountUp from '@/components/ui/MoneyCountUp';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { serial, truncateHash, txExplorer, resolveDisplayStatus } from '@/lib/format';
 import type { ActionSummary } from '@/lib/types';
@@ -62,12 +63,12 @@ export default function Hero({
 
           {/* Live stats */}
           <dl className="mt-10 grid max-w-lg grid-cols-2 gap-x-8 gap-y-5 border-t border-rule pt-6 sm:grid-cols-4">
-            <Stat label="Bonded" value={<Money atomic={bonded} bare />} />
-            <Stat label="Slashed" value={<Money atomic={slashed} bare />} tone="slash" />
-            <Stat label="Reserve" value={<Money atomic={reserve} bare />} />
+            <Stat label="Bonded" value={<MoneyCountUp atomic={bonded} />} />
+            <Stat label="Slashed" value={<MoneyCountUp atomic={slashed} />} tone="slash" />
+            <Stat label="Reserve" value={<MoneyCountUp atomic={reserve} />} />
             <Stat
               label="Watchdog earned"
-              value={watchdogEarned ? <Money atomic={watchdogEarned} bare /> : '0'}
+              value={watchdogEarned ? <MoneyCountUp atomic={watchdogEarned} /> : '0'}
             />
           </dl>
         </div>

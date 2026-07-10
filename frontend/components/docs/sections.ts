@@ -6,6 +6,7 @@ export interface DocSection {
 }
 
 export const DOCS_SECTIONS: DocSection[] = [
+  { id: 'quickstart', title: 'Test this in five minutes', keywords: 'quickstart judge test proof arena challenge mcp five minutes' },
   { id: 'thesis', title: 'Problem and thesis', keywords: 'problem agent risk nothing bond no action layer issuance' },
   { id: 'how-it-works', title: 'How it works', keywords: 'lifecycle clean slash path two agent economy watchdog' },
   { id: 'contracts', title: 'Contracts', keywords: 'controller bond vault invoice pool csprusd hashes architecture table' },

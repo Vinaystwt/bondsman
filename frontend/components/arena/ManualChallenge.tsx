@@ -71,8 +71,15 @@ function backendJobKey(actionId: number): string {
   return `bondsman.backendChallenge.${actionId}`;
 }
 
+// One global pointer to the most recent challenge job so the Arena can
+// recover the pending card after a reload, even though the challenged action
+// has left the ready pool.
+export const ACTIVE_JOB_KEY = 'bondsman.activeChallengeJob';
+
 function saveBackendJob(actionId: number, jobId: string): void {
-  if (typeof window !== 'undefined') window.localStorage.setItem(backendJobKey(actionId), jobId);
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(backendJobKey(actionId), jobId);
+  window.localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ jobId, actionId }));
 }
 
 function loadBackendJob(actionId: number): string | null {
@@ -80,7 +87,9 @@ function loadBackendJob(actionId: number): string | null {
 }
 
 function clearBackendJob(actionId: number): void {
-  if (typeof window !== 'undefined') window.localStorage.removeItem(backendJobKey(actionId));
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(backendJobKey(actionId));
+  window.localStorage.removeItem(ACTIVE_JOB_KEY);
 }
 
 export default function ManualChallenge({
@@ -95,6 +104,10 @@ export default function ManualChallenge({
   const [action, setAction] = useState<ActionDetail>(initial);
   const [phase, setPhase] = useState<Phase>(() => {
     if (initial.status === 'ResolvedSlash') return 'backend_resolved';
+    // A persisted challenge job for this action means the wait is in
+    // progress, not that the case expired, even though the on-chain status
+    // may already read Challenged.
+    if (loadBackendJob(initial.actionId)) return 'backend_pending';
     if (initial.status !== 'Executed' || initial.windowEnd <= Date.now() || initial.challenger)
       return 'expired';
     return 'idle';
@@ -135,16 +148,20 @@ export default function ManualChallenge({
     setPhase('timeout');
   }, [action.actionId, action.challenger, action.status, action.windowEnd, phase]);
 
-  // Backend challenge jobs are persisted by the API and their id survives a refresh.
+  // Backend challenge jobs are persisted by the API and their id survives a
+  // refresh. Resume both the pending state and the poll loop.
+  const resumedJob = useRef(false);
   useEffect(() => {
-    if (phase !== 'idle') return;
+    if (resumedJob.current) return;
+    if (phase !== 'idle' && phase !== 'backend_pending') return;
     const jobId = loadBackendJob(action.actionId);
     if (!jobId) return;
+    resumedJob.current = true;
     setPhase('backend_pending');
-    void clientApi.job(jobId).then((job) => {
-      setBackendJob(job);
-      setBackendChallengeTx(job.challengeTx);
-    }).catch(() => undefined);
+    void pollBackendJob(jobId).catch(() => {
+      // Job persisted server-side; manual check button recovers it.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action.actionId, phase]);
 
   const walletChallenge = useCallback(async () => {

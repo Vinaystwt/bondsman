@@ -9,6 +9,7 @@ import Ticker from '@/components/live/Ticker';
 import RealVsDemo from '@/components/RealVsDemo';
 import ReserveGrowth from '@/components/ReserveGrowth';
 import Money from '@/components/ui/Money';
+import MoneyCountUp from '@/components/ui/MoneyCountUp';
 import CopyHash from '@/components/ui/CopyHash';
 import Term from '@/components/ui/Term';
 import { parseEventData, serial, truncateHash, txExplorer } from '@/lib/format';
@@ -68,16 +69,16 @@ export default async function OverviewPage() {
 
       <section aria-label="Totals" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Held in bonds" tone="accent">
-          <Money atomic={heldBonds} bare />
+          <MoneyCountUp atomic={heldBonds} />
         </Stat>
         <Stat label="Slashed to date" tone="slash">
-          <Money atomic={slashedBonds} bare />
+          <MoneyCountUp atomic={slashedBonds} />
         </Stat>
         <Stat label="Reserve balance" tone="accent">
-          <Money atomic={reserve.balance} bare />
+          <MoneyCountUp atomic={reserve.balance} />
         </Stat>
         <Stat label="Watchdog earned" tone="accent">
-          {watchdog ? <Money atomic={watchdog.totalRewardEarned} bare /> : '0'}
+          {watchdog ? <MoneyCountUp atomic={watchdog.totalRewardEarned} /> : '0'}
         </Stat>
       </section>
 

@@ -7,6 +7,7 @@ import Seal from './Seal';
 import WalletButton from './WalletButton';
 
 const PUBLIC_LINKS = [
+  { href: '/proof', label: 'Proof' },
   { href: '/how-it-works', label: 'How it works' },
   { href: '/two-agents', label: 'Two agents' },
   { href: '/rwa', label: 'Invoice pool' },
@@ -18,6 +19,7 @@ const PUBLIC_LINKS = [
 const APP_LINKS = [
   { href: '/app', label: 'Overview' },
   { href: '/app/arena', label: 'Arena' },
+  { href: '/proof', label: 'Proof' },
   { href: '/app/actions', label: 'Docket' },
   { href: '/app/ledger', label: 'My Ledger' },
   { href: '/app/agents', label: 'Agents' },

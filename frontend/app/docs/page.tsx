@@ -31,6 +31,47 @@ export default async function DocsPage() {
         </p>
       </header>
 
+      <DocSection id="quickstart" title="Test this in five minutes">
+        <p>
+          The fastest path for a judge or reviewer, start to finish, with no
+          local setup.
+        </p>
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>
+            Open the <Link href="/proof">Proof Center</Link>. Every completed
+            slash and refund is listed with its amounts, split, challenger,
+            and explorer links. Open any transaction on testnet.cspr.live and
+            read the same numbers on chain.
+          </li>
+          <li>
+            Open the <Link href="/app/arena">Arena</Link>. The latest completed
+            slash proof loads first; a ready duplicate-claim case sits below
+            it with a live countdown.
+          </li>
+          <li>
+            Press Run live challenge. A real Casper transaction submits within
+            seconds; the wait for finality shows as a three-step progression
+            and survives reloads. Expect a few minutes; the result also lands
+            in the Proof Center.
+          </li>
+          <li>
+            Open <Link href="/two-agents">Two agents</Link> to watch the
+            autonomous loop: the model-driven approver pays a duplicate, the
+            deterministic watchdog catches and slashes it, no human in the
+            path.
+          </li>
+          <li>
+            Install the MCP package to drive the same protocol from any agent
+            runtime:
+          </li>
+        </ol>
+        <CodeBlock
+          label="npm"
+          code={`npm install -g @vinaystwt/bondsman-mcp
+bondsman-mcp`}
+        />
+      </DocSection>
+
       <DocSection id="thesis" title="Problem and thesis">
         <p>
           An agent can approve a payout in milliseconds. Today it risks nothing
