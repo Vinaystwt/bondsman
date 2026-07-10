@@ -4,6 +4,8 @@ import type {
   AgentReputation,
   Deployment,
   DemoReady,
+  DemoProofs,
+  DemoJob,
   Health,
   Invoice,
   Reserve,
@@ -17,7 +19,6 @@ import type {
 const SERVER_BASE =
   process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 const FETCH_TIMEOUT_MS = 30_000;
-const LONG_FETCH_TIMEOUT_MS = 300_000;
 const DIRECT_BACKEND_WRITE_PATHS = new Set([
   '/challenge',
   '/challenge/wallet-resolve',
@@ -124,6 +125,7 @@ export const api = {
   actions: () => serverGet<ActionSummary[]>('/api/actions'),
   action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
   demoReady: () => serverGet<DemoReady>('/api/demo/ready'),
+  demoProofs: () => serverGet<DemoProofs>('/api/demo/proofs'),
   agent: (address: string) =>
     serverGet<AgentReputation>(`/api/agents/${address}`),
   reserve: () => serverGet<Reserve>('/api/reserve'),
@@ -183,16 +185,15 @@ export const clientApi = {
   actions: () => clientGet<ActionSummary[]>('/actions'),
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   demoReady: () => clientGet<DemoReady>('/demo/ready'),
+  demoProofs: () => clientGet<DemoProofs>('/demo/proofs'),
   reserve: () => clientGet<Reserve>('/reserve'),
   watchdog: () => clientGet<Watchdog>('/watchdog'),
-  arm: () => clientPost<ActionDetail>('/demo/arm', undefined, LONG_FETCH_TIMEOUT_MS),
-  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo', undefined, LONG_FETCH_TIMEOUT_MS),
-  challenge: (actionId: number) =>
-    clientPost<{ challenge: string; resolve: string }>(
-      '/challenge',
-      { actionId },
-      LONG_FETCH_TIMEOUT_MS,
-    ),
+  arm: () => clientPost<ActionDetail>('/demo/arm'),
+  armAsync: () => clientPost<DemoJob>('/demo/arm/async'),
+  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo'),
+  watchdogDemoAsync: () => clientPost<DemoJob>('/watchdog/demo/async'),
+  challenge: (actionId: number) => clientPost<DemoJob>('/challenge', { actionId }),
+  job: (id: string) => clientGet<DemoJob>(`/jobs/${id}`),
   deployments: () => clientGet<Deployment>('/deployments'),
   transactionStatus: (hash: string) =>
     clientGet<TransactionStatus>(`/transactions/${hash}`),

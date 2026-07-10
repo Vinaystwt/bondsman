@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
 import { buildServer } from '../../src/api/server.js';
+import { createDemoJobService } from '../../src/api/demo-jobs.js';
 import type { Deployment } from '../../src/shared/deployment.js';
 
 const hash = `hash-${'1'.repeat(64)}`;
@@ -121,6 +122,7 @@ function fixture() {
   );
   repository.setReserve('25');
   const resolution = {
+    challenge: vi.fn().mockResolvedValue('a'.repeat(64)),
     challengeAndResolve: vi
       .fn()
       .mockResolvedValue({
@@ -185,12 +187,14 @@ function fixture() {
     resolution,
     arm,
     walletChallenge,
+    jobs: createDemoJobService({ repository, resolution, arm }),
     server: buildServer(
       repository,
       deployment,
       resolution,
       arm,
       walletChallenge,
+      createDemoJobService({ repository, resolution, arm }),
     ),
   };
 }
@@ -259,6 +263,28 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('returns persisted Casper proof and ready cases without a fresh transaction', async () => {
+    const context = fixture();
+    const response = await context.server.inject('/api/demo/proofs');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      latestManualSlash: null,
+      latestWatchdogSlash: {
+        actionId: 3,
+        status: 'ResolvedSlash',
+        challengeTx: 'f'.repeat(64),
+        resolveTx: 'd'.repeat(64),
+      },
+      readyCases: [
+        expect.objectContaining({ actionId: 6, safeToChallengeNow: true }),
+      ],
+    });
+    expect(context.arm.arm).not.toHaveBeenCalled();
+    await context.server.close();
+    context.database.close();
+  });
+
   it('returns a structured no-ready response', async () => {
     const context = fixture();
     context.repository.upsertAction({
@@ -282,7 +308,7 @@ describe('REST routes', () => {
     context.database.close();
   });
 
-  it('sequences challenge then resolution and exposes manual resolution', async () => {
+  it('starts a persisted challenge job and exposes manual resolution', async () => {
     const context = fixture();
     const challenged = await context.server.inject({
       method: 'POST',
@@ -290,7 +316,14 @@ describe('REST routes', () => {
       payload: { actionId: 4 },
     });
     expect(challenged.statusCode).toBe(200);
-    expect(context.resolution.challengeAndResolve).toHaveBeenCalledWith(4);
+    expect(challenged.json()).toMatchObject({
+      actionId: 4,
+      kind: 'challenge',
+      status: expect.stringMatching(/queued|submitting_challenge|challenge_finalized|resolving|resolved/),
+    });
+    expect(context.resolution.challenge).toHaveBeenCalledWith(4);
+    const job = await context.server.inject(`/api/jobs/${challenged.json().id}`);
+    expect(job.statusCode).toBe(200);
 
     const resolved = await context.server.inject({
       method: 'POST',

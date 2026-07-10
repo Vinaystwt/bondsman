@@ -6,6 +6,7 @@ import type { DemoArmService } from './arm.js';
 import { registerRoutes } from './routes.js';
 import { normalizeApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
+import type { DemoJobService } from './demo-jobs.js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://bondsman.vercel.app',
@@ -32,6 +33,7 @@ export function buildServer(
   resolution: ResolutionService,
   arm: DemoArmService,
   walletChallenge: WalletChallengeService,
+  jobs: DemoJobService,
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   const origins = allowedOrigins();
@@ -71,6 +73,7 @@ export function buildServer(
     resolution,
     arm,
     walletChallenge,
+    jobs,
   );
   return server;
 }

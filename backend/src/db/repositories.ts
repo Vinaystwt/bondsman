@@ -53,6 +53,20 @@ export interface WatchdogSummary {
   totalRewardEarned: string;
 }
 
+export type DemoJobKind = 'challenge' | 'arm' | 'watchdog';
+
+export interface DemoJobRecord {
+  id: string;
+  kind: DemoJobKind;
+  actionId: number | null;
+  status: string;
+  challengeTx: string | null;
+  resolveTx: string | null;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface EventRecord {
   contract: string;
   eventIndex: number;
@@ -425,4 +439,77 @@ export class Repository {
       totalRewardEarned,
     };
   }
+
+  createDemoJob(input: {
+    id: string;
+    kind: DemoJobKind;
+    actionId?: number | null;
+    status: string;
+  }): DemoJobRecord {
+    const now = Date.now();
+    this.database
+      .prepare(
+        `INSERT INTO demo_jobs
+          (id, kind, action_id, status, challenge_tx, resolve_tx, error, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+      )
+      .run(input.id, input.kind, input.actionId ?? null, input.status, now, now);
+    return this.demoJob(input.id)!;
+  }
+
+  demoJob(id: string): DemoJobRecord | undefined {
+    const row = this.database
+      .prepare('SELECT * FROM demo_jobs WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    return row ? demoJobFromRow(row) : undefined;
+  }
+
+  activeChallengeJob(actionId: number): DemoJobRecord | undefined {
+    const row = this.database
+      .prepare(
+        `SELECT * FROM demo_jobs
+         WHERE kind = 'challenge' AND action_id = ?
+           AND status NOT IN ('resolved', 'failed')
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(actionId) as Record<string, unknown> | undefined;
+    return row ? demoJobFromRow(row) : undefined;
+  }
+
+  updateDemoJob(
+    id: string,
+    update: Partial<Pick<DemoJobRecord, 'actionId' | 'status' | 'challengeTx' | 'resolveTx' | 'error'>>,
+  ): DemoJobRecord | undefined {
+    const current = this.demoJob(id);
+    if (!current) return undefined;
+    this.database
+      .prepare(
+        `UPDATE demo_jobs SET action_id = ?, status = ?, challenge_tx = ?,
+          resolve_tx = ?, error = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(
+        update.actionId === undefined ? current.actionId : update.actionId,
+        update.status ?? current.status,
+        update.challengeTx === undefined ? current.challengeTx : update.challengeTx,
+        update.resolveTx === undefined ? current.resolveTx : update.resolveTx,
+        update.error === undefined ? current.error : update.error,
+        Date.now(),
+        id,
+      );
+    return this.demoJob(id);
+  }
+}
+
+function demoJobFromRow(row: Record<string, unknown>): DemoJobRecord {
+  return {
+    id: String(row.id),
+    kind: String(row.kind) as DemoJobKind,
+    actionId: row.action_id === null ? null : Number(row.action_id),
+    status: String(row.status),
+    challengeTx: row.challenge_tx === null ? null : String(row.challenge_tx),
+    resolveTx: row.resolve_tx === null ? null : String(row.resolve_tx),
+    error: row.error === null ? null : String(row.error),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
 }

@@ -13,6 +13,7 @@ import { reconcileChain } from '../listener/reconcile.js';
 import { createResolutionService } from './resolution.js';
 import { buildServer } from './server.js';
 import { createDemoArmService } from './arm.js';
+import { createDemoJobService } from './demo-jobs.js';
 import { clearLegacyEvidence } from '../evidence/store.js';
 import { createWalletChallengeService } from './wallet-challenge.js';
 import {
@@ -106,12 +107,18 @@ const armService = createDemoArmService(
   repository,
   reconcile,
 );
+const jobs = createDemoJobService({
+  repository,
+  resolution,
+  arm: armService,
+});
 const server = buildServer(
   repository,
   deployment,
   resolution,
   armService,
   walletChallenge,
+  jobs,
 );
 const host = process.env.HOST || '0.0.0.0';
 await server.listen({ host, port });

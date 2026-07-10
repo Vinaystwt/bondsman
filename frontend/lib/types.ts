@@ -107,6 +107,46 @@ export interface DemoReadyCase extends ActionDetail {
   safeToChallengeNow: boolean;
 }
 
+export interface SlashProof {
+  actionId: number;
+  status: 'ResolvedSlash';
+  challenger: string | null;
+  challengerType: 'manual' | 'watchdog' | 'external-wallet' | null;
+  bond: string;
+  amount: string;
+  challengeTx: string | null;
+  resolveTx: string | null;
+  explorerLinks: Partial<Record<keyof ActionTransactions, string>>;
+}
+
+export interface DemoProofs {
+  latestManualSlash: SlashProof | null;
+  latestWatchdogSlash: SlashProof | null;
+  readyCases: DemoReadyCase[];
+}
+
+export type DemoJobStatus =
+  | 'queued'
+  | 'arming'
+  | 'action_ready'
+  | 'submitting_challenge'
+  | 'challenge_finalized'
+  | 'resolving'
+  | 'resolved'
+  | 'failed';
+
+export interface DemoJob {
+  id: string;
+  kind: 'challenge' | 'arm' | 'watchdog';
+  actionId: number | null;
+  status: DemoJobStatus;
+  challengeTx: string | null;
+  resolveTx: string | null;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type DemoReady =
   | {
       success: true;

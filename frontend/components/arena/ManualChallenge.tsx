@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { clientApi, ApiError } from '@/lib/api';
 import { useWallet } from '@/lib/wallet';
 import { buildChallengeDeploy, attachSignature } from '@/lib/challenge-deploy';
-import type { ActionDetail, WalletResolveResult } from '@/lib/types';
+import type { ActionDetail, DemoJob, WalletResolveResult } from '@/lib/types';
 import { parseEventData, serial, truncateHash, txExplorer, accountExplorer } from '@/lib/format';
 import Seal from '@/components/Seal';
 import Money from '@/components/ui/Money';
@@ -66,6 +66,22 @@ function clearPendingChallenge(actionId: number): void {
   window.localStorage.removeItem(pendingChallengeKey(actionId));
 }
 
+function backendJobKey(actionId: number): string {
+  return `bondsman.backendChallenge.${actionId}`;
+}
+
+function saveBackendJob(actionId: number, jobId: string): void {
+  if (typeof window !== 'undefined') window.localStorage.setItem(backendJobKey(actionId), jobId);
+}
+
+function loadBackendJob(actionId: number): string | null {
+  return typeof window === 'undefined' ? null : window.localStorage.getItem(backendJobKey(actionId));
+}
+
+function clearBackendJob(actionId: number): void {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(backendJobKey(actionId));
+}
+
 export default function ManualChallenge({
   initial,
   onResolved,
@@ -117,6 +133,18 @@ export default function ManualChallenge({
     setDeployHash(pendingHash);
     setPhase('timeout');
   }, [action.actionId, action.challenger, action.status, action.windowEnd, phase]);
+
+  // Backend challenge jobs are persisted by the API and their id survives a refresh.
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const jobId = loadBackendJob(action.actionId);
+    if (!jobId) return;
+    setPhase('backend_pending');
+    void clientApi.job(jobId).then((job) => {
+      setBackendJob(job);
+      setBackendChallengeTx(job.challengeTx);
+    }).catch(() => undefined);
+  }, [action.actionId, phase]);
 
   const walletChallenge = useCallback(async () => {
     if (action.windowEnd <= Date.now()) {
@@ -269,54 +297,60 @@ export default function ManualChallenge({
 
   // Backend-signed challenge (fallback path, existing behavior)
   const [backendChallengeTx, setBackendChallengeTx] = useState<string | null>(null);
+  const [backendJob, setBackendJob] = useState<DemoJob | null>(null);
+
+  const checkBackendJob = useCallback(async (jobId: string) => {
+    const job = await clientApi.job(jobId);
+    setBackendJob(job);
+    setBackendChallengeTx(job.challengeTx);
+    if (job.actionId !== null) {
+      const fresh = await clientApi.action(job.actionId);
+      setAction(fresh);
+      if (fresh.status === 'ResolvedSlash' || job.status === 'resolved') {
+        clearBackendJob(action.actionId);
+        setPhase('backend_resolved');
+        onResolved();
+      }
+    }
+    if (job.status === 'failed') {
+      setError(job.error ?? 'The background challenge job failed.');
+      setPhase('error');
+    }
+    return job;
+  }, [action.actionId, onResolved]);
+
+  const pollBackendJob = useCallback(async (jobId: string) => {
+    for (let i = 0; i < 120; i += 1) {
+      const job = await checkBackendJob(jobId);
+      if (['resolved', 'failed'].includes(job.status)) return;
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+    setPhase('timeout');
+  }, [checkBackendJob]);
 
   const backendChallenge = useCallback(async () => {
     if (action.windowEnd <= Date.now()) {
       setPhase('expired');
       return;
     }
-    setPhase('backend_submitting');
     setError('');
     try {
-      let challengeError: unknown = null;
-      const challengeRequest = clientApi
-        .challenge(action.actionId)
-        .then((result) => {
-          setBackendChallengeTx(result.challenge ?? null);
-          return result;
-        })
-        .catch((err) => {
-          challengeError = err;
-          return null;
-        });
+      setPhase('backend_submitting');
+      const job = await clientApi.challenge(action.actionId);
+      setBackendJob(job);
+      setBackendChallengeTx(job.challengeTx);
+      saveBackendJob(action.actionId, job.id);
       setPhase('backend_pending');
-      for (let i = 0; i < 120; i++) {
-        try {
-          const fresh = await clientApi.action(action.actionId);
-          setAction(fresh);
-          if (fresh.transactions.challenge) {
-            setBackendChallengeTx(fresh.transactions.challenge);
-          }
-          if (fresh.status === 'ResolvedSlash' || fresh.status === 'ResolvedRefund') {
-            setPhase('backend_resolved');
-            onResolved();
-            return;
-          }
-        } catch { /* keep polling */ }
-        if (challengeError) {
-          throw challengeError;
-        }
-        await new Promise((r) => setTimeout(r, 2500));
-      }
-      const result = await challengeRequest;
-      if (result?.challenge) setBackendChallengeTx(result.challenge);
-      setPhase('timeout');
+      void pollBackendJob(job.id).catch((err) => {
+        setError(err instanceof Error ? err.message : 'Could not check the background challenge job.');
+        setPhase('timeout');
+      });
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'The challenge could not be submitted.';
       setError(msg);
       setPhase('error');
     }
-  }, [action, onResolved]);
+  }, [action, pollBackendJob]);
 
   const slash = action.events.find((e) => e.eventType === 'BondSlashed');
   const data = slash ? parseEventData(slash.data) : {};
@@ -326,11 +360,6 @@ export default function ManualChallenge({
 
   const sealState =
     (phase === 'success' || (phase === 'backend_resolved' && resolvedSlash)) ? 'strike' : 'stamp';
-
-  const isWalletPhase = [
-    'building', 'signing', 'submitted', 'finalizing',
-    'resolving', 'success', 'rejected', 'timeout', 'resolve_error',
-  ].includes(phase);
 
   return (
     <div className="overflow-hidden rounded-lg border border-rule bg-surface">
@@ -373,7 +402,7 @@ export default function ManualChallenge({
         </p>
 
         <AnimatePresence mode="wait">
-          {/* IDLE: dual buttons */}
+          {/* IDLE: recommended backend job, wallet path is intentionally secondary */}
           {phase === 'idle' && (
             <motion.div
               key="idle"
@@ -382,19 +411,26 @@ export default function ManualChallenge({
               exit={{ opacity: 0 }}
               className="mt-5 space-y-4"
             >
-              {wallet.connected && wallet.publicKey ? (
-                <>
+              <>
+                <button
+                  type="button"
+                  onClick={backendChallenge}
+                  className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
+                >
+                  Run Demo Challenge
+                </button>
+                <p className="text-xs text-muted">
+                  A funded backend key starts a recoverable Casper job. The reward goes to that demo key; completed proof remains above while finality is pending.
+                </p>
+                <details className="rounded-md border border-rule bg-ink px-4 py-3">
+                  <summary className="cursor-pointer text-sm text-muted">Advanced: Wallet-signed challenge beta</summary>
+                  <p className="mt-3 text-xs leading-relaxed text-muted">Wallet-signed challenges submit from your Casper wallet and may take longer on testnet. The funded demo key is the recommended judge path.</p>
+                  {wallet.connected && wallet.publicKey ? (
+                    <>
                   <div className="flex items-center gap-2 rounded border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
                     Connected as {truncateHash(wallet.publicKey)}
                   </div>
-                  <button
-                    type="button"
-                    onClick={backendChallenge}
-                    className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
-                  >
-                    Demo Challenge (Backend Key)
-                  </button>
                   <button
                     type="button"
                     onClick={walletChallenge}
@@ -403,9 +439,7 @@ export default function ManualChallenge({
                     Experimental wallet challenge
                   </button>
                   <p className="text-xs text-muted">
-                    The primary demo uses a funded backend key so the contract
-                    slash is reliable during judging. Wallet signing is available
-                    for testnet users and costs ~50 CSPR gas.{' '}
+                    Wallet signing costs ~50 CSPR gas.{' '}
                     <a
                       href="https://testnet.cspr.live/tools/faucet"
                       target="_blank"
@@ -415,9 +449,9 @@ export default function ManualChallenge({
                       Need testnet gas?
                     </a>
                   </p>
-                </>
-              ) : (
-                <>
+                    </>
+                  ) : (
+                    <>
                   {wallet.available ? (
                     <button
                       type="button"
@@ -440,19 +474,10 @@ export default function ManualChallenge({
                       Install Casper Wallet to Challenge
                     </a>
                   )}
-                  <button
-                    type="button"
-                    onClick={backendChallenge}
-                    className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
-                  >
-                    Demo Challenge (Backend Key)
-                  </button>
-                  <p className="text-xs text-muted">
-                    A funded backend key signs this challenge. The reward goes to
-                    that key, not your wallet.
-                  </p>
-                </>
-              )}
+                    </>
+                  )}
+                </details>
+              </>
             </motion.div>
           )}
 
@@ -654,9 +679,9 @@ export default function ManualChallenge({
               </p>
               {backendChallengeTx && <TxLine label="Challenge" hash={backendChallengeTx} />}
               <p className="text-xs text-muted">
-                This can take a few minutes on testnet. Expected, not a hang.
-                Demo Challenge (Backend Key); the reward goes to the backend key.
+                Job {backendJob ? `#${backendJob.id.slice(0, 8)} · ${backendJob.status.replaceAll('_', ' ')}` : 'queued'}. Casper testnet finality can take time; this page remains recoverable.
               </p>
+              {backendJob && <button type="button" onClick={() => void checkBackendJob(backendJob.id)} className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50">Check status again</button>}
             </motion.div>
           )}
 

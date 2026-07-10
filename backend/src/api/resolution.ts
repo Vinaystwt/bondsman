@@ -5,6 +5,7 @@ import { SignerQueue } from '../casper/signer-queue.js';
 import { mergeActionTransactions } from '../evidence/store.js';
 
 export interface ResolutionService {
+  challenge(actionId: number): Promise<string>;
   challengeAndResolve(
     actionId: number,
   ): Promise<{ challenge: string; resolve: string }>;
@@ -35,6 +36,8 @@ export function createResolutionService(
       arguments: ['--action_id', String(actionId)],
     });
   return {
+    challenge: (actionId) =>
+      queue.run(async () => call('challenge_action', actionId)),
     challengeAndResolve: (actionId) =>
       queue.run(async () => {
         const challenge = await call('challenge_action', actionId);

@@ -22,6 +22,35 @@ import {
 import { ApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import { demoReadyResponse } from './demo-ready.js';
+import type { DemoJobService } from './demo-jobs.js';
+
+function latestSlashProof(
+  repository: Repository,
+  controllerHash: string,
+  challengerType: 'manual' | 'watchdog',
+) {
+  const action = repository
+    .listActions()
+    .filter((candidate) =>
+      candidate.controllerHash === controllerHash &&
+      candidate.status === 'ResolvedSlash' &&
+      candidate.challengerType === challengerType,
+    )
+    .sort((left, right) => right.actionId - left.actionId)[0];
+  if (!action) return null;
+  const detail = actionDetail(repository, action.actionId)!;
+  return {
+    actionId: detail.actionId,
+    status: detail.status,
+    challenger: detail.challenger,
+    challengerType: detail.challengerType,
+    bond: detail.bondPosted,
+    amount: detail.amount,
+    challengeTx: detail.transactions.challenge ?? null,
+    resolveTx: detail.transactions.resolve ?? null,
+    explorerLinks: detail.explorerLinks,
+  };
+}
 
 export function registerRoutes(
   server: FastifyInstance,
@@ -30,6 +59,7 @@ export function registerRoutes(
   resolution: ResolutionService,
   arm: DemoArmService,
   walletChallenge: WalletChallengeService,
+  jobs: DemoJobService,
 ): void {
   const startedAt = Date.now();
   const currentController =
@@ -83,6 +113,22 @@ export function registerRoutes(
   server.get('/api/demo/ready', async () =>
     demoReadyResponse(repository, currentController),
   );
+  server.get('/api/demo/proofs', async () => {
+    const ready = demoReadyResponse(repository, currentController);
+    return {
+      latestManualSlash: latestSlashProof(
+        repository,
+        currentController,
+        'manual',
+      ),
+      latestWatchdogSlash: latestSlashProof(
+        repository,
+        currentController,
+        'watchdog',
+      ),
+      readyCases: ready.cases,
+    };
+  });
   server.post('/api/challenge', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);
@@ -93,7 +139,14 @@ export function registerRoutes(
       );
       throw new ApiError(409, code, 'action is not challengeable');
     }
-    return resolution.challengeAndResolve(actionId);
+    return jobs.startChallenge(actionId);
+  });
+  server.get('/api/jobs/:id', async (request) => {
+    const job = jobs.job((request.params as { id: string }).id);
+    if (!job) {
+      throw new ApiError(404, 'NOT_FOUND', 'demo job not found');
+    }
+    return job;
   });
   server.post('/api/resolve', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
@@ -126,6 +179,7 @@ export function registerRoutes(
     }
   };
   server.post('/api/demo/arm', async () => armDemo(true));
+  server.post('/api/demo/arm/async', async () => jobs.startArm(true));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();
     return {
@@ -136,6 +190,7 @@ export function registerRoutes(
     };
   });
   server.post('/api/watchdog/demo', async () => armDemo(false));
+  server.post('/api/watchdog/demo/async', async () => jobs.startArm(false));
   server.post('/api/verify', async (request, reply) => {
     const amount = process.env.X402_VERIFY_PRICE ?? '1000000';
     const payTo = deployment.accounts.challenger.publicKey;

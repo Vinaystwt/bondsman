@@ -68,4 +68,16 @@ CREATE TABLE IF NOT EXISTS watchdog_status (
   account TEXT NOT NULL,
   heartbeat_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS demo_jobs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  action_id INTEGER,
+  status TEXT NOT NULL,
+  challenge_tx TEXT,
+  resolve_tx TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `;

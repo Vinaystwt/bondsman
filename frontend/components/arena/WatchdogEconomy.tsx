@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
-import type { ActionDetail, Watchdog, WatchdogCatch } from '@/lib/types';
+import type { ActionDetail, DemoJob, SlashProof, Watchdog, WatchdogCatch } from '@/lib/types';
 import { serial, truncateHash, txExplorer } from '@/lib/format';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
@@ -14,9 +14,11 @@ type Phase = 'idle' | 'running' | 'done' | 'timeout' | 'error';
 
 export default function WatchdogEconomy({
   initialWatchdog,
+  initialProof = null,
   onResolved,
 }: {
   initialWatchdog: Watchdog | null;
+  initialProof?: SlashProof | null;
   onResolved: () => void;
 }) {
   const reduce = useReducedMotion();
@@ -24,6 +26,7 @@ export default function WatchdogEconomy({
   const [action, setAction] = useState<ActionDetail | null>(null);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(initialWatchdog);
   const [error, setError] = useState('');
+  const [job, setJob] = useState<DemoJob | null>(null);
 
   // Load the watchdog's live earnings independently of the parent's timing.
   useEffect(() => {
@@ -34,21 +37,34 @@ export default function WatchdogEconomy({
     setPhase('running');
     setError('');
     try {
-      const minted = await clientApi.watchdogDemo();
-      setAction(minted);
-      await poll(minted.actionId);
+      const started = await clientApi.watchdogDemoAsync();
+      setJob(started);
+      await pollJob(started.id);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else if (err instanceof BackendUnreachable) {
-        setError(
-          'The watchdog demo timed out. The Casper testnet may be slow. Try again in a moment.',
-        );
+        setError('The watchdog job could not be reached. The completed proof above remains available.');
       } else {
         setError('The watchdog demo could not start.');
       }
       setPhase('error');
     }
+  }
+
+  async function pollJob(jobId: string) {
+    for (let i = 0; i < 120; i += 1) {
+      const fresh = await clientApi.job(jobId);
+      setJob(fresh);
+      if (fresh.status === 'failed') throw new Error(fresh.error ?? 'Watchdog job failed.');
+      if (fresh.actionId !== null && fresh.status === 'action_ready') {
+        setAction(await clientApi.action(fresh.actionId));
+        await poll(fresh.actionId);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+    setPhase('timeout');
   }
 
   async function refreshProof() {
@@ -132,11 +148,15 @@ export default function WatchdogEconomy({
           )}
         </div>
 
-        {phase === 'idle' && latestCatch && (
+        {phase === 'idle' && initialProof && (
+          <LatestWatchdogProof proof={initialProof} />
+        )}
+
+        {phase === 'idle' && !initialProof && latestCatch && (
           <LatestWatchdogCatch latestCatch={latestCatch} />
         )}
 
-        {phase === 'idle' && !latestCatch && (
+        {phase === 'idle' && !initialProof && !latestCatch && (
           <div className="mt-5 rounded-md border border-rule bg-ink p-4">
             <p className="text-sm text-bone">No recent autonomous slash is loaded yet.</p>
             <p className="mt-2 text-xs leading-relaxed text-muted">
@@ -149,7 +169,7 @@ export default function WatchdogEconomy({
         {phase === 'idle' && (
           <details className="mt-5 rounded-md border border-rule bg-ink px-4 py-3">
             <summary className="cursor-pointer text-sm text-muted">
-              Advanced: run fresh autonomous case
+              Advanced: Run fresh autonomous case
             </summary>
             <button
               type="button"
@@ -168,8 +188,7 @@ export default function WatchdogEconomy({
 
         {phase === 'running' && (
           <p className="mt-4 text-xs text-muted">
-            Fresh autonomous run in progress. Each step is a real Casper
-            testnet transaction, so this operator flow can take several minutes.
+            Fresh autonomous job {job ? `#${job.id.slice(0, 8)} · ${job.status.replaceAll('_', ' ')}` : 'queued'}. The approver setup runs in the background; the watchdog then catches the duplicate on its next scan.
           </p>
         )}
 
@@ -262,6 +281,19 @@ export default function WatchdogEconomy({
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function LatestWatchdogProof({ proof }: { proof: SlashProof }) {
+  return (
+    <div className="mt-5 rounded-md border border-accent/30 bg-accent/5 p-4">
+      <p className="text-sm font-medium text-bone">Latest autonomous slash: {serial(proof.actionId)}</p>
+      <p className="mt-1 text-sm text-muted">Approver approved a duplicate, the watchdog challenged it, and the contract slashed the bond on Casper Testnet.</p>
+      <div className="mt-3 space-y-2 border-t border-accent/20 pt-3">
+        {proof.challengeTx && <TxLine label="Challenge" hash={proof.challengeTx} />}
+        {proof.resolveTx && <TxLine label="Resolve" hash={proof.resolveTx} />}
       </div>
     </div>
   );
