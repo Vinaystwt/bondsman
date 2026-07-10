@@ -115,6 +115,22 @@ export function registerRoutes(
   );
   server.get('/api/demo/proofs', async () => {
     const ready = demoReadyResponse(repository, currentController);
+    const actions = repository.listActions();
+    let totalSlashes = 0;
+    let totalRefunds = 0;
+    let totalSlashedBonds = 0n;
+    for (const action of actions) {
+      if (action.status === 'ResolvedSlash') {
+        totalSlashes += 1;
+        try {
+          totalSlashedBonds += BigInt(action.bondPosted || '0');
+        } catch {
+          /* skip malformed amounts */
+        }
+      } else if (action.status === 'ResolvedRefund') {
+        totalRefunds += 1;
+      }
+    }
     return {
       latestManualSlash: latestSlashProof(
         repository,
@@ -127,6 +143,11 @@ export function registerRoutes(
         'watchdog',
       ),
       readyCases: ready.cases,
+      totals: {
+        slashes: totalSlashes,
+        refunds: totalRefunds,
+        slashedBonds: totalSlashedBonds.toString(),
+      },
     };
   });
   server.post('/api/challenge', async (request) => {

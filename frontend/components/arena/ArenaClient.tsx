@@ -2,13 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { clientApi, ApiError, BackendUnreachable } from '@/lib/api';
-import type { ActionDetail, DemoJob, DemoProofs, SlashProof, Watchdog } from '@/lib/types';
+import type { ActionDetail, DemoJob, DemoProofs, Watchdog } from '@/lib/types';
 import { BackendDown, SkeletonPanel } from '@/components/ui/States';
 import { Label } from '@/components/ui/Primitives';
-import { serial, truncateHash, txExplorer } from '@/lib/format';
-import CopyHash from '@/components/ui/CopyHash';
-import Money from '@/components/ui/Money';
 import ManualChallenge from './ManualChallenge';
+import ProofHero from './ProofHero';
 import WatchdogEconomy from './WatchdogEconomy';
 
 export default function ArenaClient({ heading }: { heading?: boolean }) {
@@ -85,7 +83,7 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
           refresh();
           return;
         }
-        setArmError('A case was found, but it is not safe to challenge now. Run npm run demo:prearm before a demo.');
+        setArmError('A case exists but its window is nearly closed. The pool arms a fresh one automatically within a few minutes.');
       } else {
         setArmError(ready.message);
       }
@@ -119,20 +117,12 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
         </header>
       )}
 
-      <section aria-label="Casper testnet proof" className="max-w-3xl">
+      <section aria-label="Casper testnet proof" className="max-w-4xl">
         <div className="mb-4">
           <Label>Already proven on Casper Testnet</Label>
-          <p className="mt-1 text-sm text-muted">
-            Completed slashes remain visible while any fresh testnet transaction waits for finality.
-          </p>
         </div>
         {status === 'loading' && <SkeletonPanel rows={3} />}
-        {status === 'ready' && proofs && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ProofCard label="Backend demo slash" proof={proofs.latestManualSlash} />
-            <ProofCard label="Autonomous watchdog slash" proof={proofs.latestWatchdogSlash} />
-          </div>
-        )}
+        {status === 'ready' && proofs && <ProofHero proofs={proofs} />}
         {status === 'ready' && !proofs && (
           <p className="rounded-md border border-rule bg-surface px-5 py-4 text-sm text-muted">
             Loading the latest persisted on-chain proof. The ready challenge case below remains available.
@@ -141,11 +131,13 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
       </section>
 
       {/* Challenge path */}
-      <section aria-label="Challenge a payout" className="max-w-3xl">
+      <section aria-label="Run another live challenge" className="max-w-3xl">
         <div className="mb-4">
-          <Label>Challenge a Payout</Label>
+          <Label>Run another live challenge</Label>
           <p className="mt-1 text-sm text-muted">
-            Recommended judge path: the funded demo key starts a recoverable background job. The current completed proof above stays visible while Casper reaches finality.
+            This submits a real Casper transaction. Finality takes a few
+            minutes; you can leave and the result will be here. The completed
+            proof above stays visible the whole time.
           </p>
         </div>
         {status === 'loading' && <SkeletonPanel rows={3} />}
@@ -207,23 +199,3 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
   );
 }
 
-function ProofCard({ label, proof }: { label: string; proof: SlashProof | null }) {
-  if (!proof) {
-    return <div className="rounded-lg border border-rule bg-surface p-5 text-sm text-muted">No completed proof is projected yet.</div>;
-  }
-  return (
-    <div className="rounded-lg border border-accent/30 bg-accent/5 p-5">
-      <Label>{label}</Label>
-      <p className="mt-2 text-lg font-medium text-bone">Bond slashed · {serial(proof.actionId)}</p>
-      <p className="mt-1 text-sm text-muted">Duplicate payout <Money atomic={proof.amount} /> · bond <Money atomic={proof.bond} /></p>
-      <div className="mt-4 space-y-2 border-t border-accent/20 pt-3 text-sm">
-        {proof.challengeTx && <ProofTx label="Challenge" hash={proof.challengeTx} />}
-        {proof.resolveTx && <ProofTx label="Resolve" hash={proof.resolveTx} />}
-      </div>
-    </div>
-  );
-}
-
-function ProofTx({ label, hash }: { label: string; hash: string }) {
-  return <div className="flex items-center justify-between gap-3"><span className="text-muted">{label}</span><CopyHash value={hash} href={txExplorer(hash)} label={truncateHash(hash)} /></div>;
-}

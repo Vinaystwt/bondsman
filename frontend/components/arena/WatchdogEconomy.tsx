@@ -53,16 +53,27 @@ export default function WatchdogEconomy({
   }
 
   async function pollJob(jobId: string) {
-    for (let i = 0; i < 120; i += 1) {
-      const fresh = await clientApi.job(jobId);
-      setJob(fresh);
-      if (fresh.status === 'failed') throw new Error(fresh.error ?? 'Watchdog job failed.');
-      if (fresh.actionId !== null && fresh.status === 'action_ready') {
-        setAction(await clientApi.action(fresh.actionId));
-        await poll(fresh.actionId);
-        return;
+    // Fast poll five minutes, then slow poll. Transient fetch errors do not
+    // kill the watch; the job is persisted server-side.
+    for (let i = 0; i < 300; i += 1) {
+      let fresh: DemoJob | null = null;
+      try {
+        fresh = await clientApi.job(jobId);
+      } catch {
+        fresh = null; // transient; keep polling
       }
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      if (fresh) {
+        setJob(fresh);
+        if (fresh.status === 'failed') {
+          throw new Error(fresh.error ?? 'Watchdog job failed.');
+        }
+        if (fresh.actionId !== null && fresh.status === 'action_ready') {
+          setAction(await clientApi.action(fresh.actionId));
+          await poll(fresh.actionId);
+          return;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, i < 120 ? 2500 : 10_000));
     }
     setPhase('timeout');
   }

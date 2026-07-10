@@ -123,6 +123,11 @@ export interface DemoProofs {
   latestManualSlash: SlashProof | null;
   latestWatchdogSlash: SlashProof | null;
   readyCases: DemoReadyCase[];
+  totals?: {
+    slashes: number;
+    refunds: number;
+    slashedBonds: string;
+  };
 }
 
 export type DemoJobStatus =

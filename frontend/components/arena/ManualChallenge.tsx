@@ -13,6 +13,7 @@ import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
 import { Label } from '@/components/ui/Primitives';
 import Countdown from './Countdown';
+import PendingStepper from './PendingStepper';
 
 type Phase =
   | 'idle'
@@ -320,12 +321,18 @@ export default function ManualChallenge({
   }, [action.actionId, onResolved]);
 
   const pollBackendJob = useCallback(async (jobId: string) => {
-    for (let i = 0; i < 120; i += 1) {
-      const job = await checkBackendJob(jobId);
-      if (['resolved', 'failed'].includes(job.status)) return;
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+    // Fast poll for the first five minutes, then slow poll. The job is
+    // persisted server-side, so this never flips to a failure state on its
+    // own: the wait is chain finality, not a fault.
+    for (let i = 0; i < 300; i += 1) {
+      try {
+        const job = await checkBackendJob(jobId);
+        if (['resolved', 'failed'].includes(job.status)) return;
+      } catch {
+        // Transient fetch error; the job itself is persisted. Keep polling.
+      }
+      await new Promise((resolve) => setTimeout(resolve, i < 120 ? 2500 : 10_000));
     }
-    setPhase('timeout');
   }, [checkBackendJob]);
 
   const backendChallenge = useCallback(async () => {
@@ -341,9 +348,9 @@ export default function ManualChallenge({
       setBackendChallengeTx(job.challengeTx);
       saveBackendJob(action.actionId, job.id);
       setPhase('backend_pending');
-      void pollBackendJob(job.id).catch((err) => {
-        setError(err instanceof Error ? err.message : 'Could not check the background challenge job.');
-        setPhase('timeout');
+      void pollBackendJob(job.id).catch(() => {
+        // Polling stopped; the job is persisted and the manual check button
+        // below recovers it. Stay in the pending (progress) state.
       });
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'The challenge could not be submitted.';
@@ -415,12 +422,13 @@ export default function ManualChallenge({
                 <button
                   type="button"
                   onClick={backendChallenge}
-                  className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong"
+                  className="w-full rounded-md bg-accent px-5 py-3.5 font-medium text-ink transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
                 >
-                  Run Demo Challenge
+                  Run live challenge
                 </button>
                 <p className="text-xs text-muted">
-                  A funded backend key starts a recoverable Casper job. The reward goes to that demo key; completed proof remains above while finality is pending.
+                  A funded demo key signs the challenge; the reward goes to that
+                  key. The job is persisted, so a reload picks up right here.
                 </p>
                 <details className="rounded-md border border-rule bg-ink px-4 py-3">
                   <summary className="cursor-pointer text-sm text-muted">Advanced: Wallet-signed challenge beta</summary>
@@ -669,19 +677,23 @@ export default function ManualChallenge({
               key="backend_pending"
               initial={reduce ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-5 space-y-3"
+              className="mt-5 space-y-4"
             >
-              <p className="flex items-center gap-2 text-sm text-accent">
-                <Spinner />
-                {phase === 'backend_submitting'
-                  ? 'Submitting a real transaction to Casper testnet'
-                  : 'Waiting for the slash to confirm on chain'}
-              </p>
+              <PendingStepper status={backendJob?.status ?? 'queued'} />
               {backendChallengeTx && <TxLine label="Challenge" hash={backendChallengeTx} />}
               <p className="text-xs text-muted">
-                Job {backendJob ? `#${backendJob.id.slice(0, 8)} · ${backendJob.status.replaceAll('_', ' ')}` : 'queued'}. Casper testnet finality can take time; this page remains recoverable.
+                The job survives reloads and restarts. Leave this page and come
+                back; the result lands here and in the proof above.
               </p>
-              {backendJob && <button type="button" onClick={() => void checkBackendJob(backendJob.id)} className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50">Check status again</button>}
+              {backendJob && (
+                <button
+                  type="button"
+                  onClick={() => void checkBackendJob(backendJob.id)}
+                  className="rounded-md border border-rule px-4 py-2 text-sm text-bone transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                >
+                  Check status now
+                </button>
+              )}
             </motion.div>
           )}
 
