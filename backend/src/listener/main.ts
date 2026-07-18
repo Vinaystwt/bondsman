@@ -65,7 +65,9 @@ if (!process.argv.includes('--once')) {
       queue = queue.then(tick).catch(console.error);
     }, 500);
   };
-  setInterval(scheduleTick, 20_000);
+  // SSE drives normal reconciliation. This is only a loss-tolerant catch-up
+  // heartbeat, not a second poller competing with the event stream.
+  setInterval(scheduleTick, 5 * 60_000);
   const controller = new AbortController();
   process.once('SIGINT', () => controller.abort());
   process.once('SIGTERM', () => controller.abort());

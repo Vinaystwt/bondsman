@@ -245,6 +245,44 @@ export class Repository {
       );
   }
 
+  eventCursor(contract: string): number | undefined {
+    const row = this.database
+      .prepare('SELECT last_event_index FROM event_cursors WHERE contract = ?')
+      .get(contract) as { last_event_index: number } | undefined;
+    return row?.last_event_index;
+  }
+
+  advanceEventCursor(contract: string, eventIndex: number): void {
+    this.database
+      .prepare(
+        `INSERT INTO event_cursors (contract, last_event_index, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(contract) DO UPDATE SET
+           last_event_index = MAX(last_event_index, excluded.last_event_index),
+           updated_at = excluded.updated_at`,
+      )
+      .run(contract, eventIndex, Date.now());
+  }
+
+  setSystemState(key: string, value: unknown): void {
+    this.database
+      .prepare(
+        `INSERT INTO system_state (state_key, value_json, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(state_key) DO UPDATE SET
+           value_json = excluded.value_json, updated_at = excluded.updated_at`,
+      )
+      .run(key, JSON.stringify(value), Date.now());
+  }
+
+  systemState<T>(key: string): { value: T; updatedAt: number } | undefined {
+    const row = this.database
+      .prepare('SELECT value_json, updated_at FROM system_state WHERE state_key = ?')
+      .get(key) as { value_json: string; updated_at: number } | undefined;
+    if (!row) return undefined;
+    return { value: JSON.parse(row.value_json) as T, updatedAt: row.updated_at };
+  }
+
   eventsForAction(actionId: number): EventRecord[] {
     return this.database
       .prepare(

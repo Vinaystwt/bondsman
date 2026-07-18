@@ -138,18 +138,25 @@ export async function reconcileChain(
   await importPendingInvoice(options);
 
   const actionIds = new Set<number>();
+  let reserveChanged = false;
   for (const contract of [
     'MockCsprUSD',
     'BondVault',
     'BondsmanController',
     'InvoicePool',
   ]) {
-    for (const event of await readEvents({
+    const cursor = options.repository.eventCursor(contract);
+    const events = await readEvents({
       repository: options.repositoryPath,
       config: options.config,
       signerPath,
       contract,
-    })) {
+    });
+    for (const event of events) {
+      // The CLI returns a bounded recent window. Persisting the highest index
+      // means a wakeup only projects new events instead of rebuilding every
+      // historical action on each listener tick.
+      if (cursor !== undefined && event.index <= cursor) continue;
       const parsed = parseOdraEvent(event.data);
       const actionId = parsed.fields.action_id
         ? Number(parsed.fields.action_id)
@@ -168,6 +175,8 @@ export async function reconcileChain(
           parsed.type,
         ),
       });
+      options.repository.advanceEventCursor(contract, event.index);
+      reserveChanged = reserveChanged || contract === 'InvoicePool';
     }
   }
 
@@ -279,15 +288,22 @@ export async function reconcileChain(
     }
   }
 
-  const reserve = await readContract<string>({
-    repository: options.repositoryPath,
-    config: options.config,
-    signerPath,
-    contract: 'InvoicePool',
-    entrypoint: 'reserve_balance',
-    arguments: [],
+  if (reserveChanged || options.repository.reserve() === '0') {
+    const reserve = await readContract<string>({
+      repository: options.repositoryPath,
+      config: options.config,
+      signerPath,
+      contract: 'InvoicePool',
+      entrypoint: 'reserve_balance',
+      arguments: [],
+    });
+    options.repository.setReserve(reserve);
+  }
+  options.repository.setSystemState('listener', {
+    running: true,
+    lastReconciledAt: new Date().toISOString(),
+    newActionCount: actionIds.size,
   });
-  options.repository.setReserve(reserve);
 }
 
 export async function resolveExpiredClean(

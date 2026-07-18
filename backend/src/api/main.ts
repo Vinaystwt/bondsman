@@ -26,6 +26,7 @@ import {
   inspectStartupPort,
   startupDiagnostic,
 } from './startup.js';
+import { createFundingMonitor } from '../ops/funding-monitor.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -123,6 +124,12 @@ const server = buildServer(
 const host = process.env.HOST || '0.0.0.0';
 await server.listen({ host, port });
 console.log(`Bondsman API listening on http://${host}:${port}`);
+createFundingMonitor({
+  repositoryPath,
+  config,
+  deployment,
+  repository,
+}).start();
 createDemoReadyPool({
   config: demoReadyPoolConfig(),
   repository,

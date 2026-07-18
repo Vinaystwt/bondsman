@@ -3,11 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { callContract } from '../casper/odra-cli.js';
-import {
-  fundToTarget,
-} from '../casper/funding.js';
 import { loadPrivateKey } from '../casper/keys.js';
-import { createRpcClient } from '../casper/rpc.js';
 import { SignerQueue } from '../casper/signer-queue.js';
 import { loadConfig } from '../config/env.js';
 import {
@@ -55,15 +51,6 @@ if (
 ) {
   throw new Error('watchdog key does not match deployment metadata');
 }
-const deployer = await loadPrivateKey(
-  resolve(config.deployerSecretKeyPath),
-);
-await fundToTarget(
-  createRpcClient(config),
-  deployer,
-  watchdog.publicKey,
-  100_000_000_000n,
-);
 
 const watchdogAddress =
   `account-hash-${deployment.accounts.watchdog.accountHash}`;
@@ -114,11 +101,13 @@ async function tick(): Promise<void> {
   const catches = await service.scanOnce();
   repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
   if (catches.length) console.log(JSON.stringify({ catches }));
-  await reconcile();
+  // The listener owns projection freshness. Reconcile only after this worker
+  // actually submits a catch so it can attach the resulting transaction data.
+  if (catches.length) await reconcile();
   repository.setWatchdogHeartbeat(watchdogAddress, Date.now());
 }
 
 const schedule = createSingleFlight(tick);
 const run = () => void schedule().catch(console.error);
 run();
-setInterval(run, Number(process.env.WATCHDOG_POLL_MS ?? 5_000));
+setInterval(run, Number(process.env.WATCHDOG_POLL_MS ?? 60_000));

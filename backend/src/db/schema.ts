@@ -80,4 +80,16 @@ CREATE TABLE IF NOT EXISTS demo_jobs (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS event_cursors (
+  contract TEXT PRIMARY KEY,
+  last_event_index INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS system_state (
+  state_key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `;
