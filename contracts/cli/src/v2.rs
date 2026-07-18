@@ -10,7 +10,7 @@ use mock_cspr_usd::mock_cspr_usd::MockCsprUSD;
 use odra::{casper_types::U256, host::{HostEnv, NoArgs}, prelude::Addressable};
 use odra_cli::{deploy::{DeployScript, Error}, DeployedContractsContainer, DeployerExt, OdraCli};
 
-const INSTALL_GAS: u64 = 350_000_000_000;
+const INSTALL_GAS: u64 = 600_000_000_000;
 const CALL_GAS: u64 = 50_000_000_000;
 const UNIT: u64 = 1_000_000_000;
 
