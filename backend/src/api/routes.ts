@@ -293,7 +293,7 @@ export function registerRoutes(
   server.post('/api/demo/arm', async () => armDemo(true));
   server.post('/api/demo/arm/async', async () => jobs.startArm(true));
   server.post('/api/demo/run-integrator', async (request) => runIntegrator({
-    baseUrl: `${request.protocol}://${request.headers.host ?? request.hostname}`,
+    baseUrl: `${String(request.headers['x-forwarded-proto'] ?? 'https').split(',')[0]}://${request.headers.host ?? request.hostname}`,
     deployment,
     repository,
   }));
