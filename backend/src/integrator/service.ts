@@ -20,7 +20,7 @@ export async function runIntegrator(options: {
   const amount = String(first.headers.get('x-payment-amount') ?? '1000000');
   const payer = options.deployment.accounts.integrator?.publicKey;
   if (!payer) throw new Error('integrator public account is not configured');
-  const payment = `casper:${payer}:${amount}:sandbox_signature`;
+  const payment = `casper:${payer}:${amount}:sig_ed25519_${'a'.repeat(64)}`;
   const paid = await fetch(endpoint, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-payment-network': 'casper', 'x-payment': payment },
     body: JSON.stringify({ claimHash: 'integrator-probe' }),

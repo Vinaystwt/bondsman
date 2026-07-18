@@ -293,7 +293,7 @@ export function registerRoutes(
   server.post('/api/demo/arm', async () => armDemo(true));
   server.post('/api/demo/arm/async', async () => jobs.startArm(true));
   server.post('/api/demo/run-integrator', async (request) => runIntegrator({
-    baseUrl: `${request.protocol}://${request.hostname}`,
+    baseUrl: `${request.protocol}://${request.headers.host ?? request.hostname}`,
     deployment,
     repository,
   }));
