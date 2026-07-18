@@ -4,6 +4,11 @@ members = [
     "bondsman_controller",
     "cli",
     "invoice_pool",
+    "invoice_pool_v2",
+    "bond_vault_v2",
+    "bondsman_controller_v2",
+    "duplicate_claim_verifier_v2",
+    "delivery_contradiction_verifier_v2",
     "mock_cspr_usd",
 ]
 resolver = "2"

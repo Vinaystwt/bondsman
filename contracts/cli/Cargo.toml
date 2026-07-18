@@ -8,6 +8,11 @@ bond_vault = { path = "../bond_vault" }
 bondsman_controller = { path = "../bondsman_controller" }
 invoice_pool = { path = "../invoice_pool" }
 mock_cspr_usd = { path = "../mock_cspr_usd" }
+bond_vault_v2 = { path = "../bond_vault_v2" }
+bondsman_controller_v2 = { path = "../bondsman_controller_v2" }
+invoice_pool_v2 = { path = "../invoice_pool_v2" }
+duplicate_claim_verifier_v2 = { path = "../duplicate_claim_verifier_v2" }
+delivery_contradiction_verifier_v2 = { path = "../delivery_contradiction_verifier_v2" }
 odra = { workspace = true }
 odra-cli = { workspace = true }
 casper-client = { workspace = true }
@@ -15,3 +20,7 @@ casper-client = { workspace = true }
 [[bin]]
 name = "bondsman_cli"
 path = "src/main.rs"
+
+[[bin]]
+name = "bondsman_cli_v2"
+path = "src/v2.rs"

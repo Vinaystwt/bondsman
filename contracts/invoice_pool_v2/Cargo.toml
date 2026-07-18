@@ -1,0 +1,24 @@
+[package]
+edition = "2021"
+name = "invoice_pool_v2"
+version = "0.2.0"
+
+[dependencies]
+odra = { workspace = true }
+odra-modules = { workspace = true }
+
+[build-dependencies]
+odra-build = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+odra-build = { workspace = true }
+
+[[bin]]
+name = "invoice_pool_v2_build_contract"
+path = "bin/build_contract.rs"
+test = false
+
+[[bin]]
+name = "invoice_pool_v2_build_schema"
+path = "bin/build_schema.rs"
+test = false

@@ -9,3 +9,18 @@ fqn = "bondsman_controller::bondsman_controller::BondsmanController"
 
 [[contracts]]
 fqn = "invoice_pool::invoice_pool::InvoicePool"
+
+[[contracts]]
+fqn = "bond_vault_v2::bond_vault_v2::BondVaultV2"
+
+[[contracts]]
+fqn = "invoice_pool_v2::invoice_pool_v2::InvoicePoolV2"
+
+[[contracts]]
+fqn = "duplicate_claim_verifier_v2::duplicate_claim_verifier_v2::DuplicateClaimVerifierV2"
+
+[[contracts]]
+fqn = "delivery_contradiction_verifier_v2::delivery_contradiction_verifier_v2::DeliveryContradictionVerifierV2"
+
+[[contracts]]
+fqn = "bondsman_controller_v2::bondsman_controller_v2::BondsmanControllerV2"

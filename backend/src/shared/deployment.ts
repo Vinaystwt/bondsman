@@ -20,6 +20,7 @@ export const deploymentSchema = z.object({
   network: z.literal('casper-test'),
   chainName: z.literal('casper-test'),
   nodeRpcUrl: z.string().url(),
+  current: z.enum(['v1', 'v2']).default('v1'),
   contracts: z.object({
     mockCsprUsd: contractSchema,
     bondVault: contractSchema,
@@ -33,6 +34,24 @@ export const deploymentSchema = z.object({
     bondVaultV2: optionalContractSchema,
     invoicePoolV2: optionalContractSchema,
   }),
+  versions: z.object({
+    v1: z.object({
+      mockCsprUsd: contractSchema,
+      bondVault: contractSchema,
+      controller: contractSchema,
+      invoicePool: contractSchema,
+    }).optional(),
+    v2: z.object({
+      mockCsprUsd: contractSchema,
+      bondVault: contractSchema,
+      controller: contractSchema,
+      invoicePool: contractSchema,
+      verifiers: z.object({
+        duplicateClaim: contractSchema,
+        deliveryContradiction: contractSchema,
+      }),
+    }).optional(),
+  }).optional(),
   accounts: z.object({
     deployer: accountSchema,
     agent: accountSchema,

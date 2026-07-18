@@ -1,0 +1,8 @@
+#![no_std]
+#![cfg_attr(target_arch = "wasm32", no_main)]
+#![allow(unused_imports)]
+use delivery_contradiction_verifier_v2;
+#[cfg(not(target_arch = "wasm32"))]
+fn main() { odra_build::build(); }
+#[cfg(target_arch = "wasm32")]
+pub fn main() {}

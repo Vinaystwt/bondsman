@@ -251,13 +251,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bond_vault_v2"
+version = "0.2.0"
+dependencies = [
+ "mock_cspr_usd",
+ "odra",
+ "odra-build",
+ "odra-modules",
+ "odra-test",
+]
+
+[[package]]
 name = "bondsman_cli"
 version = "0.1.0"
 dependencies = [
  "bond_vault",
+ "bond_vault_v2",
  "bondsman_controller",
+ "bondsman_controller_v2",
  "casper-client",
+ "delivery_contradiction_verifier_v2",
+ "duplicate_claim_verifier_v2",
  "invoice_pool",
+ "invoice_pool_v2",
  "mock_cspr_usd",
  "odra",
  "odra-cli",
@@ -269,6 +285,21 @@ version = "0.1.0"
 dependencies = [
  "bond_vault",
  "invoice_pool",
+ "mock_cspr_usd",
+ "odra",
+ "odra-build",
+ "odra-test",
+]
+
+[[package]]
+name = "bondsman_controller_v2"
+version = "0.2.0"
+dependencies = [
+ "bond_vault_v2",
+ "delivery_contradiction_verifier_v2",
+ "duplicate_claim_verifier_v2",
+ "ed25519-dalek",
+ "invoice_pool_v2",
  "mock_cspr_usd",
  "odra",
  "odra-build",
@@ -830,6 +861,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "delivery_contradiction_verifier_v2"
+version = "0.2.0"
+dependencies = [
+ "ed25519-dalek",
+ "invoice_pool_v2",
+ "odra",
+ "odra-build",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -922,6 +963,15 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "duplicate_claim_verifier_v2"
+version = "0.2.0"
+dependencies = [
+ "invoice_pool_v2",
+ "odra",
+ "odra-build",
+]
 
 [[package]]
 name = "dyn-clone"
@@ -1677,6 +1727,15 @@ dependencies = [
  "odra-build",
  "odra-modules",
  "odra-test",
+]
+
+[[package]]
+name = "invoice_pool_v2"
+version = "0.2.0"
+dependencies = [
+ "odra",
+ "odra-build",
+ "odra-modules",
 ]
 
 [[package]]
