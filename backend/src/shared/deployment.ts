@@ -9,6 +9,8 @@ const contractSchema = z.object({
   contractHash: hash,
 });
 
+const optionalContractSchema = contractSchema.optional();
+
 const accountSchema = z.object({
   publicKey,
   accountHash,
@@ -23,12 +25,21 @@ export const deploymentSchema = z.object({
     bondVault: contractSchema,
     controller: contractSchema,
     invoicePool: contractSchema,
+    // The original suite remains the default until a later client migration.
+    // Parallel suites are deliberately optional so existing deployments keep
+    // parsing while the migration is being prepared.
+    controllerV1: optionalContractSchema,
+    controllerV2: optionalContractSchema,
+    bondVaultV2: optionalContractSchema,
+    invoicePoolV2: optionalContractSchema,
   }),
   accounts: z.object({
     deployer: accountSchema,
     agent: accountSchema,
     challenger: accountSchema,
     watchdog: accountSchema,
+    integrator: accountSchema.optional(),
+    receiptSigner: accountSchema.optional(),
   }),
 });
 

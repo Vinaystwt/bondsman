@@ -40,6 +40,8 @@ const KEY_VARS = {
   CHALLENGER_KEY_B64: 'challenger.pem',
   WATCHDOG_KEY_B64: 'watchdog.pem',
   DEMO_AGENT_KEY_B64: 'demo-agent.pem',
+  INTEGRATOR_KEY_B64: 'integrator.pem',
+  RECEIPT_SIGNER_KEY_B64: 'receipt-signer.pem',
 };
 
 async function decodeKeys() {

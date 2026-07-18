@@ -12,6 +12,7 @@
     "deploy": "tsx ../scripts/deploy.ts",
     "redeploy": "tsx ../scripts/redeploy.ts",
     "agent": "tsx src/agent/main.ts",
+    "integrator": "tsx src/integrator/main.ts",
     "listener": "tsx src/listener/main.ts",
     "watchdog": "tsx src/watchdog/main.ts",
     "mcp": "tsx src/mcp/main.ts",

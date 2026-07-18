@@ -112,7 +112,9 @@ export function createWalletChallengeService(
   options: WalletChallengeOptions,
 ): WalletChallengeService {
   const configuredAccounts = new Set(
-    Object.values(options.deployment.accounts).map(
+    Object.values(options.deployment.accounts).filter(
+      (account): account is { publicKey: string; accountHash: string } => Boolean(account),
+    ).map(
       (account) => `account-hash-${account.accountHash}`,
     ),
   );

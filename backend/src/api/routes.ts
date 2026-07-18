@@ -23,6 +23,11 @@ import { ApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import { demoReadyResponse } from './demo-ready.js';
 import type { DemoJobService } from './demo-jobs.js';
+import { deliveryAttestationSchema, verifyDeliveryAttestation } from '../verifiers/delivery-attestation.js';
+import { listVerifiers, verifier } from '../verifiers/registry.js';
+import { featuredProofs, proofFor } from '../proofs/service.js';
+import { issueReceipt, verifyReceipt, type PortableReceipt } from '../receipts/service.js';
+import { runIntegrator } from '../integrator/service.js';
 
 function latestSlashProof(
   repository: Repository,
@@ -60,6 +65,7 @@ export function registerRoutes(
   arm: DemoArmService,
   walletChallenge: WalletChallengeService,
   jobs: DemoJobService,
+  repositoryPath = process.cwd(),
 ): void {
   const startedAt = Date.now();
   const currentController =
@@ -68,9 +74,21 @@ export function registerRoutes(
     const watchdog = repository.watchdogSummary();
     return {
       ok: true,
-      version: '0.1.0',
+      version: '0.2.0',
       controller: currentController,
-      watchdog: { running: watchdog.running },
+      controllerVersion: deployment.contracts.controllerV2 ? 'v2' : 'v1',
+      watchdog: { running: watchdog.running, lastCatch: watchdog.recentCatches[0]?.timestamp ?? null, totalEarned: watchdog.totalRewardEarned },
+      integrator: repository.systemState<{ lastRun?: string }>('integrator')?.value ?? { running: false, lastRun: null },
+      listener: repository.systemState('listener')?.value ?? { running: false },
+      readyPool: {
+        manualCases: demoReadyResponse(repository, currentController).cases.length,
+        watchdogCases: repository.listActions().filter((action) => action.controllerHash === currentController && !action.reservedForManual && action.status === 'Executed').length,
+        deliveryCases: repository.listActions().filter((action) => action.controllerHash === currentController && action.faultClass === 'delivery_contradiction' && action.status === 'Executed').length,
+      },
+      reserves: {
+        operationalBalance: repository.reserve(),
+        funding: repository.systemState('funding')?.value ?? null,
+      },
       uptimeSec: Math.max(0, Math.floor((Date.now() - startedAt) / 1000)),
       deploymentsPath: 'deployments/testnet.json',
     };
@@ -110,6 +128,79 @@ export function registerRoutes(
     balance: repository.reserve(),
     slashes: repository.slashEvents(),
   }));
+  server.get('/api/coverage', async () => {
+    const actions = repository.listActions().filter((action) => action.controllerHash === currentController);
+    const openBondedExposure = actions
+      .filter((action) => ['Initiated', 'Bonded', 'Executed', 'Challenged'].includes(action.status))
+      .reduce((sum, action) => sum + BigInt(action.amount), 0n);
+    const slashes = actions.filter((action) => action.status === 'ResolvedSlash');
+    const refunds = actions.filter((action) => action.status === 'ResolvedRefund');
+    const reserveBalance = BigInt(repository.reserve());
+    const maxSingle = actions.reduce((max, action) => BigInt(action.amount) > max ? BigInt(action.amount) : max, 0n);
+    return {
+      reserveBalance: reserveBalance.toString(), openBondedExposure: openBondedExposure.toString(),
+      coverageRatio: openBondedExposure === 0n ? null : Number(reserveBalance * 1000n / openBondedExposure) / 1000,
+      cumulativeSlashes: slashes.reduce((sum, action) => sum + BigInt(action.bondPosted), 0n).toString(),
+      cumulativeRefunds: refunds.reduce((sum, action) => sum + BigInt(action.bondPosted), 0n).toString(),
+      maxSingleActionCoverage: maxSingle.toString(),
+      largestPossibleUncoveredLoss: (maxSingle > reserveBalance ? maxSingle - reserveBalance : 0n).toString(),
+      explanation: {
+        bondCoverageRatio: 'Bond coverage is risk priced and does not represent full payout insurance.',
+        reserveRole: 'The reserve tracks the pool share of verified slashes.',
+        uncoveredCap: 'A payout above the available reserve and bond can have uncovered exposure.',
+      },
+    };
+  });
+  server.get('/api/verifiers', async () => listVerifiers());
+  server.get('/api/verifiers/:faultClass', async (request) => {
+    const found = verifier((request.params as { faultClass: string }).faultClass);
+    if (!found) throw new ApiError(404, 'NOT_FOUND', 'verifier not found');
+    return found;
+  });
+  server.post('/api/delivery-attestation', async (request) => {
+    const input = deliveryAttestationSchema.parse(request.body);
+    const action = repository.action(input.actionId);
+    if (!action || action.invoiceId !== input.invoiceId) {
+      throw new ApiError(409, 'ATTESTATION_MISMATCH', 'attestation does not match the action invoice');
+    }
+    if (input.occurredAt <= 0 || input.occurredAt > Date.now() + 60_000) {
+      throw new ApiError(400, 'ATTESTATION_TIME_INVALID', 'attestation time is invalid');
+    }
+    const attestation = verifyDeliveryAttestation(input);
+    repository.upsertDeliveryAttestation(attestation);
+    return { success: true, attestation: { ...attestation, signature: attestation.signature } };
+  });
+  server.get('/api/proof/:id', async (request) => {
+    const actionId = Number((request.params as { id: string }).id);
+    const query = request.query as { controller?: string };
+    const controller = query.controller === 'v1'
+      ? deployment.contracts.controllerV1?.contractHash ?? currentController
+      : currentController;
+    const proof = proofFor(repository, actionId, controller);
+    if (!proof) throw new ApiError(404, 'NOT_FOUND', 'completed proof not found');
+    return proof;
+  });
+  server.get('/api/proofs/latest', async (request) => {
+    const query = request.query as { limit?: string };
+    const limit = Math.min(50, Math.max(1, Number(query.limit ?? 10) || 10));
+    return repository.listActions().filter((action) => action.controllerHash === currentController && ['ResolvedSlash', 'ResolvedRefund'].includes(action.status))
+      .sort((a, b) => b.actionId - a.actionId).slice(0, limit)
+      .map((action) => proofFor(repository, action.actionId, currentController));
+  });
+  server.get('/api/proofs/featured', async () => featuredProofs(repository, currentController));
+  server.get('/api/receipt/:id', async (request) => {
+    const actionId = Number((request.params as { id: string }).id);
+    const receipt = await issueReceipt({ repositoryPath, repository, actionId, controllerHash: currentController });
+    if (!receipt) throw new ApiError(404, 'NOT_FOUND', 'completed receipt not found');
+    return receipt;
+  });
+  server.get('/api/receipt/:id/verify', async (request) => {
+    const actionId = Number((request.params as { id: string }).id);
+    const receipt = await issueReceipt({ repositoryPath, repository, actionId, controllerHash: currentController });
+    if (!receipt) throw new ApiError(404, 'NOT_FOUND', 'completed receipt not found');
+    return verifyReceipt(receipt);
+  });
+  server.post('/api/receipt/:id/verify', async (request) => verifyReceipt(request.body as PortableReceipt));
   server.get('/api/demo/ready', async () =>
     demoReadyResponse(repository, currentController),
   );
@@ -201,6 +292,11 @@ export function registerRoutes(
   };
   server.post('/api/demo/arm', async () => armDemo(true));
   server.post('/api/demo/arm/async', async () => jobs.startArm(true));
+  server.post('/api/demo/run-integrator', async (request) => runIntegrator({
+    baseUrl: `${request.protocol}://${request.hostname}`,
+    deployment,
+    repository,
+  }));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();
     return {
@@ -212,7 +308,7 @@ export function registerRoutes(
   });
   server.post('/api/watchdog/demo', async () => armDemo(false));
   server.post('/api/watchdog/demo/async', async () => jobs.startArm(false));
-  server.post('/api/verify', async (request, reply) => {
+  const verifySandbox = async (request: any, reply: any) => {
     const amount = process.env.X402_VERIFY_PRICE ?? '1000000';
     const payTo = deployment.accounts.challenger.publicKey;
     const requirement = paymentRequired(payTo, amount);
@@ -236,7 +332,7 @@ export function registerRoutes(
         .header('X-Payment-Simulated', 'true')
         .send({
           success: false,
-          code: 'PAYMENT_REQUIRED',
+          code: 'X402_SANDBOX',
           message: 'sandbox payment envelope required',
           payment: requirement,
         });
@@ -246,6 +342,7 @@ export function registerRoutes(
       verifyBodySchema.parse(request.body),
     );
     return {
+      code: 'X402_SANDBOX',
       ...verification,
       payment: {
         mode: 'sandbox',
@@ -257,6 +354,21 @@ export function registerRoutes(
         transactionHash: null,
       },
     };
-  });
+  };
+  server.post('/api/labs/x402-sandbox', verifySandbox);
+  server.post('/api/verify', verifySandbox);
+  server.get('/.well-known/agent.json', async () => ({
+    name: 'Bondsman Gate',
+    description: 'Bonded execution gateway for autonomous financial agents on Casper.',
+    url: 'https://bondsman-backend-production.up.railway.app',
+    provider: { organization: 'Bondsman', url: 'https://bondsman.vercel.app' },
+    version: '1.0.0', capabilities: { streaming: true, pushNotifications: false },
+    authentication: { schemes: ['x402'] }, defaultInputModes: ['application/json'], defaultOutputModes: ['application/json'],
+    skills: [
+      { id: 'quote_bonded_action', name: 'Quote a bonded action', description: 'Get a risk priced bond quote for an autonomous financial action.', tags: ['bonding', 'risk', 'autonomous'], examples: ['Quote a bond for a 50,000 invoice payout'] },
+      { id: 'submit_bonded_action', name: 'Submit a bonded action', description: 'Post a bond and execute a payout under Bondsman accountability.', tags: ['execution', 'bonding'] },
+      { id: 'verify_receipt', name: 'Verify a Bondsman receipt', description: 'Independently verify a signed Bondsman action receipt.', tags: ['verification', 'proof'] },
+    ],
+  }));
   server.get('/api/deployments', async () => deployment);
 }

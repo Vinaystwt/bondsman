@@ -7,6 +7,7 @@ import { registerRoutes } from './routes.js';
 import { normalizeApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import type { DemoJobService } from './demo-jobs.js';
+import { registerRemoteMcp } from '../mcp/remote.js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://bondsman.vercel.app',
@@ -34,6 +35,7 @@ export function buildServer(
   arm: DemoArmService,
   walletChallenge: WalletChallengeService,
   jobs: DemoJobService,
+  repositoryPath = process.cwd(),
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   const origins = allowedOrigins();
@@ -74,6 +76,8 @@ export function buildServer(
     arm,
     walletChallenge,
     jobs,
+    repositoryPath,
   );
+  registerRemoteMcp(server, repository, deployment);
   return server;
 }

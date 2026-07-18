@@ -120,6 +120,7 @@ const server = buildServer(
   armService,
   walletChallenge,
   jobs,
+  repositoryPath,
 );
 const host = process.env.HOST || '0.0.0.0';
 await server.listen({ host, port });

@@ -167,6 +167,7 @@ async function main(): Promise<void> {
 
   console.log(`Wrote ${deploymentPath}`);
   for (const [name, contract] of Object.entries(contracts)) {
+    if (!contract) continue;
     console.log(`${name}: ${contract.contractHash}`);
     console.log(
       `  https://testnet.cspr.live/contract/${contract.contractHash.replace('hash-', '')}`,

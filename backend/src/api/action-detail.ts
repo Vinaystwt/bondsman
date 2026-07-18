@@ -19,6 +19,10 @@ export function actionDetail(
             available: false,
             message: 'proof unavailable for this contract version',
           },
+    receiptUrl:
+      action.status === 'ResolvedSlash' || action.status === 'ResolvedRefund'
+        ? `/api/receipt/${action.actionId}`
+        : null,
     events: repository.eventsForAction(actionId).map((event) => ({
       ...event,
       explorerLink: event.transactionHash

@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS actions (
   challenge_signing TEXT,
   controller_hash TEXT NOT NULL DEFAULT '',
   duplicate_proven INTEGER NOT NULL DEFAULT 0,
+  fault_class TEXT NOT NULL DEFAULT 'duplicate_claim',
+  evidence_root TEXT,
   reserved_for_manual INTEGER NOT NULL DEFAULT 0,
   transactions_json TEXT NOT NULL
 );
@@ -91,5 +93,34 @@ CREATE TABLE IF NOT EXISTS system_state (
   state_key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL,
   updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS delivery_attestations (
+  evidence_root TEXT PRIMARY KEY,
+  invoice_id INTEGER NOT NULL,
+  action_id INTEGER,
+  event_type TEXT NOT NULL,
+  occurred_at INTEGER NOT NULL,
+  buyer_public_key TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  received_at INTEGER NOT NULL,
+  used_action_id INTEGER UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS proof_cache (
+  controller_hash TEXT NOT NULL,
+  action_id INTEGER NOT NULL,
+  proof_json TEXT NOT NULL,
+  cached_at INTEGER NOT NULL,
+  PRIMARY KEY (controller_hash, action_id)
+);
+
+CREATE TABLE IF NOT EXISTS signed_receipts (
+  controller_hash TEXT NOT NULL,
+  action_id INTEGER NOT NULL,
+  receipt_json TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  PRIMARY KEY (controller_hash, action_id)
 );
 `;

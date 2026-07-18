@@ -46,5 +46,13 @@ export function openDatabase(path: string): Database.Database {
       'ALTER TABLE actions ADD COLUMN duplicate_proven INTEGER NOT NULL DEFAULT 0',
     );
   }
+  if (!actionColumns.has('fault_class')) {
+    database.exec(
+      "ALTER TABLE actions ADD COLUMN fault_class TEXT NOT NULL DEFAULT 'duplicate_claim'",
+    );
+  }
+  if (!actionColumns.has('evidence_root')) {
+    database.exec('ALTER TABLE actions ADD COLUMN evidence_root TEXT');
+  }
   return database;
 }

@@ -33,6 +33,8 @@ export interface ActionRecord {
   challengeSigning?: 'backend-key' | 'watchdog-key' | 'external-wallet' | null;
   controllerHash?: string;
   duplicateProven?: boolean;
+  faultClass?: 'duplicate_claim' | 'delivery_contradiction';
+  evidenceRoot?: string | null;
   reservedForManual: boolean;
   transactions: Record<string, string>;
 }
@@ -74,6 +76,19 @@ export interface EventRecord {
   actionId: number | null;
   data: string;
   transactionHash: string | null;
+}
+
+export interface DeliveryAttestationRecord {
+  evidenceRoot: string;
+  invoiceId: number;
+  actionId: number | null;
+  eventType: 'delivery_rejected' | 'goods_not_received';
+  occurredAt: number;
+  buyerPublicKey: string;
+  signature: string;
+  payload: Record<string, unknown>;
+  receivedAt: number;
+  usedActionId: number | null;
 }
 
 function invoiceFromRow(row: Record<string, unknown>): InvoiceRecord {
@@ -121,6 +136,11 @@ function actionFromRow(row: Record<string, unknown>): ActionRecord {
             | 'external-wallet'),
     controllerHash: String(row.controller_hash),
     duplicateProven: Boolean(row.duplicate_proven),
+    faultClass:
+      String(row.fault_class ?? 'duplicate_claim') as
+        | 'duplicate_claim'
+        | 'delivery_contradiction',
+    evidenceRoot: row.evidence_root === null ? null : String(row.evidence_root),
     reservedForManual: Boolean(row.reserved_for_manual),
     transactions: JSON.parse(
       String(row.transactions_json),
@@ -171,8 +191,8 @@ export class Repository {
           (action_id, invoice_id, agent, amount, claim_hash, reasoning,
            reasoning_hash, bond_required, bond_posted, window_end, status,
            challenger, challenger_type, challenge_signing, controller_hash,
-           duplicate_proven, reserved_for_manual, transactions_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           duplicate_proven, fault_class, evidence_root, reserved_for_manual, transactions_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(action_id) DO UPDATE SET
           invoice_id=excluded.invoice_id, agent=excluded.agent,
           amount=excluded.amount, claim_hash=excluded.claim_hash,
@@ -184,6 +204,8 @@ export class Repository {
           challenge_signing=excluded.challenge_signing,
           controller_hash=excluded.controller_hash,
           duplicate_proven=excluded.duplicate_proven,
+          fault_class=excluded.fault_class,
+          evidence_root=excluded.evidence_root,
           reserved_for_manual=excluded.reserved_for_manual,
           transactions_json=excluded.transactions_json`,
       )
@@ -204,6 +226,8 @@ export class Repository {
         action.challengeSigning ?? null,
         action.controllerHash ?? '',
         Number(action.duplicateProven ?? false),
+        action.faultClass ?? 'duplicate_claim',
+        action.evidenceRoot ?? null,
         Number(action.reservedForManual),
         JSON.stringify(action.transactions),
       );
@@ -281,6 +305,74 @@ export class Repository {
       .get(key) as { value_json: string; updated_at: number } | undefined;
     if (!row) return undefined;
     return { value: JSON.parse(row.value_json) as T, updatedAt: row.updated_at };
+  }
+
+  upsertDeliveryAttestation(attestation: DeliveryAttestationRecord): void {
+    this.database
+      .prepare(
+        `INSERT INTO delivery_attestations
+         (evidence_root, invoice_id, action_id, event_type, occurred_at,
+          buyer_public_key, signature, payload_json, received_at, used_action_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(evidence_root) DO UPDATE SET
+          action_id=excluded.action_id, event_type=excluded.event_type,
+          occurred_at=excluded.occurred_at, buyer_public_key=excluded.buyer_public_key,
+          signature=excluded.signature, payload_json=excluded.payload_json,
+          received_at=excluded.received_at, used_action_id=excluded.used_action_id`,
+      )
+      .run(
+        attestation.evidenceRoot, attestation.invoiceId, attestation.actionId,
+        attestation.eventType, attestation.occurredAt, attestation.buyerPublicKey,
+        attestation.signature, JSON.stringify(attestation.payload), attestation.receivedAt,
+        attestation.usedActionId,
+      );
+  }
+
+  deliveryAttestationForAction(actionId: number): DeliveryAttestationRecord | undefined {
+    const row = this.database.prepare(
+      'SELECT * FROM delivery_attestations WHERE action_id = ? ORDER BY occurred_at DESC LIMIT 1',
+    ).get(actionId) as Record<string, unknown> | undefined;
+    return row ? deliveryAttestationFromRow(row) : undefined;
+  }
+
+  useDeliveryEvidence(evidenceRoot: string, actionId: number): boolean {
+    const result = this.database.prepare(
+      `UPDATE delivery_attestations SET used_action_id = ?
+       WHERE evidence_root = ? AND (used_action_id IS NULL OR used_action_id = ?)`,
+    ).run(actionId, evidenceRoot, actionId);
+    return result.changes === 1;
+  }
+
+  cacheProof(controllerHash: string, actionId: number, proof: unknown): void {
+    this.database.prepare(
+      `INSERT INTO proof_cache (controller_hash, action_id, proof_json, cached_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(controller_hash, action_id) DO UPDATE SET
+        proof_json=excluded.proof_json, cached_at=excluded.cached_at`,
+    ).run(controllerHash, actionId, JSON.stringify(proof), Date.now());
+  }
+
+  proof(controllerHash: string, actionId: number): unknown | undefined {
+    const row = this.database.prepare(
+      'SELECT proof_json FROM proof_cache WHERE controller_hash = ? AND action_id = ?',
+    ).get(controllerHash, actionId) as { proof_json: string } | undefined;
+    return row ? JSON.parse(row.proof_json) : undefined;
+  }
+
+  cacheReceipt(controllerHash: string, actionId: number, receipt: unknown): void {
+    this.database.prepare(
+      `INSERT INTO signed_receipts (controller_hash, action_id, receipt_json, issued_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(controller_hash, action_id) DO UPDATE SET
+        receipt_json=excluded.receipt_json, issued_at=excluded.issued_at`,
+    ).run(controllerHash, actionId, JSON.stringify(receipt), Date.now());
+  }
+
+  receipt(controllerHash: string, actionId: number): unknown | undefined {
+    const row = this.database.prepare(
+      'SELECT receipt_json FROM signed_receipts WHERE controller_hash = ? AND action_id = ?',
+    ).get(controllerHash, actionId) as { receipt_json: string } | undefined;
+    return row ? JSON.parse(row.receipt_json) : undefined;
   }
 
   eventsForAction(actionId: number): EventRecord[] {
@@ -549,5 +641,22 @@ function demoJobFromRow(row: Record<string, unknown>): DemoJobRecord {
     error: row.error === null ? null : String(row.error),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+  };
+}
+
+function deliveryAttestationFromRow(
+  row: Record<string, unknown>,
+): DeliveryAttestationRecord {
+  return {
+    evidenceRoot: String(row.evidence_root),
+    invoiceId: Number(row.invoice_id),
+    actionId: row.action_id === null ? null : Number(row.action_id),
+    eventType: String(row.event_type) as DeliveryAttestationRecord['eventType'],
+    occurredAt: Number(row.occurred_at),
+    buyerPublicKey: String(row.buyer_public_key),
+    signature: String(row.signature),
+    payload: JSON.parse(String(row.payload_json)) as Record<string, unknown>,
+    receivedAt: Number(row.received_at),
+    usedActionId: row.used_action_id === null ? null : Number(row.used_action_id),
   };
 }

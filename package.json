@@ -10,6 +10,7 @@
     "deploy": "npm --workspace backend run deploy",
     "redeploy": "npm --workspace backend run redeploy",
     "agent": "npm --workspace backend run agent",
+    "integrator": "npm --workspace backend run integrator",
     "listener": "npm --workspace backend run listener",
     "watchdog": "npm --workspace backend run watchdog",
     "mcp": "npm --workspace backend run mcp",

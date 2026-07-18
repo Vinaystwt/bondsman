@@ -230,7 +230,7 @@ describe('REST routes', () => {
     });
     expect((await context.server.inject('/api/health')).json()).toMatchObject({
       ok: true,
-      version: '0.1.0',
+      version: '0.2.0',
       controller: deployment.contracts.controller.contractHash,
       watchdog: { running: false },
       deploymentsPath: 'deployments/testnet.json',
@@ -523,6 +523,7 @@ describe('REST routes', () => {
     });
     expect(paid.statusCode).toBe(200);
     expect(paid.json()).toEqual({
+      code: 'X402_SANDBOX',
       claimHash: 'aa',
       collidesWithPaidClaim: true,
       matchingActionIds: [4],

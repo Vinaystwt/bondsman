@@ -15,6 +15,10 @@
       "packageHash": "hash-9bedae33a4f53adcaab4f6c74a2c214b051361e0fe85671be3f82f0ca4c24722",
       "contractHash": "hash-6f1e1b47040f8b90f73b4bb7b8cc6303a18ae09b628fc4870c14eb6250303a2b"
     },
+    "controllerV1": {
+      "packageHash": "hash-9bedae33a4f53adcaab4f6c74a2c214b051361e0fe85671be3f82f0ca4c24722",
+      "contractHash": "hash-6f1e1b47040f8b90f73b4bb7b8cc6303a18ae09b628fc4870c14eb6250303a2b"
+    },
     "invoicePool": {
       "packageHash": "hash-bb2077d5cc0d2d8340cfe8a3d6e4f7cecbeeb5b18888730d0e0e703c46bdec3d",
       "contractHash": "hash-ada888facd119474d3fb5271f23e403aa7bc033b87def9945e1aa6b2906a0b0a"
@@ -36,6 +40,14 @@
     "watchdog": {
       "publicKey": "010f416134e6fa84a9a9538b510c88173744291e20f7c46ebebb20a500c316748c",
       "accountHash": "80b98aa54801f01eb434094bc8d6401b4c9ecab2396810d2ae250ef276608428"
+    },
+    "integrator": {
+      "publicKey": "018080639af28604964819f7e2d54fd42bc4abe3b488de48e8914491b493fc3d6a",
+      "accountHash": "3b3362ea7af5776a37530df663afa7bc7c673ebcdd167f8934e2ac68d7eb9c77"
+    },
+    "receiptSigner": {
+      "publicKey": "017ec4666aa4b82b0c3c13b88132aa0f579ffb392a8455a8b90dcc620886e588f8",
+      "accountHash": "933a0be910bbf4fbe8476dc862e296f6bfbab5208a87eeb24587349b6902646a"
     }
   }
 }
