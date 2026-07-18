@@ -66,6 +66,22 @@ Anyone can also challenge a bad payout by hand: connect a Casper wallet, inspect
 - **Frontend** (Next.js, TypeScript, Tailwind): the public site and the app, including the Challenge Arena, the action Docket, My Ledger, the Agents directory, and the Leaderboard.
 - **MCP server**: exposes Bondsman's core actions (get action, get reputation, get the required bond, challenge an action, read deployments) as tools any Casper agent can call directly, so bonded accountability is adoptable infrastructure, not just a demo.
 
+### Verifiers, proofs, and integrations
+
+The live controller settles duplicate-claim evidence on chain. The backend also ships a typed delivery-contradiction evidence registry for signed buyer or logistics rejections that arise after payout. The active suite cannot settle that second class because its immutable vault binding only supports duplicate verification; a parallel suite is required before delivery evidence can trigger a truthful on-chain slash. This distinction is documented rather than hidden.
+
+Completed actions expose a cacheable proof object and a signed portable receipt. Agents can discover the service through its [A2A Agent Card](https://bondsman-backend-production.up.railway.app/.well-known/agent.json) or use remote MCP at `https://bondsman-backend-production.up.railway.app/mcp`.
+
+Integration and security references:
+
+- `docs/INTEGRATION.md`
+- `docs/FAULT_CLASSES.md`
+- `docs/BOND_ECONOMICS.md`
+- `docs/RECEIPT_VERIFICATION.md`
+- `docs/INVARIANTS.md`
+- `docs/THREAT_MODEL.md`
+- `docs/X402_STATUS.md`
+
 ### The bond and reputation
 
 The required bond scales with the size of the payout, and rises further if the agent's on-chain reputation is negative. A clean action adds to reputation; a slash subtracts far more. The bond floor by amount tier never discounts below the base rate, so there is no way to grind a good reputation on small actions and then defect on a large one.
@@ -74,7 +90,7 @@ The required bond scales with the size of the payout, and rises further if the a
 
 Bondsman is deployed as a live Casper Testnet prototype with real on-chain execution. The core accountability loop is active today: agents post bonds, payouts execute through the invoice pool, duplicate claims can be challenged, bonds can be slashed, reserves update, and agent reputation changes on chain.
 
-The invoice dataset uses controlled testnet fixtures so duplicate-claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP-18 asset, and the x402 verification flow is implemented as a metering sandbox for future paid verification. The production path is direct: connect a real invoice/oracle feed, replace the testnet token with a production asset, and connect x402 settlement to a facilitator-compatible payment flow.
+The invoice dataset uses controlled testnet fixtures so duplicate-claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP-18 asset. The x402 endpoint is an explicitly labeled sandbox at `/api/labs/x402-sandbox`; it does not settle payment or fabricate a transaction receipt. See `docs/X402_STATUS.md` for the currently verified facilitator limitation.
 
 ---
 
