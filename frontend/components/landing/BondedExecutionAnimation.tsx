@@ -134,21 +134,14 @@ export default function BondedExecutionAnimation({
       startedRef.current = true;
       return;
     }
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            play();
-            io.disconnect();
-            break;
-          }
-        }
-      },
-      { threshold: 0.35 },
-    );
-    io.observe(el);
+
+    // The hero animation is always in the initial viewport, so we start the
+    // sequence directly after hydration rather than routing it through an
+    // IntersectionObserver that sometimes never fires on already-visible
+    // elements.
+    const kickoff = window.setTimeout(() => play(), 250);
     return () => {
-      io.disconnect();
+      window.clearTimeout(kickoff);
       timeoutsRef.current.forEach((id) => window.clearTimeout(id));
       timeoutsRef.current = [];
     };
