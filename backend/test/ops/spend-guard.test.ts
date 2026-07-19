@@ -52,6 +52,14 @@ describe('spending circuit breaker', () => {
       code: 'SPENDING_CIRCUIT_TRIPPED',
       tripped: true,
     });
+    expect(spendSnapshot(60 * 60 * 1000)).toMatchObject({
+      code: 'SPENDING_CIRCUIT_TRIPPED',
+      tripped: true,
+    });
+    expect(spendSnapshot(60 * 60 * 1000 + 2_001)).toMatchObject({
+      code: 'SPENDING_OK',
+      tripped: false,
+    });
   });
 
   it('keeps account budgets independent', () => {

@@ -36,7 +36,10 @@ const CSPR = 1_000_000_000n;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const history: SpendRecord[] = [];
-const trippedAccounts = new Map<string, string>();
+const trippedAccounts = new Map<string, {
+  reason: string;
+  recoverAfterMs: number;
+}>();
 
 function envMotes(name: string, fallbackMotes: bigint): bigint {
   const raw = process.env[name]?.trim();
@@ -136,16 +139,18 @@ export function assertSpendAllowed(input: {
   const dayLimit = dailyLimit(account);
   const hourTxLimit = hourlyTransactionLimit(account);
   const dayTxLimit = dailyTransactionLimit(account);
-  if (
-    hourTransactions > hourTxLimit ||
-    dayTransactions > dayTxLimit ||
-    hourTotal > hourLimit ||
-    dayTotal > dayLimit
-  ) {
+  const hourlyViolation =
+    hourTransactions > hourTxLimit || hourTotal > hourLimit;
+  const dailyViolation =
+    dayTransactions > dayTxLimit || dayTotal > dayLimit;
+  if (hourlyViolation || dailyViolation) {
     const reason =
       `account=${account}; hourlyTransactions=${hourTransactions}/${hourTxLimit}; ` +
       `dailyTransactions=${dayTransactions}/${dayTxLimit}; hourlyMotes=${hourTotal}/${hourLimit}; dailyMotes=${dayTotal}/${dayLimit}`;
-    trippedAccounts.set(account, reason);
+    trippedAccounts.set(account, {
+      reason,
+      recoverAfterMs: now + (dailyViolation ? DAY_MS : HOUR_MS),
+    });
     const error = new Error(`SPENDING_CIRCUIT_TRIPPED: ${reason}`);
     (error as Error & { code?: string }).code = 'SPENDING_CIRCUIT_TRIPPED';
     throw error;
@@ -188,6 +193,21 @@ export function resetSpendGuard(): void {
 
 export function spendSnapshot(now = Date.now()): SpendSnapshot {
   prune(now);
+  for (const [account, trip] of trippedAccounts.entries()) {
+    const hour = usage(account, HOUR_MS, now);
+    const day = usage(account, DAY_MS, now);
+    const hourTransactions = transactionCount(account, HOUR_MS, now);
+    const dayTransactions = transactionCount(account, DAY_MS, now);
+    if (
+      now >= trip.recoverAfterMs &&
+      hour < hourlyLimit(account) &&
+      day < dailyLimit(account) &&
+      hourTransactions < hourlyTransactionLimit(account) &&
+      dayTransactions < dailyTransactionLimit(account)
+    ) {
+      trippedAccounts.delete(account);
+    }
+  }
   const accounts = new Set<string>([
     ...history.map((record) => record.account),
     ...trippedAccounts.keys(),
@@ -209,7 +229,7 @@ export function spendSnapshot(now = Date.now()): SpendSnapshot {
     const dailyPercent = Number((day * 10_000n) / dayLimit) / 100;
     const hourlyTransactionPercent = (hourTransactions / hourTxLimit) * 100;
     const dailyTransactionPercent = (dayTransactions / dayTxLimit) * 100;
-    const reason = trippedAccounts.get(account) ?? null;
+    const reason = trippedAccounts.get(account)?.reason ?? null;
     const warning =
       hourlyPercent >= 80 ||
       dailyPercent >= 80 ||
