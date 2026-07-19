@@ -4,6 +4,7 @@ import type { Deployment } from '../shared/deployment.js';
 import type { ResolutionService } from './resolution.js';
 import type { DemoArmService } from './arm.js';
 import { registerRoutes } from './routes.js';
+import type { CurrentBondPolicyReader } from './routes.js';
 import { normalizeApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import type { DemoJobService } from './demo-jobs.js';
@@ -41,6 +42,7 @@ export function buildServer(
   walletChallenge: WalletChallengeService,
   jobs: DemoJobService,
   repositoryPath = process.cwd(),
+  readCurrentBondPolicy?: CurrentBondPolicyReader,
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   const origins = allowedOrigins();
@@ -159,6 +161,7 @@ export function buildServer(
     walletChallenge,
     jobs,
     repositoryPath,
+    readCurrentBondPolicy,
   );
   registerRemoteMcp(server, repository, deployment);
   return server;

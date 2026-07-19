@@ -125,7 +125,8 @@ CREATE TABLE IF NOT EXISTS paid_quotes (
   submit_payload_hash TEXT,
   consumed_action_id INTEGER,
   created_at INTEGER NOT NULL,
-  consumed_at INTEGER
+  consumed_at INTEGER,
+  policy_snapshot_json TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS paid_quotes_settlement_tx_unique

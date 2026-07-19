@@ -29,6 +29,7 @@ import {
   startupDiagnostic,
 } from './startup.js';
 import { createFundingMonitor } from '../ops/funding-monitor.js';
+import { policyFor } from '../policy/engine.js';
 
 const repositoryPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -124,6 +125,55 @@ const server = buildServer(
   walletChallenge,
   jobs,
   repositoryPath,
+  async ({ amount, faultClass }) => {
+    const agent = `account-hash-${deployment.accounts.agent.accountHash}`;
+    let reputationScore: number | null = null;
+    try {
+      const reputationJson = await readContract<string>({
+        repository: repositoryPath,
+        config,
+        signerPath: join(repositoryPath, '.keys/agent.pem'),
+        contract: contracts.controller,
+        entrypoint: 'get_reputation',
+        arguments: ['--agent', agent],
+      });
+      const reputation = JSON.parse(reputationJson) as { score?: string };
+      reputationScore = reputation.score === undefined
+        ? null
+        : Number(reputation.score);
+    } catch {
+      const projected = repository.reputation(agent);
+      reputationScore = typeof projected?.score === 'number'
+        ? projected.score
+        : null;
+    }
+    try {
+      const expectedActualBond = await readContract<string>({
+        repository: repositoryPath,
+        config,
+        signerPath: join(repositoryPath, '.keys/agent.pem'),
+        contract: contracts.controller,
+        entrypoint: 'get_bond_required',
+        arguments: ['--amount', amount, '--agent', agent],
+      });
+      return {
+        source: 'controller_read',
+        reputationScore,
+        expectedActualBond,
+      };
+    } catch {
+      const policy = policyFor({
+        amount,
+        supportedFaultClass: faultClass,
+        reputationScore,
+      });
+      return {
+        source: 'repository_projection',
+        reputationScore,
+        expectedActualBond: policy.estimatedMinimumBond,
+      };
+    }
+  },
 );
 const host = process.env.HOST || '0.0.0.0';
 await server.listen({ host, port });

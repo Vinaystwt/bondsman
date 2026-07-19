@@ -109,6 +109,7 @@ export interface PaidQuoteRecord {
   consumedActionId: number | null;
   createdAt: number;
   consumedAt: number | null;
+  policySnapshot?: Record<string, unknown> | null;
 }
 
 function invoiceFromRow(row: Record<string, unknown>): InvoiceRecord {
@@ -361,8 +362,8 @@ export class Repository {
        (quote_hash, action_type, fault_class, verifier, amount, required_bond,
         challenge_window, quote_expiry, payer, settlement_tx, payment_amount,
         facilitator, status, submit_payload_hash, consumed_action_id,
-        created_at, consumed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, consumed_at, policy_snapshot_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(quote_hash) DO UPDATE SET
         action_type=excluded.action_type, fault_class=excluded.fault_class,
         verifier=excluded.verifier, amount=excluded.amount,
@@ -372,6 +373,7 @@ export class Repository {
         settlement_tx=excluded.settlement_tx,
         payment_amount=excluded.payment_amount,
         facilitator=excluded.facilitator,
+        policy_snapshot_json=COALESCE(paid_quotes.policy_snapshot_json, excluded.policy_snapshot_json),
         status=paid_quotes.status,
         submit_payload_hash=paid_quotes.submit_payload_hash,
         consumed_action_id=paid_quotes.consumed_action_id,
@@ -382,6 +384,7 @@ export class Repository {
       quote.quoteExpiry, quote.payer, quote.settlementTx, quote.paymentAmount,
       quote.facilitator, quote.status, quote.submitPayloadHash,
       quote.consumedActionId, quote.createdAt, quote.consumedAt,
+      quote.policySnapshot ? JSON.stringify(quote.policySnapshot) : null,
     );
   }
 
@@ -783,6 +786,10 @@ function deliveryAttestationFromRow(
 }
 
 function paidQuoteFromRow(row: Record<string, unknown>): PaidQuoteRecord {
+  const policySnapshotJson = row.policy_snapshot_json === null ||
+    row.policy_snapshot_json === undefined
+    ? null
+    : String(row.policy_snapshot_json);
   return {
     quoteHash: String(row.quote_hash),
     actionType: String(row.action_type) as PaidQuoteRecord['actionType'],
@@ -803,5 +810,8 @@ function paidQuoteFromRow(row: Record<string, unknown>): PaidQuoteRecord {
       row.consumed_action_id === null ? null : Number(row.consumed_action_id),
     createdAt: Number(row.created_at),
     consumedAt: row.consumed_at === null ? null : Number(row.consumed_at),
+    policySnapshot: policySnapshotJson
+      ? JSON.parse(policySnapshotJson) as Record<string, unknown>
+      : null,
   };
 }

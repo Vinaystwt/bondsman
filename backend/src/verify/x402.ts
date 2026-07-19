@@ -297,10 +297,27 @@ export function quoteResponse(options: {
     typeof reputationRow?.score === 'number' ? reputationRow.score : -20;
   const policy = policyFor({
     amount: amount.toString(),
-    faultClass,
+    supportedFaultClass: faultClass,
     reputationScore: reputation,
   });
   const requiredBond = BigInt(policy.estimatedBond);
+  const policySnapshot = {
+    schemaId: 'bondsman.quote-policy-snapshot.v1',
+    formulaVersion: policy.formulaVersion,
+    amount: amount.toString(),
+    faultClass,
+    reputationInput: {
+      source: 'repository_projection',
+      agent,
+      score: reputation,
+    },
+    bondBasisPoints: policy.bondBasisPoints,
+    riskTier: policy.riskTier,
+    quotedMinimumBond: policy.estimatedMinimumBond,
+    verifier: policy.verifier,
+    challengeWindow: policy.challengeWindowSeconds,
+    policyTimestamp: new Date().toISOString(),
+  };
   const quoteExpiry = new Date(Date.now() + 15 * 60_000).toISOString();
   const quoteHash =
     `0x${createHash('blake2b512')
@@ -320,9 +337,12 @@ export function quoteResponse(options: {
     verifier,
     riskTier: policy.riskTier.toUpperCase(),
     requiredBond: requiredBond.toString(),
+    quotedMinimumBond: requiredBond.toString(),
+    bondSemantics: 'minimum_required_bond',
     challengeWindow: policy.challengeWindowSeconds,
     agentReputation: reputation,
     policyModule: verifier,
+    policySnapshot,
     quoteExpiry,
     quoteHash,
     paymentReceipt: {
@@ -353,6 +373,7 @@ export function quoteResponse(options: {
     consumedActionId: null,
     createdAt: Date.now(),
     consumedAt: null,
+    policySnapshot,
   });
   return quote;
 }

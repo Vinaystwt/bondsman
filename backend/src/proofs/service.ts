@@ -8,8 +8,9 @@ import {
   paymentSection,
   reasoningCommitment,
 } from '../evidence/canonical.js';
+import { bondEconomicRelation } from '../evidence/bond-economics.js';
 
-const PROOF_SCHEMA_VERSION = 3;
+const PROOF_SCHEMA_VERSION = 4;
 
 function role(action: ActionRecord): string {
   return action.challengerType === 'watchdog' ? 'deterministic' : 'model-driven';
@@ -40,6 +41,10 @@ export function buildProof(
   const paidQuote = repository.paidQuoteForAction(action.actionId);
   const slashed = action.status === 'ResolvedSlash';
   const economics = actionEconomics(repository, action);
+  const bondEconomics = bondEconomicRelation({
+    quotedMinimumBond: paidQuote?.requiredBond,
+    actualPostedBond: action.bondPosted,
+  });
   const timeline: Record<string, unknown>[] = [
     { stage: 'initiate', transaction: 'initiate', actor: 'approver' },
     { stage: 'bond_posted', transaction: 'postBond', actor: 'approver' },
@@ -77,6 +82,7 @@ export function buildProof(
       challenger: action.challenger ? { account: action.challenger, role: role(action) } : null,
     },
     valueAtRisk: action.amount, bond: action.bondPosted,
+    bondEconomics,
     faultCondition: {
       class: action.faultClass ?? 'duplicate_claim',
       verifierModule: action.faultClass === 'delivery_contradiction' ? 'delivery-contradiction' : 'duplicate-claim',
@@ -84,7 +90,7 @@ export function buildProof(
       verificationDetails: verificationDetails(action, attestation),
     },
     payment: paymentSection(deployment, paidQuote),
-    paidQuote: paidQuoteSection(paidQuote),
+    paidQuote: paidQuoteSection(paidQuote, action.bondPosted),
     deliveryAttestation: deliveryAttestationSection(attestation),
     modelReasoning: reasoningCommitment(action),
     economicImpact: {

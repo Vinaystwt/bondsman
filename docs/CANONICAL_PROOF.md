@@ -47,14 +47,17 @@ Explorer links:
 
 The canonical proof for action `27` must include:
 
-- `proofSchemaVersion: 3`.
+- `proofSchemaVersion: 4`.
 - `payment` with protocol `x402`, scheme `exact`, network `casper:casper-test`, asset `WCSPR`, amount, payer, pay-to account, facilitator, settlement transaction, and explorer link.
-- `paidQuote` with `quoteHash`, verifier, required bond, quote expiry, status `consumed`, and `consumedActionId: 27`.
+- `paidQuote` with `quoteHash`, verifier, `requiredBond`, `quotedMinimumBond`, `bondSemantics: "minimum_required_bond"`, quote expiry, status `consumed`, and `consumedActionId: 27`.
+- `bondEconomics` proving the actual posted bond satisfies the quoted minimum.
 - `deliveryAttestation` with buyer public key, evidence root, event type, occurrence time, received time, signature verification flag, and `usedActionId: 27`.
 - `modelReasoning` with the original reasoning, committed hash, recomputed `blake2b256(reasoning)` hash, and `verifiedMatches`.
 - `economicImpact` with challenger reward and reserve credit sourced from the chain event when projected, plus current reserve snapshot and reputation delta source.
 
-The canonical receipt for action `27` must have `version: "2"` and `schemaId: "bondsman.portable-receipt.golden-path.v2"`. Its signature covers action identity, controller, actor, principal, bond, fault class, verifier, outcome, watchdog challenge, resolve transaction, chain-derived economics, reasoning commitment, delivery evidence, x402 settlement, and paid quote consumption. Changing the action id, settlement transaction, or quote hash must fail receipt verification.
+Action `27` is intentionally not an exact quote/bond match. The paid quote committed `requiredBond: "2600000000000"` as the minimum required bond, while the controller posted `bond: "2800000000000"`. The canonical relation is `overcollateralized`, with `minimumSatisfied: true`, `exactMatch: false`, and `bondDifference: "200000000000"`. The proof console is ready when the actual posted bond is greater than or equal to the quoted minimum; it is invalid when the actual posted bond is below that minimum.
+
+The canonical receipt for action `27` must have `version: "3"` and `schemaId: "bondsman.portable-receipt.golden-path.v3"`. Its signature covers action identity, controller, actor, principal, actual posted bond, quote minimum semantics, fault class, verifier, outcome, watchdog challenge, resolve transaction, chain-derived economics, reasoning commitment, delivery evidence, x402 settlement, and paid quote consumption. Changing the action id, settlement transaction, quote hash, or making the actual bond lower than the quoted minimum must fail receipt or canonical proof verification.
 
 ## Submit authorization model
 

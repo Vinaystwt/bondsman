@@ -2,20 +2,26 @@ const TOKEN_UNIT = 1_000_000_000n;
 
 export type FaultClass = 'duplicate_claim' | 'delivery_contradiction';
 export type ImplementationStatus = 'executable_now' | 'blueprint';
+export type FormulaVersion = 'bond-policy-v1';
 
 export interface BondPolicyInput {
   amount: string;
-  faultClass: FaultClass;
+  supportedFaultClass: FaultClass;
   reputationScore?: number | null;
 }
 
-export interface BondPolicyResult {
+export interface BondPriceResult {
   authority: 'deterministic_policy';
+  formulaVersion: FormulaVersion;
   riskTier: 'standard' | 'elevated' | 'high';
+  estimatedMinimumBond: string;
+  bondBasisPoints: number;
+}
+
+export interface BondPolicyResult extends BondPriceResult {
   faultClass: FaultClass;
   verifier: 'duplicate-claim-v2' | 'delivery-contradiction-v2';
   estimatedBond: string;
-  bondBasisPoints: number;
   challengeWindowSeconds: 1800;
   evidenceRequirements: string[];
   implementationStatus: ImplementationStatus;
@@ -52,21 +58,33 @@ export function riskTier(amount: string, bps: number): BondPolicyResult['riskTie
   return 'standard';
 }
 
-export function policyFor(input: BondPolicyInput): BondPolicyResult {
+export function priceBond(input: {
+  amount: string;
+  reputationScore?: number | null;
+}): BondPriceResult {
   const amount = positiveAmount(input.amount);
   const bps = bondBasisPoints(input);
-  const verifier = input.faultClass === 'delivery_contradiction'
+  return {
+    authority: 'deterministic_policy',
+    formulaVersion: 'bond-policy-v1',
+    riskTier: riskTier(input.amount, bps),
+    estimatedMinimumBond: ((amount * BigInt(bps)) / 10_000n).toString(),
+    bondBasisPoints: bps,
+  };
+}
+
+export function policyFor(input: BondPolicyInput): BondPolicyResult {
+  const price = priceBond(input);
+  const verifier = input.supportedFaultClass === 'delivery_contradiction'
     ? 'delivery-contradiction-v2'
     : 'duplicate-claim-v2';
   return {
-    authority: 'deterministic_policy',
-    riskTier: riskTier(input.amount, bps),
-    faultClass: input.faultClass,
+    ...price,
+    faultClass: input.supportedFaultClass,
     verifier,
-    estimatedBond: ((amount * BigInt(bps)) / 10_000n).toString(),
-    bondBasisPoints: bps,
+    estimatedBond: price.estimatedMinimumBond,
     challengeWindowSeconds: 1800,
-    evidenceRequirements: input.faultClass === 'delivery_contradiction'
+    evidenceRequirements: input.supportedFaultClass === 'delivery_contradiction'
       ? ['buyer-signed delivery attestation bound to action id and invoice id']
       : ['paid-claim collision against InvoicePool claim registry'],
     implementationStatus: 'executable_now',

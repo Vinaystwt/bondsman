@@ -46,6 +46,7 @@ import { runIntegrator } from '../integrator/service.js';
 import { spendSnapshot } from '../ops/spend-guard.js';
 import { dailyOpsSummary, recentApiErrors } from '../ops/observability.js';
 import { createIdempotencyStore } from './idempotency.js';
+import type { PaidQuoteRecord } from '../db/repositories.js';
 import {
   canonicalActionId,
   canonicalReplay,
@@ -63,6 +64,19 @@ import {
   publicWalletChallengeEnabled,
   requireOperator,
 } from './operator-auth.js';
+import { bondEconomicRelation } from '../evidence/bond-economics.js';
+import { policyFor } from '../policy/engine.js';
+
+export interface CurrentBondPolicy {
+  source: string;
+  reputationScore: number | null;
+  expectedActualBond: string;
+}
+
+export type CurrentBondPolicyReader = (input: {
+  amount: string;
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+}) => Promise<CurrentBondPolicy>;
 
 function latestSlashProof(
   repository: Repository,
@@ -156,6 +170,83 @@ function publicCapabilities() {
   };
 }
 
+function reputationScore(row: Record<string, unknown> | undefined): number | null {
+  return typeof row?.score === 'number' ? row.score : null;
+}
+
+function projectedBondPolicyReader(
+  repository: Repository,
+  deployment: Deployment,
+): CurrentBondPolicyReader {
+  return async ({ amount, faultClass }) => {
+    const agent = `account-hash-${deployment.accounts.agent.accountHash}`;
+    const reputation = reputationScore(repository.reputation(agent));
+    const policy = policyFor({
+      amount,
+      supportedFaultClass: faultClass,
+      reputationScore: reputation,
+    });
+    return {
+      source: 'repository_projection',
+      reputationScore: reputation,
+      expectedActualBond: policy.estimatedMinimumBond,
+    };
+  };
+}
+
+function snapshotValue(
+  snapshot: Record<string, unknown> | null | undefined,
+  key: string,
+): string | null {
+  const value = snapshot?.[key];
+  return typeof value === 'string' ? value : null;
+}
+
+async function assertQuotePolicyFresh(input: {
+  quote: PaidQuoteRecord;
+  readCurrentBondPolicy: CurrentBondPolicyReader;
+}) {
+  const { quote } = input;
+  const snapshot = quote.policySnapshot ?? null;
+  const snapshotErrors = [
+    snapshot && snapshotValue(snapshot, 'amount') !== quote.amount
+      ? 'snapshot amount does not match quote amount'
+      : null,
+    snapshot && snapshotValue(snapshot, 'faultClass') !== quote.faultClass
+      ? 'snapshot fault class does not match quote fault class'
+      : null,
+    snapshot && snapshotValue(snapshot, 'quotedMinimumBond') !== quote.requiredBond
+      ? 'snapshot minimum bond does not match quote requiredBond'
+      : null,
+  ].filter((error): error is string => Boolean(error));
+  if (snapshotErrors.length > 0) {
+    throw new ApiError(
+      409,
+      'QUOTE_POLICY_STALE',
+      `quote policy snapshot is inconsistent: ${snapshotErrors.join('; ')}`,
+    );
+  }
+  const current = await input.readCurrentBondPolicy({
+    amount: quote.amount,
+    faultClass: quote.faultClass,
+  });
+  const relation = bondEconomicRelation({
+    quotedMinimumBond: quote.requiredBond,
+    actualPostedBond: current.expectedActualBond,
+  });
+  if (!relation.minimumSatisfied) {
+    throw new ApiError(
+      409,
+      'QUOTE_POLICY_STALE',
+      'current controller policy would post less than the quoted minimum bond',
+    );
+  }
+  return {
+    ...current,
+    bondEconomics: relation,
+  };
+}
+
 async function readAssuranceSchema(repositoryPath: string) {
   const candidates = [
     join(repositoryPath, 'spec/bondsman-assurance-manifest-v1.schema.json'),
@@ -182,6 +273,8 @@ export function registerRoutes(
   walletChallenge: WalletChallengeService,
   jobs: DemoJobService,
   repositoryPath = process.cwd(),
+  readCurrentBondPolicy: CurrentBondPolicyReader =
+    projectedBondPolicyReader(repository, deployment),
 ): void {
   const startedAt = Date.now();
   const idempotency = createIdempotencyStore();
@@ -554,6 +647,10 @@ export function registerRoutes(
       if (!quote.payer) {
         throw new ApiError(409, 'QUOTE_PAYER_MISSING', 'paid quote does not include payer identity');
       }
+      const currentPolicy = await assertQuotePolicyFresh({
+        quote,
+        readCurrentBondPolicy,
+      });
       let submitAuth: { payer: string; nonceHash: string };
       try {
         submitAuth = verifySubmitAuthorization({
@@ -614,6 +711,10 @@ export function registerRoutes(
             faultClass: quote.faultClass,
             verifier: quote.verifier,
             requiredBond: quote.requiredBond,
+            quotedMinimumBond: quote.requiredBond,
+            expectedActualBond: currentPolicy.expectedActualBond,
+            policySource: currentPolicy.source,
+            bondEconomics: currentPolicy.bondEconomics,
             paymentReceipt: {
               network: 'casper-test',
               asset: 'WCSPR',

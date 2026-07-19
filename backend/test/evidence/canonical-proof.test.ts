@@ -17,6 +17,7 @@ import {
   verifyReceipt,
   type PortableReceipt,
 } from '../../src/receipts/service.js';
+import { validateCanonical } from '../../src/evidence/replay.js';
 
 const contractHash = `hash-${'1'.repeat(64)}`;
 const deployment = {
@@ -83,7 +84,7 @@ function seedCanonical(repository: Repository, actionId = 27, reasoningHash?: st
     faultClass: 'delivery_contradiction',
     verifier: 'delivery-contradiction-v2',
     amount: '50000000000000',
-    requiredBond: '2800000000000',
+    requiredBond: '2600000000000',
     challengeWindow: 1800,
     quoteExpiry: new Date(Date.now() + 60_000).toISOString(),
     payer: `00${'5'.repeat(64)}`,
@@ -144,9 +145,17 @@ describe('canonical proof evidence', () => {
       deployment,
     )!;
     expect(proof).toMatchObject({
-      proofSchemaVersion: 3,
+      proofSchemaVersion: 4,
       actionId: '27',
       faultClass: 'delivery_contradiction',
+      bondEconomics: {
+        quotedMinimumBond: '2600000000000',
+        actualPostedBond: '2800000000000',
+        bondRelation: 'overcollateralized',
+        bondDifference: '200000000000',
+        minimumSatisfied: true,
+        exactMatch: false,
+      },
       payment: {
         protocol: 'x402',
         asset: 'WCSPR',
@@ -156,6 +165,9 @@ describe('canonical proof evidence', () => {
       paidQuote: {
         consumedActionId: 27,
         status: 'consumed',
+        quotedMinimumBond: '2600000000000',
+        actualPostedBond: '2800000000000',
+        bondRelation: 'overcollateralized',
       },
       deliveryAttestation: {
         eventType: 'goods_not_received',
@@ -206,7 +218,44 @@ describe('canonical proof evidence', () => {
     database.close();
   });
 
-  it('signs receipt v2 golden-path evidence and rejects field tampering', async () => {
+  it('rejects canonical readiness when actual bond is below the quoted minimum', async () => {
+    const repositoryPath = join(
+      tmpdir(),
+      `bondsman-underbond-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    );
+    await mkdir(join(repositoryPath, '.keys'), { recursive: true });
+    const { privateKey } = generateKeyPairSync('ed25519');
+    await writeFile(
+      join(repositoryPath, '.keys/receipt-signer.pem'),
+      privateKey.export({ format: 'pem', type: 'pkcs8' }),
+      'utf8',
+    );
+    const database = openDatabase(':memory:');
+    const repository = new Repository(database);
+    seedCanonical(repository);
+    repository.upsertPaidQuote({
+      ...repository.paidQuoteForAction(27)!,
+      requiredBond: '2900000000000',
+    });
+
+    const validation = await validateCanonical({
+      repositoryPath,
+      repository,
+      deployment,
+      controllerHash: deployment.contracts.controller.contractHash,
+      actionId: 27,
+    });
+    expect(validation).toMatchObject({
+      ready: false,
+      errors: expect.arrayContaining([
+        'actual bond is below quoted minimum',
+      ]),
+    });
+    database.close();
+    await rm(repositoryPath, { recursive: true, force: true });
+  });
+
+  it('signs receipt v3 golden-path evidence and rejects field tampering', async () => {
     const repositoryPath = join(
       tmpdir(),
       `bondsman-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -236,8 +285,8 @@ describe('canonical proof evidence', () => {
     });
     expect(receipt).toMatchObject({
       protocol: 'bondsman',
-      version: '2',
-      schemaId: 'bondsman.portable-receipt.golden-path.v2',
+      version: '3',
+      schemaId: 'bondsman.portable-receipt.golden-path.v3',
       actionId: '27',
       challengerType: 'watchdog',
       watchdogChallengeTransaction: '8'.repeat(64),
@@ -247,6 +296,14 @@ describe('canonical proof evidence', () => {
       },
       paidQuote: {
         consumedActionId: 27,
+        bondRelation: 'overcollateralized',
+      },
+      bondEconomics: {
+        quotedMinimumBond: '2600000000000',
+        actualPostedBond: '2800000000000',
+        bondRelation: 'overcollateralized',
+        minimumSatisfied: true,
+        exactMatch: false,
       },
       deliveryEvidence: {
         evidenceRoot: `0x${'a'.repeat(64)}`,

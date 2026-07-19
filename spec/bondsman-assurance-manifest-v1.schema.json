@@ -73,8 +73,14 @@
         "bondBasisPoints": { "type": "integer", "minimum": 0 }
       }
     },
-    "faultClass": { "enum": ["duplicate_claim", "delivery_contradiction"] },
+    "faultClass": {
+      "type": ["string", "null"],
+      "enum": ["duplicate_claim", "delivery_contradiction", null]
+    },
     "verifier": {
+      "type": ["string", "null"]
+    },
+    "proposedFaultClass": {
       "type": ["string", "null"]
     },
     "proposedVerifier": {

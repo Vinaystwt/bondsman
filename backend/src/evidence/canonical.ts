@@ -8,6 +8,7 @@ import type {
 import type { Deployment } from '../shared/deployment.js';
 import { blake2b256 } from '../agent/hashing.js';
 import { x402Config } from '../verify/x402.js';
+import { bondEconomicRelation } from './bond-economics.js';
 
 export function explorer(hash: string | null | undefined): string | null {
   return hash && /^[0-9a-f]{64}$/.test(hash)
@@ -47,8 +48,15 @@ export function paymentSection(
   };
 }
 
-export function paidQuoteSection(quote?: PaidQuoteRecord) {
+export function paidQuoteSection(
+  quote?: PaidQuoteRecord,
+  actualPostedBond?: string | null,
+) {
   if (!quote) return null;
+  const relation = bondEconomicRelation({
+    quotedMinimumBond: quote.requiredBond,
+    actualPostedBond,
+  });
   return {
     quoteHash: quote.quoteHash,
     actionType: quote.actionType,
@@ -56,7 +64,10 @@ export function paidQuoteSection(quote?: PaidQuoteRecord) {
     verifier: quote.verifier,
     principalAmount: quote.amount,
     requiredBond: quote.requiredBond,
+    quotedMinimumBond: quote.requiredBond,
+    bondSemantics: 'minimum_required_bond',
     challengeWindow: quote.challengeWindow,
+    policySnapshot: quote.policySnapshot ?? null,
     issuedAt: new Date(quote.createdAt).toISOString(),
     expiresAt: quote.quoteExpiry,
     consumedAt: quote.consumedAt === null
@@ -64,6 +75,7 @@ export function paidQuoteSection(quote?: PaidQuoteRecord) {
       : new Date(quote.consumedAt).toISOString(),
     consumedActionId: quote.consumedActionId,
     status: quote.status,
+    ...(actualPostedBond === undefined ? {} : relation),
   };
 }
 

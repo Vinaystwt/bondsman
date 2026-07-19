@@ -64,6 +64,9 @@ export function openDatabase(path: string): Database.Database {
   if (!quoteColumns.has('submit_payload_hash')) {
     database.exec('ALTER TABLE paid_quotes ADD COLUMN submit_payload_hash TEXT');
   }
+  if (!quoteColumns.has('policy_snapshot_json')) {
+    database.exec('ALTER TABLE paid_quotes ADD COLUMN policy_snapshot_json TEXT');
+  }
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS paid_quotes_settlement_tx_unique
       ON paid_quotes(settlement_tx);

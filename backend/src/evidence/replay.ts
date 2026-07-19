@@ -9,6 +9,8 @@ import {
   verifyReceipt,
   type PortableReceipt,
 } from '../receipts/service.js';
+import { paidQuoteSection } from './canonical.js';
+import { bondEconomicRelation } from './bond-economics.js';
 
 export const CANONICAL_REPLAY_SCHEMA_ID = 'bondsman.canonical-replay.v1';
 export const CANONICAL_BUNDLE_SCHEMA_ID = 'bondsman.canonical-action-bundle.v1';
@@ -67,6 +69,10 @@ export async function validateCanonical(input: {
   const actionId = input.actionId ?? canonicalActionId();
   const action = input.repository.action(actionId);
   const quote = input.repository.paidQuoteForAction(actionId);
+  const bondEconomics = bondEconomicRelation({
+    quotedMinimumBond: quote?.requiredBond,
+    actualPostedBond: action?.bondPosted,
+  });
   const receipt = await issueReceipt({
     repositoryPath: input.repositoryPath,
     repository: input.repository,
@@ -84,6 +90,7 @@ export async function validateCanonical(input: {
     quote && quote.status !== 'consumed' ? 'paid quote is not consumed' : null,
     quote && quote.consumedActionId !== actionId ? 'paid quote consumedActionId mismatch' : null,
     quote && !quote.settlementTx ? 'settlement transaction missing' : null,
+    quote && action && !bondEconomics.minimumSatisfied ? 'actual bond is below quoted minimum' : null,
     action && !action.transactions.challenge ? 'challenge transaction missing' : null,
     action && !action.transactions.resolve ? 'resolution transaction missing' : null,
     !receipt ? 'receipt missing' : null,
@@ -164,6 +171,10 @@ export async function canonicalReplay(input: {
   const receiptVerification = verifyReceipt(receipt);
   const quote = input.repository.paidQuoteForAction(actionId)!;
   const attestation = input.repository.deliveryAttestationForAction(actionId);
+  const bondEconomics = bondEconomicRelation({
+    quotedMinimumBond: quote.requiredBond,
+    actualPostedBond: action.bondPosted,
+  });
   const checks = {
     paymentSettled: proof.payment && (proof.payment as { settled?: boolean }).settled === true,
     settlementTransactionPresent: Boolean(quote.settlementTx),
@@ -173,6 +184,11 @@ export async function canonicalReplay(input: {
     quoteConsumedActionId: quote.consumedActionId,
     quoteSingleUse: quote.status === 'consumed' && quote.consumedActionId === actionId,
     quoteReplayAllowed: false,
+    quotedBondPresent: Boolean(quote.requiredBond),
+    actualBondPresent: Boolean(action.bondPosted),
+    minimumBondSatisfied: bondEconomics.minimumSatisfied,
+    exactBondMatch: bondEconomics.exactMatch,
+    bondRelation: bondEconomics.bondRelation,
     reasoningCommitmentValid:
       (proof.modelReasoning as { verifiedMatches?: boolean }).verifiedMatches === true,
     deliveryAttestationValid:
@@ -192,6 +208,7 @@ export async function canonicalReplay(input: {
     proof,
     receipt,
     receiptVerification,
+    bondEconomics,
     checks,
     interactions: {
       liveQuoteProbe: {
@@ -231,6 +248,7 @@ async function committedBundle(repositoryPath: string) {
     receipt: bundle.receipt,
     receiptVerification: bundle.verification,
     checks: bundle.checks,
+    bondEconomics: bundle.bondEconomics,
     bundleChecksum: bundle.checksum,
   };
 }
@@ -262,8 +280,9 @@ export async function canonicalBundle(input: {
     proof: replay.proof,
     receipt: replay.receipt,
     verification: replay.receiptVerification,
+    bondEconomics: replay.bondEconomics,
     checks: replay.checks,
-    paidQuote: quote,
+    paidQuote: paidQuoteSection(quote ?? undefined, action?.bondPosted),
     settlementTransaction: quote?.settlementTx ?? null,
     challengeTransaction: action?.transactions.challenge ?? null,
     resolutionTransaction: action?.transactions.resolve ?? null,

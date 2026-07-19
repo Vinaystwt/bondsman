@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Deployment } from '../shared/deployment.js';
 import {
+  priceBond,
   policyFor,
   type FaultClass,
   type ImplementationStatus,
@@ -42,6 +43,8 @@ export interface AssuranceTemplate {
   executableNow: boolean;
   currentAdapter: string | null;
   supportedFaultClasses: FaultClass[];
+  proposedFaultClass: string | null;
+  proposedVerifier: string | null;
   objectiveEvidence: string[];
   casperValue: string;
   requiredFields: string[];
@@ -57,6 +60,8 @@ export const templates: AssuranceTemplate[] = [
     executableNow: true,
     currentAdapter: 'invoice_payout',
     supportedFaultClasses: ['delivery_contradiction'],
+    proposedFaultClass: null,
+    proposedVerifier: null,
     objectiveEvidence: ['buyer-signed delivery attestation'],
     casperValue: 'Turns Casper testnet actions into bonded RWA disbursement evidence.',
     requiredFields: ['amount', 'buyerPublicKey', 'delivery attestation schema'],
@@ -70,6 +75,8 @@ export const templates: AssuranceTemplate[] = [
     executableNow: true,
     currentAdapter: 'invoice_payout',
     supportedFaultClasses: ['duplicate_claim'],
+    proposedFaultClass: null,
+    proposedVerifier: null,
     objectiveEvidence: ['paid claim registry collision'],
     casperValue: 'Demonstrates deterministic verifier settlement against Casper contract state.',
     requiredFields: ['invoice claim hash'],
@@ -83,6 +90,8 @@ export const templates: AssuranceTemplate[] = [
     executableNow: false,
     currentAdapter: null,
     supportedFaultClasses: [],
+    proposedFaultClass: 'treasury_policy_violation',
+    proposedVerifier: 'treasury-policy-violation-v1-proposed',
     objectiveEvidence: ['multisig approval record', 'payment policy receipt'],
     casperValue: 'Would add accountable treasury automation using Casper receipts and verifiers.',
     requiredFields: ['treasury policy', 'approval quorum', 'recipient allowlist'],
@@ -96,6 +105,8 @@ export const templates: AssuranceTemplate[] = [
     executableNow: false,
     currentAdapter: null,
     supportedFaultClasses: [],
+    proposedFaultClass: 'execution_constraint_violation',
+    proposedVerifier: 'execution-constraint-violation-v1-proposed',
     objectiveEvidence: ['execution receipt', 'route and slippage oracle'],
     casperValue: 'Would expand agent-originated DeFi transactions with objective post-trade accountability.',
     requiredFields: ['route', 'max slippage', 'execution adapter'],
@@ -109,6 +120,8 @@ export const templates: AssuranceTemplate[] = [
     executableNow: false,
     currentAdapter: null,
     supportedFaultClasses: [],
+    proposedFaultClass: 'service_delivery_contradiction',
+    proposedVerifier: 'service-delivery-contradiction-v1-proposed',
     objectiveEvidence: ['service delivery attestation', 'x402 receipt'],
     casperValue: 'Connects Casper x402 settlement volume to accountable paid-service agents.',
     requiredFields: ['service SLA', 'delivery verifier', 'payer identity'],
@@ -247,23 +260,31 @@ export async function analyzeAssurance(input: AssuranceInput, options: {
       modelAvailable = false;
     }
   }
-  const faultClass: FaultClass = template.id === 'duplicate_invoice_test'
+  const reputationScore = input.counterpartyStatus === 'new' ? -60 : -20;
+  const executableFaultClass: FaultClass = template.id === 'duplicate_invoice_test'
     ? 'duplicate_claim'
     : 'delivery_contradiction';
-  const executablePolicy = policyFor({
+  const executablePolicy = template.executableNow
+    ? policyFor({
+        amount: input.amount,
+        supportedFaultClass: executableFaultClass,
+        reputationScore,
+      })
+    : null;
+  const price = priceBond({
     amount: input.amount,
-    faultClass,
-    reputationScore: input.counterpartyStatus === 'new' ? -60 : -20,
+    reputationScore,
   });
-  const policy = template.executableNow
-    ? executablePolicy
-    : {
-        ...executablePolicy,
-        verifier: 'proposed-verifier-required',
-        implementationStatus: 'blueprint' as const,
-        executableNow: false,
-        evidenceRequirements: template.objectiveEvidence,
-      };
+  const policy = executablePolicy ?? {
+    ...price,
+    faultClass: null,
+    verifier: null,
+    estimatedBond: price.estimatedMinimumBond,
+    challengeWindowSeconds: 1800 as const,
+    evidenceRequirements: template.objectiveEvidence,
+    implementationStatus: 'blueprint' as const,
+    executableNow: false,
+  };
   const boundaries = {
     submitsTransaction: false,
     makesPayment: false,
@@ -284,6 +305,7 @@ export async function analyzeAssurance(input: AssuranceInput, options: {
       id: template.id,
       name: template.name,
       implementationStatus: template.implementationStatus,
+      executableNow: template.executableNow,
     },
     actionCategory: template.category,
     amount: { value: input.amount, asset: 'csprUSD', decimals: 9 },
@@ -295,14 +317,16 @@ export async function analyzeAssurance(input: AssuranceInput, options: {
       estimatedBond: policy.estimatedBond,
       bondBasisPoints: policy.bondBasisPoints,
     },
-    faultClass: policy.faultClass,
-    verifier: template.executableNow ? policy.verifier : null,
-    proposedVerifier: template.executableNow ? null : policy.verifier,
+    faultClass: executablePolicy?.faultClass ?? null,
+    verifier: executablePolicy?.verifier ?? null,
+    proposedFaultClass: template.executableNow ? null : template.proposedFaultClass,
+    proposedVerifier: template.executableNow ? null : template.proposedVerifier,
     challengeWindowSeconds: policy.challengeWindowSeconds,
     evidenceRequirements: policy.evidenceRequirements,
     implementationStatus: template.implementationStatus,
+    executableNow: template.executableNow,
     quoteRequestShape: template.executableNow
-      ? { method: 'POST', path: '/v1/actions/quote', amount: input.amount, faultClass }
+      ? { method: 'POST', path: '/v1/actions/quote', amount: input.amount, faultClass: executablePolicy!.faultClass }
       : null,
     submitRequirements: template.executableNow
       ? ['paid quote hash', 'payer submit authorization', 'one-use nonce']

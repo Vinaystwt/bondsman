@@ -15,3 +15,5 @@ The model path is used only when `ANTHROPIC_API_KEY` is present and `ASSURANCE_S
 Required input fields are `templateId`, `description`, `amount`, `agentConfidence`, `counterpartyStatus`, `evidenceSource`, `maxLossBps`, and `urgency`. Unknown fields are rejected.
 
 The schema lives at `spec/bondsman-assurance-manifest-v1.schema.json`.
+
+Executable templates are `invoice_delivery` and `duplicate_invoice_test`; they expose deployed fault classes and verifiers and can describe the paid quote request shape. Blueprint templates are `treasury_payment`, `dex_execution`, and `x402_service_delivery`; they must return `implementationStatus: "blueprint"`, `executableNow: false`, `faultClass: null`, `verifier: null`, `quoteRequestShape: null`, and `submitRequirements: []`. Their future integration intent is carried only in `proposedFaultClass` and `proposedVerifier`.

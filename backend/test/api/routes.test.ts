@@ -146,7 +146,7 @@ function seedCanonical(repository: Repository) {
     faultClass: 'delivery_contradiction',
     verifier: 'delivery-contradiction-v2',
     amount: '50000000000000',
-    requiredBond: '2800000000000',
+    requiredBond: '2600000000000',
     challengeWindow: 1800,
     quoteExpiry: new Date(Date.now() + 60_000).toISOString(),
     payer: `00${'5'.repeat(64)}`,
@@ -712,6 +712,64 @@ describe('REST routes', () => {
         },
       },
     });
+    const duplicate = await context.server.inject({
+      method: 'POST',
+      url: '/api/assurance/analyze',
+      payload: {
+        templateId: 'duplicate_invoice_test',
+        description: 'Detect and slash a repeated invoice claim fingerprint.',
+        amount: '50000000000000',
+        agentConfidence: 0.9,
+        counterpartyStatus: 'known',
+        evidenceSource: 'paid_claim_registry',
+        maxLossBps: 600,
+        urgency: 'normal',
+      },
+    });
+    expect(duplicate.statusCode).toBe(200);
+    expect(duplicate.json().manifest).toMatchObject({
+      implementationStatus: 'executable_now',
+      executableNow: true,
+      faultClass: 'duplicate_claim',
+      verifier: 'duplicate-claim-v2',
+      proposedFaultClass: null,
+      proposedVerifier: null,
+    });
+
+    for (const [templateId, proposedFaultClass] of [
+      ['treasury_payment', 'treasury_policy_violation'],
+      ['dex_execution', 'execution_constraint_violation'],
+      ['x402_service_delivery', 'service_delivery_contradiction'],
+    ] as const) {
+      const blueprint = await context.server.inject({
+        method: 'POST',
+        url: '/api/assurance/analyze',
+        payload: {
+          templateId,
+          description: `Blueprint analysis for ${templateId} without deployed verifier claims.`,
+          amount: '50000000000000',
+          agentConfidence: 0.84,
+          counterpartyStatus: 'new',
+          evidenceSource: templateId === 'treasury_payment'
+            ? 'multisig_approval'
+            : templateId === 'dex_execution'
+              ? 'execution_receipt'
+              : 'signed_delivery_attestation',
+          maxLossBps: 600,
+          urgency: 'normal',
+        },
+      });
+      expect(blueprint.statusCode).toBe(200);
+      expect(blueprint.json().manifest).toMatchObject({
+        implementationStatus: 'blueprint',
+        executableNow: false,
+        faultClass: null,
+        verifier: null,
+        proposedFaultClass,
+        quoteRequestShape: null,
+        submitRequirements: [],
+      });
+    }
     expect(context.repository.listActions()).toHaveLength(before);
     await context.server.close();
     context.database.close();
@@ -725,6 +783,13 @@ describe('REST routes', () => {
       actionId: '27',
       faultClass: 'delivery_contradiction',
       paidQuote: { status: 'consumed', consumedActionId: 27 },
+      bondEconomics: {
+        quotedMinimumBond: '2600000000000',
+        actualPostedBond: '2800000000000',
+        bondRelation: 'overcollateralized',
+        minimumSatisfied: true,
+        exactMatch: false,
+      },
     });
 
     const replay = await context.server.inject('/api/replay/canonical');
@@ -735,6 +800,9 @@ describe('REST routes', () => {
       checks: {
         quoteSingleUse: true,
         quoteReplayAllowed: false,
+        minimumBondSatisfied: true,
+        exactBondMatch: false,
+        bondRelation: 'overcollateralized',
         receiptValid: true,
       },
     });
@@ -1461,6 +1529,87 @@ describe('REST routes', () => {
     expect(replay.statusCode).toBe(409);
     expect(replay.json().code).toBe('SUBMIT_AUTHORIZATION_REPLAY');
 
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('rejects stale quote policy before nonce consumption or reservation', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    const payerKey = casperEd25519Key();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        success: true,
+        transaction: 'a'.repeat(64),
+        network: 'casper:casper-test',
+        payer: payerKey.payer,
+      })),
+    }));
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: { signature: '00' },
+    })).toString('base64');
+    const paid = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: {
+        amount: '50000000000000',
+        faultClass: 'delivery_contradiction',
+      },
+    });
+    expect(paid.statusCode).toBe(200);
+    const quoteHash = paid.json().quoteHash;
+    const quote = context.repository.paidQuote(quoteHash)!;
+    context.repository.upsertPaidQuote({
+      ...quote,
+      requiredBond: '9999999999999999',
+      policySnapshot: {
+        ...(quote.policySnapshot ?? {}),
+        quotedMinimumBond: '9999999999999999',
+      },
+    });
+    const buyerPublicKey = Buffer.alloc(32, 7).toString('base64');
+    const authorization = submitAuthorization({
+      ...payerKey,
+      quoteHash,
+      faultClass: 'delivery_contradiction',
+      buyerPublicKey,
+      nonce: 'stale-policy'.padEnd(32, '0'),
+    });
+    const rejected = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        submitAuthorization: authorization,
+      },
+    });
+    expect(rejected.statusCode).toBe(409);
+    expect(rejected.json()).toMatchObject({
+      code: 'QUOTE_POLICY_STALE',
+    });
+    expect(context.repository.paidQuote(quoteHash)).toMatchObject({
+      status: 'paid',
+      consumedActionId: null,
+      submitPayloadHash: null,
+    });
+    const nonces = context.database
+      .prepare('SELECT COUNT(*) AS count FROM submit_authorization_nonces')
+      .get() as { count: number };
+    expect(nonces.count).toBe(0);
+    expect(context.arm.submitPaidAction).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
     if (originalKey === undefined) {
       delete process.env.X402_FACILITATOR_API_KEY;

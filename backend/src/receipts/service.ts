@@ -10,12 +10,16 @@ import {
   paymentSection,
   reasoningCommitment,
 } from '../evidence/canonical.js';
+import {
+  bondEconomicRelation,
+  type BondEconomicRelation,
+} from '../evidence/bond-economics.js';
 
-const RECEIPT_SCHEMA_ID = 'bondsman.portable-receipt.golden-path.v2';
+const RECEIPT_SCHEMA_ID = 'bondsman.portable-receipt.golden-path.v3';
 
 export interface PortableReceipt {
   protocol: 'bondsman';
-  version: '2';
+  version: '3';
   schemaId: typeof RECEIPT_SCHEMA_ID;
   network: 'casper-test';
   actionId: string;
@@ -50,6 +54,7 @@ export interface PortableReceipt {
   deliveryEvidence: ReturnType<typeof deliveryAttestationSection>;
   payment: ReturnType<typeof paymentSection>;
   paidQuote: ReturnType<typeof paidQuoteSection>;
+  bondEconomics: BondEconomicRelation;
   issuedAt: string;
   signerPublicKey: string;
   signature: string;
@@ -79,7 +84,7 @@ function isCurrentReceipt(value: unknown): value is PortableReceipt {
     value &&
     typeof value === 'object' &&
     (value as Record<string, unknown>).protocol === 'bondsman' &&
-    (value as Record<string, unknown>).version === '2' &&
+    (value as Record<string, unknown>).version === '3' &&
     (value as Record<string, unknown>).schemaId === RECEIPT_SCHEMA_ID,
   );
 }
@@ -108,7 +113,7 @@ export async function issueReceipt(input: {
   const economics = actionEconomics(input.repository, action);
   const receipt: PortableReceipt = {
     protocol: 'bondsman',
-    version: '2',
+    version: '3',
     schemaId: RECEIPT_SCHEMA_ID,
     network: 'casper-test',
     actionId: String(action.actionId),
@@ -145,7 +150,11 @@ export async function issueReceipt(input: {
     reasoningCommitment: reasoningCommitment(action),
     deliveryEvidence: deliveryAttestationSection(attestation),
     payment: paymentSection(input.deployment, paidQuote),
-    paidQuote: paidQuoteSection(paidQuote),
+    paidQuote: paidQuoteSection(paidQuote, action.bondPosted),
+    bondEconomics: bondEconomicRelation({
+      quotedMinimumBond: paidQuote?.requiredBond,
+      actualPostedBond: action.bondPosted,
+    }),
     issuedAt: new Date().toISOString(),
     signerPublicKey: publicKey,
     signature: '',
