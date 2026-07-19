@@ -343,6 +343,13 @@ export class Repository {
     return result.changes === 1;
   }
 
+  releaseDeliveryEvidence(evidenceRoot: string, actionId: number): void {
+    this.database.prepare(
+      `UPDATE delivery_attestations SET used_action_id = NULL
+       WHERE evidence_root = ? AND used_action_id = ?`,
+    ).run(evidenceRoot, actionId);
+  }
+
   cacheProof(controllerHash: string, actionId: number, proof: unknown): void {
     this.database.prepare(
       `INSERT INTO proof_cache (controller_hash, action_id, proof_json, cached_at)

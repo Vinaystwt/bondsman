@@ -89,4 +89,115 @@ describe('watchdog service', () => {
     });
     database.close();
   });
+
+  it('catches a delivery contradiction with verifier evidence once', async () => {
+    const database = openDatabase(':memory:');
+    const repository = new Repository(database);
+    repository.upsertAction({
+      actionId: 5,
+      invoiceId: 5,
+      agent: 'account-hash-agent',
+      amount: '100',
+      claimHash: 'claim',
+      reasoning: 'Delivered',
+      reasoningHash: 'bb',
+      bondRequired: '20',
+      bondPosted: '20',
+      windowEnd: 20_000,
+      status: 'Executed',
+      challenger: null,
+      challengerType: null,
+      duplicateProven: false,
+      reservedForManual: false,
+      transactions: {},
+    });
+    repository.upsertDeliveryAttestation({
+      evidenceRoot: '0xabc',
+      invoiceId: 5,
+      actionId: 5,
+      eventType: 'delivery_rejected',
+      occurredAt: 11_000,
+      buyerPublicKey: 'key',
+      signature: 'signature',
+      payload: { evidenceHex: 'ab'.repeat(120) },
+      receivedAt: 12_000,
+      usedActionId: null,
+    });
+    const transact = vi.fn().mockResolvedValue({
+      challenge: 'c'.repeat(64),
+      resolve: 'd'.repeat(64),
+    });
+    const service = createWatchdogService({
+      repository,
+      watchdogAddress: 'account-hash-watchdog',
+      delayMs: 0,
+      now: () => 10_000,
+      sleep: vi.fn().mockResolvedValue(undefined),
+      transact,
+      reasoning: async (action) => `${action.faultClass}:${action.actionId}`,
+    });
+
+    await expect(service.scanOnce()).resolves.toHaveLength(1);
+    await expect(service.scanOnce()).resolves.toHaveLength(0);
+    expect(transact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        faultClass: 'delivery_contradiction',
+        evidence: Buffer.from('ab'.repeat(120), 'hex'),
+      }),
+    );
+    expect(repository.action(5)).toMatchObject({
+      status: 'ResolvedSlash',
+      faultClass: 'delivery_contradiction',
+      evidenceRoot: '0xabc',
+    });
+    database.close();
+  });
+
+  it('releases delivery evidence when the on-chain challenge fails', async () => {
+    const database = openDatabase(':memory:');
+    const repository = new Repository(database);
+    repository.upsertAction({
+      actionId: 6,
+      invoiceId: 6,
+      agent: 'account-hash-agent',
+      amount: '100',
+      claimHash: 'claim',
+      reasoning: 'Delivered',
+      reasoningHash: 'bb',
+      bondRequired: '20',
+      bondPosted: '20',
+      windowEnd: 20_000,
+      status: 'Executed',
+      challenger: null,
+      challengerType: null,
+      duplicateProven: false,
+      reservedForManual: false,
+      transactions: {},
+    });
+    repository.upsertDeliveryAttestation({
+      evidenceRoot: '0xdef',
+      invoiceId: 6,
+      actionId: 6,
+      eventType: 'delivery_rejected',
+      occurredAt: 11_000,
+      buyerPublicKey: 'key',
+      signature: 'signature',
+      payload: { evidenceHex: 'cd'.repeat(120) },
+      receivedAt: 12_000,
+      usedActionId: null,
+    });
+    const service = createWatchdogService({
+      repository,
+      watchdogAddress: 'account-hash-watchdog',
+      delayMs: 0,
+      now: () => 10_000,
+      sleep: vi.fn().mockResolvedValue(undefined),
+      transact: vi.fn().mockRejectedValue(new Error('rpc failed')),
+      reasoning: async () => 'delivery contradiction',
+    });
+
+    await expect(service.scanOnce()).rejects.toThrow('rpc failed');
+    expect(repository.deliveryAttestationForAction(6)?.usedActionId).toBeNull();
+    database.close();
+  });
 });

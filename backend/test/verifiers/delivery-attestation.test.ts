@@ -1,4 +1,4 @@
-import { createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
+import { createPublicKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { canonicalDeliveryPayload, verifyDeliveryAttestation } from '../../src/verifiers/delivery-attestation.js';
 
@@ -7,13 +7,14 @@ describe('delivery attestation verifier', () => {
     const keys = generateKeyPairSync('ed25519');
     const input = {
       invoiceId: 7, actionId: 42, eventType: 'goods_not_received' as const,
-      occurredAt: 1_785_000_000_000, nonce: 'buyer-event-42',
+      occurredAt: 1_785_000_000_000, nonce: randomBytes(32).toString('hex'),
       buyerPublicKey: createPublicKey(keys.privateKey).export({ type: 'spki', format: 'der' }).toString('base64'),
       signature: '',
     };
-    input.signature = sign(null, Buffer.from(canonicalDeliveryPayload(input)), keys.privateKey).toString('base64');
+    input.signature = sign(null, canonicalDeliveryPayload(input), keys.privateKey).toString('base64');
     const attestation = verifyDeliveryAttestation(input);
     expect(attestation.evidenceRoot).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(attestation.payload.evidenceHex).toMatch(/^[0-9a-f]{240}$/);
     expect(attestation.usedActionId).toBeNull();
   });
 

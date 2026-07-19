@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
 import type { Deployment } from '../shared/deployment.js';
@@ -38,6 +39,8 @@ interface ChainAction {
   window_end: string;
   status: string;
   challenger: string;
+  fault_class?: string;
+  evidence_root?: string;
 }
 
 function normalizeAddress(value: string): string {
@@ -51,6 +54,12 @@ function normalizeAddress(value: string): string {
 function bytesHex(value: string): string {
   const values = value.match(/\d+/g)?.map(Number) ?? [];
   return Buffer.from(values).toString('hex');
+}
+
+function evidenceCommitment(faultClass: string, evidenceHex: string): string | null {
+  if (!evidenceHex) return null;
+  if (faultClass !== 'delivery_contradiction') return `0x${evidenceHex}`;
+  return `0x${createHash('blake2b512').update(Buffer.from(evidenceHex, 'hex')).digest('hex').slice(0, 64)}`;
 }
 
 async function optionalJson<T>(path: string): Promise<T | undefined> {
@@ -223,6 +232,12 @@ export async function reconcileChain(
         entrypoint: 'is_action_duplicate',
         arguments: ['--action_id', String(actionId)],
       })) === 'true';
+    const faultClass = action.fault_class === 'delivery_contradiction'
+      ? 'delivery_contradiction'
+      : 'duplicate_claim';
+    const evidenceRoot = action.evidence_root
+      ? bytesHex(action.evidence_root)
+      : '';
     const record: ActionRecord = {
       actionId,
       invoiceId: Number(action.invoice_id),
@@ -258,6 +273,11 @@ export async function reconcileChain(
               : 'external-wallet',
       controllerHash,
       duplicateProven,
+      faultClass,
+      evidenceRoot:
+        evidenceCommitment(faultClass, evidenceRoot) ??
+        projected?.evidenceRoot ??
+        null,
       reservedForManual: projected?.reservedForManual ?? false,
       transactions: {
         ...Object.fromEntries(
@@ -335,22 +355,38 @@ export async function resolveExpiredClean(
   options: ReconcileOptions,
 ): Promise<string[]> {
   const hashes: string[] = [];
+  const failures: Record<string, string> = {};
   const signerPath = join(options.repositoryPath, '.keys/agent.pem');
   const contracts = activeContracts(options.deployment);
   for (const actionId of options.repository.expiredCleanActions(
     Date.now(),
   )) {
-    hashes.push(
-      await callContract({
+    try {
+      hashes.push(await callContract({
         repository: options.repositoryPath,
         config: options.config,
         signerPath,
         contract: contracts.controller,
         entrypoint: 'resolve_action',
         arguments: ['--action_id', String(actionId)],
-      }),
-    );
+      }));
+    } catch (error) {
+      failures[String(actionId)] =
+        error instanceof Error ? error.message : String(error);
+    }
   }
   if (hashes.length) await reconcileChain(options);
+  if (Object.keys(failures).length) {
+    options.repository.setSystemState('listener_expiry_resolution', {
+      ok: false,
+      failedAt: new Date().toISOString(),
+      failures,
+    });
+  } else {
+    options.repository.setSystemState('listener_expiry_resolution', {
+      ok: true,
+      checkedAt: new Date().toISOString(),
+    });
+  }
   return hashes;
 }

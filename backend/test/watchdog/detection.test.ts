@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ActionRecord } from '../../src/db/repositories.js';
-import { detectDuplicateActions } from '../../src/watchdog/detection.js';
+import type {
+  ActionRecord,
+  DeliveryAttestationRecord,
+} from '../../src/db/repositories.js';
+import {
+  detectDeliveryContradictions,
+  detectDuplicateActions,
+} from '../../src/watchdog/detection.js';
 
 function action(
   actionId: number,
@@ -65,6 +71,51 @@ describe('detectDuplicateActions', () => {
           }),
           action(3, 'collision', { windowEnd: 9_999 }),
         ],
+        10_000,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('detectDeliveryContradictions', () => {
+  const attestation: DeliveryAttestationRecord = {
+    evidenceRoot: '0xabc',
+    invoiceId: 1,
+    actionId: 1,
+    eventType: 'delivery_rejected',
+    occurredAt: 11_000,
+    buyerPublicKey: 'key',
+    signature: 'signature',
+    payload: { evidenceHex: 'aa'.repeat(120) },
+    receivedAt: 12_000,
+    usedActionId: null,
+  };
+
+  it('flags an executed unreserved action with unused verifier evidence', () => {
+    const result = detectDeliveryContradictions(
+      [action(1, 'claim', { duplicateProven: false })],
+      () => attestation,
+      10_000,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.action.actionId).toBe(1);
+    expect(result[0]!.evidence).toHaveLength(120);
+  });
+
+  it('skips expired, reserved, challenged, and already used evidence', () => {
+    expect(
+      detectDeliveryContradictions(
+        [
+          action(1, 'claim', { windowEnd: 9_999 }),
+          action(2, 'claim', { reservedForManual: true }),
+          action(3, 'claim', { challenger: 'account-hash-human' }),
+          action(4, 'claim'),
+        ],
+        (actionId) =>
+          actionId === 4
+            ? { ...attestation, actionId, usedActionId: 99 }
+            : attestation,
         10_000,
       ),
     ).toEqual([]);

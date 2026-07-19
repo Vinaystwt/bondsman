@@ -111,6 +111,8 @@ export function registerRoutes(
       watchdog: { running: watchdog.running, lastCatch: watchdog.recentCatches[0]?.timestamp ?? null, totalEarned: watchdog.totalRewardEarned },
       integrator: repository.systemState<{ lastRun?: string }>('integrator')?.value ?? { running: false, lastRun: null },
       listener: repository.systemState('listener')?.value ?? { running: false },
+      expiryResolution:
+        repository.systemState('listener_expiry_resolution')?.value ?? null,
       readyPool: {
         manualCases: demoReadyResponse(repository, currentController).cases.length,
         watchdogCases: repository.listActions().filter((action) => action.controllerHash === currentController && !action.reservedForManual && action.status === 'Executed').length,

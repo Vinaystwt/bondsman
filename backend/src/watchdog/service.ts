@@ -3,7 +3,17 @@ import type {
   Repository,
   WatchdogCatchRecord,
 } from '../db/repositories.js';
-import { detectDuplicateActions } from './detection.js';
+import {
+  detectDeliveryContradictions,
+  detectDuplicateActions,
+} from './detection.js';
+
+export interface WatchdogChallengeCandidate {
+  action: ActionRecord;
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  evidence: Buffer;
+  evidenceRoot: string | null;
+}
 
 interface WatchdogServiceOptions {
   repository: Repository;
@@ -12,7 +22,7 @@ interface WatchdogServiceOptions {
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
   transact: (
-    actionId: number,
+    candidate: WatchdogChallengeCandidate,
   ) => Promise<{ challenge: string; resolve: string }>;
   reasoning: (action: ActionRecord) => Promise<string>;
   reconcile?: () => Promise<void>;
@@ -48,24 +58,88 @@ export function createWatchdogService(
   return {
     async scanOnce() {
       const caught: WatchdogCatchRecord[] = [];
-      const duplicates = detectDuplicateActions(
+      const duplicateCandidates = detectDuplicateActions(
         options.repository.listActions(),
         now(),
-      ).filter(
-        (action) => !options.repository.hasWatchdogCatch(action.actionId),
-      );
-      for (const candidate of duplicates) {
+      )
+        .filter(
+          (action) =>
+            !options.repository.hasWatchdogCatch(action.actionId),
+        )
+        .map((action): WatchdogChallengeCandidate => ({
+          action,
+          faultClass: 'duplicate_claim',
+          evidence: Buffer.from([0]),
+          evidenceRoot: null,
+        }));
+      const deliveryCandidates = detectDeliveryContradictions(
+        options.repository.listActions(),
+        (actionId) =>
+          options.repository.deliveryAttestationForAction(actionId),
+        now(),
+      )
+        .filter(
+          ({ action }) =>
+            !options.repository.hasWatchdogCatch(action.actionId),
+        )
+        .map(
+          ({ action, attestation, evidence }): WatchdogChallengeCandidate => ({
+            action,
+            faultClass: 'delivery_contradiction',
+            evidence,
+            evidenceRoot: attestation.evidenceRoot,
+          }),
+        );
+      for (const candidate of [
+        ...duplicateCandidates,
+        ...deliveryCandidates,
+      ]) {
         await sleep(options.delayMs);
-        const current = options.repository.action(candidate.actionId);
+        const current = options.repository.action(candidate.action.actionId);
         if (!current) continue;
-        const stillEligible = detectDuplicateActions(
-          options.repository.listActions(),
-          now(),
-        ).some((action) => action.actionId === current.actionId);
+        const stillEligible = candidate.faultClass === 'duplicate_claim'
+          ? detectDuplicateActions(
+              options.repository.listActions(),
+              now(),
+            ).some((action) => action.actionId === current.actionId)
+          : detectDeliveryContradictions(
+              options.repository.listActions(),
+              (actionId) =>
+                options.repository.deliveryAttestationForAction(actionId),
+              now(),
+            ).some(({ action }) => action.actionId === current.actionId);
         if (!stillEligible) continue;
+        if (
+          candidate.evidenceRoot &&
+          !options.repository.useDeliveryEvidence(
+            candidate.evidenceRoot,
+            current.actionId,
+          )
+        ) {
+          continue;
+        }
 
-        const reasoning = await options.reasoning(current);
-        const transactions = await options.transact(current.actionId);
+        const candidateAction = {
+          ...current,
+          faultClass: candidate.faultClass,
+          evidenceRoot: candidate.evidenceRoot,
+        };
+        const reasoning = await options.reasoning(candidateAction);
+        let transactions: { challenge: string; resolve: string };
+        try {
+          transactions = await options.transact({
+            ...candidate,
+            action: current,
+          });
+        } catch (error) {
+          if (candidate.evidenceRoot) {
+            options.repository.releaseDeliveryEvidence(
+              candidate.evidenceRoot,
+              current.actionId,
+            );
+          }
+          throw error;
+        }
         if (options.reconcile) await options.reconcile();
         const record: WatchdogCatchRecord = {
           actionId: current.actionId,
@@ -76,11 +150,13 @@ export function createWatchdogService(
           timestamp: new Date(now()).toISOString(),
         };
         options.repository.upsertAction({
-          ...current,
+          ...candidateAction,
           status: 'ResolvedSlash',
           challenger: options.watchdogAddress,
           challengerType: 'watchdog',
           challengeSigning: 'watchdog-key',
+          faultClass: candidate.faultClass,
+          evidenceRoot: candidate.evidenceRoot,
           transactions: {
             ...current.transactions,
             challenge: transactions.challenge,

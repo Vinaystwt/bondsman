@@ -2,7 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
-import { callContract } from '../casper/odra-cli.js';
+import { bytesArgument, callContract } from '../casper/odra-cli.js';
 import { activeContracts, v2Enabled } from '../casper/contracts.js';
 import { loadPrivateKey } from '../casper/keys.js';
 import { SignerQueue } from '../casper/signer-queue.js';
@@ -65,8 +65,13 @@ const reconcile = () =>
     repository,
   });
 const signerQueue = new SignerQueue();
-const transact = (actionId: number) =>
+const transact = (candidate: {
+  action: { actionId: number };
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  evidence: Buffer;
+}) =>
   signerQueue.run(async () => {
+    const actionId = candidate.action.actionId;
     const challenge = await callContract({
       repository: repositoryPath,
       config,
@@ -79,9 +84,9 @@ const transact = (actionId: number) =>
         ...(v2Enabled(deployment)
           ? [
               '--fault_class',
-              'duplicate_claim',
+              candidate.faultClass,
               '--evidence',
-              '0',
+              bytesArgument(candidate.evidence),
             ]
           : []),
       ],
