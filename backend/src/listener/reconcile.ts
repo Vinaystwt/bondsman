@@ -43,6 +43,17 @@ interface ChainAction {
   evidence_root?: string;
 }
 
+interface ExpiryResolutionState {
+  ok: boolean;
+  checkedAt?: string;
+  failedAt?: string;
+  skippedAt?: string;
+  reason?: string;
+  failures?: Record<string, string>;
+}
+
+const EXPIRY_FAILURE_COOLDOWN_MS = 60 * 60_000;
+
 function normalizeAddress(value: string): string {
   const account = value.match(/Key::Account\(([0-9a-f]{64})\)/)?.[1];
   if (account) return `account-hash-${account}`;
@@ -358,6 +369,30 @@ export async function resolveExpiredClean(
   const failures: Record<string, string> = {};
   const signerPath = join(options.repositoryPath, '.keys/agent.pem');
   const contracts = activeContracts(options.deployment);
+  const previous =
+    options.repository.systemState<ExpiryResolutionState>(
+      'listener_expiry_resolution',
+    )?.value;
+  const previousFailedAt = previous?.failedAt
+    ? Date.parse(previous.failedAt)
+    : 0;
+  const previousFundingBlocked = Object.values(
+    previous?.failures ?? {},
+  ).some((failure) =>
+    /insufficient balance|SPENDING_CIRCUIT_TRIPPED/i.test(failure),
+  );
+  if (
+    previous?.ok === false &&
+    previousFundingBlocked &&
+    Date.now() - previousFailedAt < EXPIRY_FAILURE_COOLDOWN_MS
+  ) {
+    options.repository.setSystemState('listener_expiry_resolution', {
+      ...previous,
+      skippedAt: new Date().toISOString(),
+      reason: 'cooling down after funding or spend-limit failure',
+    });
+    return hashes;
+  }
   for (const actionId of options.repository.expiredCleanActions(
     Date.now(),
   )) {
@@ -404,6 +439,13 @@ export async function resolveExpiredClean(
     } catch (error) {
       failures[String(actionId)] =
         error instanceof Error ? error.message : String(error);
+      if (
+        /insufficient balance|SPENDING_CIRCUIT_TRIPPED/i.test(
+          failures[String(actionId)] ?? '',
+        )
+      ) {
+        break;
+      }
     }
   }
   if (hashes.length) await reconcileChain(options);
