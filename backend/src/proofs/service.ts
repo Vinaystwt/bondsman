@@ -1,5 +1,7 @@
 import type { ActionRecord, DeliveryAttestationRecord, Repository } from '../db/repositories.js';
 
+const PROOF_SCHEMA_VERSION = 2;
+
 function explorer(hash: string | undefined): string | null {
   return hash && /^[0-9a-f]{64}$/.test(hash)
     ? `https://testnet.cspr.live/transaction/${hash}`
@@ -58,6 +60,7 @@ export function buildProof(
   });
   const reputation = repository.reputation(action.agent);
   return {
+    proofSchemaVersion: PROOF_SCHEMA_VERSION,
     actionId: String(action.actionId), controller: controllerHash,
     outcome: slashed ? 'SLASHED' : 'REFUNDED',
     faultClass: action.faultClass ?? 'duplicate_claim',
@@ -92,7 +95,13 @@ export function proofFor(
   const action = repository.action(actionId);
   if (!action || action.controllerHash !== controllerHash || !completed(action)) return undefined;
   const cached = repository.proof(controllerHash, actionId);
-  if (cached) return cached as Record<string, unknown>;
+  if (
+    cached &&
+    typeof cached === 'object' &&
+    (cached as Record<string, unknown>).proofSchemaVersion === PROOF_SCHEMA_VERSION
+  ) {
+    return cached as Record<string, unknown>;
+  }
   const proof = buildProof(repository, action, controllerHash);
   repository.cacheProof(controllerHash, actionId, proof);
   return proof;
