@@ -392,7 +392,7 @@ export class Repository {
         `SELECT contract, event_index AS eventIndex,
           event_type AS eventType, action_id AS actionId, data,
           transaction_hash AS transactionHash
-         FROM events WHERE event_type = 'ResolvedSlash'
+         FROM events WHERE event_type IN ('ResolvedSlash', 'ResolvedSlashV2')
          ORDER BY event_index`,
       )
       .all() as EventRecord[];

@@ -127,6 +127,17 @@ function fixture() {
       resolve: 'd'.repeat(64),
     },
   });
+  repository.upsertEvent({
+    contract: 'BondsmanControllerV2',
+    eventIndex: 1,
+    eventType: 'ResolvedSlashV2',
+    actionId: 3,
+    data: JSON.stringify({
+      challenger_amount: '1',
+      reserve_amount: '1',
+    }),
+    transactionHash: 'd'.repeat(64),
+  });
   repository.upsertAction({
     actionId: 2,
     invoiceId: 1044,
@@ -532,6 +543,11 @@ describe('REST routes', () => {
     expect(watchdogAgentResponse.json().actions).toEqual([]);
     expect(coverage.json().reserveBalance).toBe(reserve.json().balance);
     expect(coverage.json().cumulativeSlashes).toBe(slashedAmount);
+    expect(reserve.json().slashes).toHaveLength(1);
+    expect(reserve.json().slashes[0]).toMatchObject({
+      eventType: 'ResolvedSlashV2',
+      actionId: 3,
+    });
     await context.server.close();
     context.database.close();
   });
