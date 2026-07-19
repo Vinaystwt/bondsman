@@ -361,6 +361,37 @@ export async function resolveExpiredClean(
   for (const actionId of options.repository.expiredCleanActions(
     Date.now(),
   )) {
+    const local = options.repository.action(actionId);
+    if (!local) continue;
+    try {
+      const serialized = await readContract<string>({
+        repository: options.repositoryPath,
+        config: options.config,
+        signerPath,
+        contract: contracts.controller,
+        entrypoint: 'get_action',
+        arguments: ['--action_id', String(actionId)],
+      });
+      const chainAction = JSON.parse(serialized) as ChainAction;
+      if (
+        chainAction.status !== 'Executed' ||
+        Number(chainAction.window_end) >= Date.now()
+      ) {
+        options.repository.upsertAction({
+          ...local,
+          status: chainAction.status,
+          windowEnd: Number(chainAction.window_end),
+          challenger: chainAction.challenger === 'None'
+            ? null
+            : normalizeAddress(chainAction.challenger),
+        });
+        continue;
+      }
+    } catch (error) {
+      failures[String(actionId)] =
+        error instanceof Error ? error.message : String(error);
+      continue;
+    }
     try {
       hashes.push(await callContract({
         repository: options.repositoryPath,
