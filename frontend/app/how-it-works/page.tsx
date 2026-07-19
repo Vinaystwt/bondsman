@@ -204,7 +204,7 @@ function Section({
         <h2 className="mt-2 text-3xl font-semibold tracking-tight text-bone">{title}</h2>
       </Appear>
       <div className="prose-docs mt-6 max-w-2xl space-y-4">{body}</div>
-      {diagram && <div className="mt-8">{diagram}</div>}
+      {diagram && <div className="mt-10">{diagram}</div>}
     </section>
   );
 }

@@ -9,7 +9,9 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/*.test.mjs",
+    "test:canonical": "node scripts/check-canonical.mjs"
   },
   "dependencies": {
     "blakejs": "^1.2.1",

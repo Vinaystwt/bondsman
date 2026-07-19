@@ -1,6 +1,7 @@
 import { Label } from '@/components/ui/Primitives';
 import CopyHash from '@/components/ui/CopyHash';
 import Money from '@/components/ui/Money';
+import MoneyCountUp from '@/components/ui/MoneyCountUp';
 import {
   accountExplorer,
   contractPackageExplorer,
@@ -204,8 +205,9 @@ export function EconomicPanel({ proof }: { proof: CanonicalProof }) {
     {
       label: 'Bond',
       value: (
-        <span className="font-mono text-slash">
-          <Money atomic={proof.bond} />
+        <span className="font-mono text-slash tabular">
+          <MoneyCountUp atomic={proof.bond} />
+          <span className="ml-1 text-[0.72em] text-muted">csprUSD</span>
         </span>
       ),
     },
@@ -213,8 +215,9 @@ export function EconomicPanel({ proof }: { proof: CanonicalProof }) {
       label: 'Challenger reward',
       value: (
         <div>
-          <span className="font-mono text-bone">
-            <Money atomic={e.challengerReward} />
+          <span className="font-mono text-bone tabular">
+            <MoneyCountUp atomic={e.challengerReward} />
+            <span className="ml-1 text-[0.72em] text-muted">csprUSD</span>
           </span>{' '}
           <span className="text-xs text-muted">({e.challengerRewardSource})</span>
         </div>
@@ -224,8 +227,9 @@ export function EconomicPanel({ proof }: { proof: CanonicalProof }) {
       label: 'Reserve credit',
       value: (
         <div>
-          <span className="font-mono text-bone">
-            <Money atomic={e.reserveCredit} />
+          <span className="font-mono text-bone tabular">
+            <MoneyCountUp atomic={e.reserveCredit} />
+            <span className="ml-1 text-[0.72em] text-muted">csprUSD</span>
           </span>{' '}
           <span className="text-xs text-muted">({e.reserveCreditSource})</span>
         </div>
@@ -234,8 +238,9 @@ export function EconomicPanel({ proof }: { proof: CanonicalProof }) {
     {
       label: 'Current reserve',
       value: (
-        <span className="font-mono text-bone">
-          <Money atomic={e.currentReserveSnapshot} />
+        <span className="font-mono text-bone tabular">
+          <MoneyCountUp atomic={e.currentReserveSnapshot} />
+          <span className="ml-1 text-[0.72em] text-muted">csprUSD</span>
         </span>
       ),
     },

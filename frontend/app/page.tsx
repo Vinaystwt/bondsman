@@ -10,16 +10,32 @@ import { Label } from '@/components/ui/Primitives';
 
 export const revalidate = 30;
 
+type HealthMode = 'healthy' | 'degraded' | 'unreachable';
+
+function resolveHealth(res: Awaited<ReturnType<typeof safeGet<Awaited<ReturnType<typeof api.health>>>>>): {
+  mode: HealthMode;
+  reason: string | null;
+} {
+  if (!res.reachable) return { mode: 'unreachable', reason: null };
+  const h = res.data as unknown as { ok?: boolean; spending?: { code?: string; tripped?: boolean }; integrator?: { running?: boolean; limitation?: string | null } };
+  if (h.ok === true) return { mode: 'healthy', reason: null };
+  const reasons: string[] = [];
+  if (h.spending?.tripped) reasons.push(`spend circuit ${h.spending.code ?? 'tripped'}`);
+  if (h.integrator?.limitation) reasons.push(String(h.integrator.limitation));
+  if (h.integrator && h.integrator.running === false) reasons.push('integrator paused');
+  return {
+    mode: 'degraded',
+    reason: reasons.length ? reasons.join(' · ') : 'protection limits reached',
+  };
+}
+
 export default async function Home() {
   const [healthRes, canonicalRes] = await Promise.all([
     safeGet(() => api.health()),
     safeGet(() => api.canonicalProof()),
   ]);
 
-  const reachable = healthRes.reachable;
-  const controllerVersion = healthRes.reachable
-    ? healthRes.data.version
-    : undefined;
+  const { mode: healthMode, reason: degradedReason } = resolveHealth(healthRes);
 
   const canonical = canonicalRes.reachable ? canonicalRes.data : null;
   const canonicalId = canonical?.actionId ?? '27';
@@ -31,7 +47,11 @@ export default async function Home() {
 
   return (
     <>
-      <Hero reachable={reachable} controllerVersion={controllerVersion} />
+      <Hero
+        healthMode={healthMode}
+        degradedReason={degradedReason}
+        canonical={canonical}
+      />
 
       {/* Canonical proof of action 27, above the fold on scroll. */}
       <Band>
@@ -71,23 +91,24 @@ export default async function Home() {
 
       {/* Why a normal API response is not enough. */}
       <Band>
-        <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
-          <Appear className="max-w-md">
-            <Label>The gap</Label>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              An HTTP 200 is not accountability.
-            </h2>
-            <p className="mt-5 leading-relaxed text-muted">
-              Autonomous financial agents already move real money. When one is
-              wrong, the loss lands on someone downstream. Bondsman turns each
-              consequential action into a bond posted before execution, a
-              contradictory-evidence window after it, and a portable proof
-              anyone can verify. The agent is answerable in economic terms, not
-              apologetic ones.
-            </p>
-          </Appear>
+        <Appear className="max-w-2xl">
+          <Label>The gap</Label>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
+            An HTTP 200 is not accountability.
+          </h2>
+          <p className="mt-5 max-w-prose leading-relaxed text-muted">
+            Autonomous financial agents already move real money. When one is
+            wrong, the loss lands on someone downstream. Bondsman turns each
+            consequential action into a bond posted before execution, a
+            contradictory-evidence window after it, and a portable proof anyone
+            can verify. The agent is answerable in economic terms, not
+            apologetic ones.
+          </p>
+        </Appear>
+        <div className="mt-10">
           <Diagram
             name="lifecycle"
+            size="full"
             alt="Bond, execute, challenge window, then refund or slash."
           />
         </div>
@@ -95,30 +116,30 @@ export default async function Home() {
 
       {/* Architecture. Who does what. */}
       <Band>
-        <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <Appear className="max-w-2xl">
+          <Label>Approver and watchdog</Label>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
+            Two accounts, one contract, no human referee.
+          </h2>
+          <p className="mt-4 max-w-prose leading-relaxed text-muted">
+            A model-driven approver posts the bond and executes the payout. A
+            deterministic watchdog runs independently and challenges when signed
+            contradiction evidence arrives. The Casper contract, not the
+            operator, decides the outcome.
+          </p>
+          <Link
+            href="/how-it-works"
+            className="mt-6 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+          >
+            How it works, end to end
+          </Link>
+        </Appear>
+        <div className="mt-10">
           <Diagram
             name="agent-economy"
+            size="full"
             alt="An external agent pays a paid quote. The approver posts a bond and executes. The deterministic watchdog challenges delayed contradiction evidence. The contract slashes the bond, funding the challenger and the reserve."
-            className="order-2 lg:order-1"
           />
-          <Appear className="order-1 max-w-md lg:order-2">
-            <Label>Approver and watchdog</Label>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              Two accounts, one contract, no human referee.
-            </h2>
-            <p className="mt-4 leading-relaxed text-muted">
-              A model-driven approver posts the bond and executes the payout. A
-              deterministic watchdog runs independently and challenges when
-              signed contradiction evidence arrives. The Casper contract, not
-              the operator, decides the outcome.
-            </p>
-            <Link
-              href="/how-it-works"
-              className="mt-6 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
-            >
-              How it works, end to end
-            </Link>
-          </Appear>
         </div>
       </Band>
 

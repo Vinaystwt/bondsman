@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Label } from '@/components/ui/Primitives';
 import CopyHash from '@/components/ui/CopyHash';
 import { truncateHash } from '@/lib/format';
@@ -13,9 +14,11 @@ interface Props {
 }
 
 export default function ReceiptPanel({ receipt, verification, actionId }: Props) {
+  const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const receiptJson = receipt ? JSON.stringify(receipt, null, 2) : null;
+  const valid = verification?.valid === true;
 
   async function copyJson() {
     if (!receiptJson) return;
@@ -54,21 +57,50 @@ export default function ReceiptPanel({ receipt, verification, actionId }: Props)
             .
           </p>
         </div>
-        <span
-          className={`serial rounded border px-2.5 py-1 text-[0.6rem] ${
-            verification?.valid
-              ? 'border-accent/40 bg-accent/10 text-accent'
+        <div className="flex items-center gap-2">
+          {valid && (
+            <motion.svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+              whileInView={reduce ? undefined : { scale: 1, opacity: 1 }}
+              viewport={{ once: true, amount: 0.6 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 22 }}
+            >
+              <circle cx="12" cy="12" r="10" fill="#35C281" />
+              <motion.path
+                d="M8 12 L11 15 L16 9"
+                stroke="#0B0F0D"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+                initial={reduce ? false : { pathLength: 0 }}
+                whileInView={reduce ? undefined : { pathLength: 1 }}
+                viewport={{ once: true, amount: 0.6 }}
+                transition={{ duration: 0.45, delay: 0.15 }}
+              />
+            </motion.svg>
+          )}
+          <span
+            className={`serial rounded border px-2.5 py-1 text-[0.6rem] ${
+              valid
+                ? 'border-accent/40 bg-accent/10 text-accent'
+                : verification?.valid === false
+                ? 'border-slash/40 bg-slash/10 text-slash'
+                : 'border-rule bg-ink text-muted'
+            }`}
+          >
+            {valid
+              ? 'verification passed'
               : verification?.valid === false
-              ? 'border-slash/40 bg-slash/10 text-slash'
-              : 'border-rule bg-ink text-muted'
-          }`}
-        >
-          {verification?.valid
-            ? 'verification passed'
-            : verification?.valid === false
-            ? 'verification failed'
-            : 'verification unavailable'}
-        </span>
+              ? 'verification failed'
+              : 'verification unavailable'}
+          </span>
+        </div>
       </div>
 
       {receipt ? (

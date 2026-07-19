@@ -78,12 +78,12 @@ export default async function RWAPage() {
             the bond splits between the challenger and the protection reserve.
           </p>
         </div>
-        <figure className="overflow-hidden rounded-md border border-rule bg-surface p-6">
+        <figure className="mx-auto max-w-4xl overflow-hidden rounded-lg border border-rule bg-surface/50 p-4 sm:p-6">
           <Image
             src="/diagrams/duplicate-proof.svg"
             alt="A duplicate invoice reuses a claim hash that was already paid. The contract proves it, slashes the bond, and the challenger and reserve split the take."
-            width={900}
-            height={420}
+            width={1120}
+            height={520}
             className="h-auto w-full"
           />
         </figure>

@@ -24,42 +24,42 @@ const FLOW: { step: number; label: string; body: string; endpoint?: string }[] =
   {
     step: 2,
     label: 'Request a bonded action quote',
-    body: 'Ask for a quote for the action you want to perform. The gate returns a paid quote requirement.',
+    body: 'Ask for a quote for the paid delivery action. The gate returns an unpaid quote that carries the x402 payment requirement.',
     endpoint: 'POST /v1/actions/quote',
   },
   {
     step: 3,
     label: 'Receive HTTP 402',
-    body: 'The gate responds with a 402 Payment Required carrying the x402 payment requirements (asset, amount, recipient, facilitator).',
+    body: 'The gate responds with 402 Payment Required. The body carries the x402 v2 requirement: scheme, network, WCSPR package hash, exact amount, payTo and a timeout.',
     endpoint: '402 Payment Required',
   },
   {
     step: 4,
     label: 'Pay with WCSPR on Casper Testnet',
-    body: 'Sign an x402 exact-scheme payment for WCSPR on casper:casper-test. Submit it through the CSPR.cloud facilitator.',
+    body: 'Sign an x402 exact-scheme payment for WCSPR on casper:casper-test. Settle through the CSPR.cloud facilitator, then attach the payment in the PAYMENT-SIGNATURE header on the retry.',
   },
   {
     step: 5,
     label: 'Receive the paid quote',
-    body: 'The gate returns a single-use paid quote hash bound to the action type, verifier and challenge window.',
+    body: 'The retry with a valid PAYMENT-SIGNATURE returns a single-use paid quote hash bound to the fault class, verifier and challenge window.',
     endpoint: 'quoteHash, verifier, challengeWindow',
   },
   {
     step: 6,
     label: 'Submit the bonded action',
-    body: 'Submit the action with a Casper account authorization from the same Casper account that paid for the quote. Bondsman posts the bond, executes and opens the challenge window.',
+    body: 'POST the paid quote plus a Casper submit-authorization signature from the same account that paid for the quote. Bondsman locks the bond, executes and opens the challenge window.',
     endpoint: 'POST /v1/actions/submit',
   },
   {
     step: 7,
     label: 'Monitor the action',
-    body: 'Poll the action detail. When the window closes with no verified fault, the bond returns. If contradictory evidence arrives, the watchdog challenges and the contract slashes.',
+    body: 'Poll the action detail. If no signed contradiction verifies inside the challenge window, the bond returns. If contradictory evidence arrives, the watchdog challenges and the contract slashes.',
     endpoint: 'GET /api/actions/:id',
   },
   {
     step: 8,
     label: 'Retrieve and verify the portable receipt',
-    body: 'Fetch the signed receipt. Reverify the signature at any time. Store or forward it as the proof of settlement.',
+    body: 'Fetch the signed portable receipt. Reverify the Ed25519 signature at any time. Store or forward it as the proof of settlement.',
     endpoint: 'GET /api/receipt/:id · GET /api/receipt/:id/verify',
   },
 ];
@@ -111,7 +111,6 @@ const QUOTE_EXAMPLE = `POST /v1/actions/quote
 Content-Type: application/json
 
 {
-  "actionType": "invoice_payout",
   "amount": "50000000000000",
   "faultClass": "delivery_contradiction"
 }`;
@@ -120,17 +119,33 @@ const QUOTE_402 = `HTTP/1.1 402 Payment Required
 Content-Type: application/json
 
 {
-  "x402Version": 1,
+  "x402Version": 2,
   "accepts": [
     {
       "scheme": "exact",
       "network": "casper:casper-test",
-      "asset": "WCSPR",
-      "maxAmountRequired": "100000000",
-      "payTo": "002cfb8f00d21230…",
-      "facilitator": "x402-facilitator.cspr.cloud"
+      "payTo": "002cfb8f00d21230301310fc0d7633350ad7326d80b7f61561f77529dff71e918f",
+      "amount": "100000000",
+      "asset": "3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
+      "extra": {
+        "name": "Wrapped CSPR",
+        "symbol": "WCSPR",
+        "version": "1",
+        "decimals": "9"
+      },
+      "maxTimeoutSeconds": 900
     }
-  ]
+  ],
+  "error": "payment required"
+}`;
+
+const QUOTE_RETRY = `POST /v1/actions/quote
+Content-Type: application/json
+PAYMENT-SIGNATURE: <base64 x402 v2 signed payment payload>
+
+{
+  "amount": "50000000000000",
+  "faultClass": "delivery_contradiction"
 }`;
 
 const SUBMIT_EXAMPLE = `POST /v1/actions/submit
@@ -138,11 +153,14 @@ Content-Type: application/json
 
 {
   "quoteHash": "0x8c3401bd019bfca6ff9e9ce0497ddf495bb19719e27d935c7a724bb4d5deca5f",
-  "invoice": { "invoiceId": 1784457630418, "amount": "50000000000000" },
-  "reasoning": "…",
-  "authorization": {
-    "casperAccount": "003b3362ea7af5776a37530df663afa7bc7c673ebcdd167f8934e2ac68d7eb9c77",
-    "signature": "<ed25519 signature over the canonical submit payload>"
+  "faultClass": "delivery_contradiction",
+  "buyerPublicKey": "y55zB1XTRZgfZsXTF3gPQZK552hcwsH+TTqhfEEwdS0=",
+  "eventType": "goods_not_received",
+  "submitAuthorization": {
+    "publicKey": "01<casper ed25519 public key of the x402 payer>",
+    "signature": "<base64 ed25519 signature>",
+    "timestamp": 1784457630418,
+    "nonce": "<single-use random nonce>"
   }
 }`;
 
@@ -168,7 +186,7 @@ export default async function BuildPage() {
         <div>
           <Label>End-to-end integration</Label>
           <p className="mt-1 text-sm text-muted">
-            Eight steps. Every real Bondsman action follows this shape.
+            The paid delivery-action integration follows this flow.
           </p>
         </div>
         <ol className="grid gap-3 md:grid-cols-2">
@@ -203,7 +221,7 @@ export default async function BuildPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel className="overflow-hidden">
             <div className="border-b border-rule px-5 py-2 text-xs text-muted">
-              Request
+              Unpaid request
             </div>
             <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
               <code className="font-mono text-bone">{QUOTE_EXAMPLE}</code>
@@ -211,7 +229,7 @@ export default async function BuildPage() {
           </Panel>
           <Panel className="overflow-hidden">
             <div className="border-b border-rule px-5 py-2 text-xs text-muted">
-              Response
+              402 response
             </div>
             <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
               <code className="font-mono text-bone">{QUOTE_402}</code>
@@ -219,8 +237,25 @@ export default async function BuildPage() {
           </Panel>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          Settle the x402 payment through the CSPR.cloud facilitator. Once
-          settled, receive the paid quote hash and continue to submit.
+          The <code className="rounded bg-surface px-1 py-0.5 text-bone">asset</code>{' '}
+          value is the WCSPR package hash, not the token symbol. Settle the
+          x402 payment through the CSPR.cloud facilitator.
+        </p>
+        <Panel className="overflow-hidden">
+          <div className="border-b border-rule px-5 py-2 text-xs text-muted">
+            Paid retry
+          </div>
+          <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
+            <code className="font-mono text-bone">{QUOTE_RETRY}</code>
+          </pre>
+        </Panel>
+        <p className="text-xs leading-relaxed text-muted">
+          The paid retry carries the x402 signed payment payload in the{' '}
+          <code className="rounded bg-surface px-1 py-0.5 text-bone">
+            PAYMENT-SIGNATURE
+          </code>{' '}
+          header. On success the response returns the single-use paid quote
+          hash.
         </p>
       </section>
 
@@ -228,13 +263,18 @@ export default async function BuildPage() {
         <div>
           <Label>Example · Submit a bonded action</Label>
           <h2 className="text-2xl font-semibold text-bone">
-            Bind the paid quote to a Casper-signed submission.
+            Bind the paid quote to a Casper submit-authorization.
           </h2>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-            The current integration security model requires that the paid action
-            submission carry a signed authorization from the same Casper account
-            that paid for the quote. This binds the quote to the payer and stops
-            replay by a different account.
+            Bondsman requires the paid action submission to carry a submit-
+            authorization signature from the same Casper account that paid for
+            the quote. The signature covers the quote hash, fault class, buyer
+            public key, event type, timestamp and nonce. This binds the paid
+            quote to the payer and blocks replay by any other account.
+          </p>
+          <p className="mt-2 max-w-prose text-xs leading-relaxed text-muted">
+            Canonical Action 27 predates the newer payer-signed
+            submit-authorization requirement.
           </p>
         </div>
         <Panel className="overflow-hidden">
@@ -287,13 +327,85 @@ export default async function BuildPage() {
       <section aria-label="MCP" className="space-y-3">
         <Label>MCP</Label>
         <h2 className="text-2xl font-semibold text-bone">
-          MCP-native agents can also connect.
+          MCP-native agents can read Bondsman.
         </h2>
         <p className="max-w-prose text-sm leading-relaxed text-muted">
-          Bondsman publishes a Model Context Protocol endpoint. MCP clients
-          discover the quote, submit, action detail, proof and receipt tools
-          over the same protocol.
+          The published MCP package exposes a read-only projection of the
+          Bondsman controller plus a backend-key challenge shortcut. It does
+          not carry the real x402 paid quote purchase or the payer-signed
+          bonded submit today; those remain HTTP surfaces on the gate. Use
+          MCP for read tools, the HTTP endpoints above for the real paid
+          integration.
         </p>
+        <ul className="grid gap-3 md:grid-cols-2">
+          {[
+            {
+              name: 'list_actions',
+              body: 'Read every bonded action from the live projection.',
+              kind: 'real read',
+            },
+            {
+              name: 'get_action',
+              body: 'Read the full action detail: reasoning, events, transactions.',
+              kind: 'real read',
+            },
+            {
+              name: 'get_reputation',
+              body: 'Read on-chain agent reputation.',
+              kind: 'real read',
+            },
+            {
+              name: 'get_deployments',
+              body: 'Read network, chain and contract package hashes.',
+              kind: 'real read',
+            },
+            {
+              name: 'get_verifiers',
+              body: 'Read the fault classes and verifier status.',
+              kind: 'real read',
+            },
+            {
+              name: 'verify_receipt',
+              body: 'Re-verify a signed Bondsman receipt.',
+              kind: 'real read',
+            },
+            {
+              name: 'challenge_action',
+              body: 'Backend-key challenge shortcut. Not a payer-signed action.',
+              kind: 'backend-key operation',
+            },
+            {
+              name: 'submit_bonded_action',
+              body: 'Stub. Real paid submit lives at POST /v1/actions/submit.',
+              kind: 'stub',
+            },
+            {
+              name: 'get_bond_requirement',
+              body: 'Stub. The bond calculation is not exposed on the HTTP API.',
+              kind: 'stub',
+            },
+          ].map((t) => (
+            <li key={t.name}>
+              <Panel className="h-full p-5">
+                <p className="font-mono text-sm text-accent">{t.name}</p>
+                <p className="mt-2 text-sm leading-relaxed text-bone">
+                  {t.body}
+                </p>
+                <p
+                  className={`mt-2 serial text-[0.58rem] ${
+                    t.kind === 'real read'
+                      ? 'text-accent'
+                      : t.kind === 'stub'
+                      ? 'text-slash'
+                      : 'text-muted'
+                  }`}
+                >
+                  {t.kind}
+                </p>
+              </Panel>
+            </li>
+          ))}
+        </ul>
         <Panel className="overflow-hidden">
           <pre className="overflow-x-auto p-5 text-xs leading-relaxed">
             <code className="font-mono text-bone">
@@ -307,7 +419,9 @@ BONDSMAN_API_BASE=https://bondsman-backend-production.up.railway.app \\
         </Panel>
         <p className="text-xs text-muted">
           The npm package source lives at{' '}
-          <code className="rounded bg-surface px-1 py-0.5 text-bone">mcp-package/</code>{' '}
+          <code className="rounded bg-surface px-1 py-0.5 text-bone">
+            mcp-package/
+          </code>{' '}
           in the repository.
         </p>
       </section>

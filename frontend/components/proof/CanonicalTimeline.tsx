@@ -1,6 +1,7 @@
 import { Label } from '@/components/ui/Primitives';
 import CopyHash from '@/components/ui/CopyHash';
 import Money from '@/components/ui/Money';
+import TimelineStep from '@/components/proof/TimelineStep';
 import {
   formatIsoUtc,
   formatWcspr,
@@ -233,21 +234,7 @@ export default function CanonicalTimeline({ proof, receipt, receiptValid }: Prop
       </div>
       <ol className="relative space-y-4 border-l border-rule pl-6">
         {steps.map((s, i) => (
-          <li key={i} className="relative">
-            <span
-              aria-hidden="true"
-              className={`absolute -left-[27px] top-2 grid h-3 w-3 place-items-center rounded-full border ${
-                s.slash
-                  ? 'border-slash bg-ink'
-                  : 'border-accent bg-ink'
-              }`}
-            >
-              <span
-                className={`h-1 w-1 rounded-full ${
-                  s.slash ? 'bg-slash' : 'bg-accent'
-                }`}
-              />
-            </span>
+          <TimelineStep key={i} index={i} slash={s.slash}>
             <div className="rounded-md border border-rule bg-surface px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <div className="flex flex-wrap items-baseline gap-3">
@@ -292,7 +279,7 @@ export default function CanonicalTimeline({ proof, receipt, receiptValid }: Prop
                 </div>
               )}
             </div>
-          </li>
+          </TimelineStep>
         ))}
       </ol>
     </section>
