@@ -10,6 +10,17 @@ function role(action: ActionRecord): string {
   return action.challengerType === 'watchdog' ? 'deterministic' : 'model-driven';
 }
 
+function verificationDetails(action: ActionRecord, attestation?: DeliveryAttestationRecord): string {
+  if (action.faultClass === 'delivery_contradiction') {
+    return action.status === 'ResolvedSlash' && (action.evidenceRoot || attestation)
+      ? 'Signed delivery contradiction evidence was verified on chain.'
+      : 'No delivery contradiction was confirmed before the window expired.';
+  }
+  return action.duplicateProven
+    ? 'Paid claim registry confirmed the collision.'
+    : 'No duplicate claim was confirmed before the window expired.';
+}
+
 export function completed(action: ActionRecord): boolean {
   return action.status === 'ResolvedSlash' || action.status === 'ResolvedRefund';
 }
@@ -63,7 +74,7 @@ export function buildProof(
       class: action.faultClass ?? 'duplicate_claim',
       verifierModule: action.faultClass === 'delivery_contradiction' ? 'delivery-contradiction' : 'duplicate-claim',
       evidenceRoot: action.evidenceRoot ?? attestation?.evidenceRoot ?? null,
-      verificationDetails: action.duplicateProven ? 'Paid claim registry confirmed the collision.' : 'No fault was confirmed before the window expired.',
+      verificationDetails: verificationDetails(action, attestation),
     },
     modelReasoning: { text: action.reasoning, commitHash: action.reasoningHash, verifiedMatches: Boolean(action.reasoning) },
     economicImpact: {
