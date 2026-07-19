@@ -170,7 +170,6 @@ describe('runArmStep', () => {
         step: 'execute_action',
         signerRole: 'agent',
         signerAccount: 'account-hash-agent',
-        signerPath: '/keys/agent.pem',
         durationMs: expect.any(Number),
         reason:
           'Transaction abc failed: User error: 5 (InvoiceAlreadyPaid)',

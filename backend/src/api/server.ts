@@ -8,6 +8,11 @@ import { normalizeApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import type { DemoJobService } from './demo-jobs.js';
 import { registerRemoteMcp } from '../mcp/remote.js';
+import {
+  recordApiError,
+  recordRequest,
+  type RequestLogEntry,
+} from '../ops/observability.js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://bondsman.vercel.app',
@@ -39,7 +44,22 @@ export function buildServer(
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   const origins = allowedOrigins();
+  const requestStarted = new WeakMap<object, number>();
+  const mutationHits = new Map<string, { count: number; resetAt: number }>();
+  const mutationLimit = Number(process.env.API_MUTATION_RATE_LIMIT_PER_MINUTE ?? 10);
+  const isMutatingPath = (method: string, path: string) =>
+    method !== 'GET' && (
+      path.startsWith('/api/demo/') ||
+      path.startsWith('/api/challenge') ||
+      path.startsWith('/api/resolve') ||
+      path.startsWith('/api/watchdog/demo') ||
+      path.startsWith('/api/delivery-attestation') ||
+      path.startsWith('/api/receipt/') ||
+      path.startsWith('/api/verify') ||
+      path.startsWith('/api/labs/')
+    );
   server.addHook('onRequest', (request, reply, done) => {
+    requestStarted.set(request, Date.now());
     const origin = request.headers.origin;
     if (origin && isAllowedOrigin(origin, origins)) {
       reply.header('Access-Control-Allow-Origin', origin);
@@ -47,7 +67,7 @@ export function buildServer(
       reply.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
       reply.header(
         'Access-Control-Allow-Headers',
-        'authorization,content-type,payment-signature,x-payment',
+        'authorization,content-type,payment-signature,x-payment,idempotency-key,x-idempotency-key',
       );
       reply.header(
         'Access-Control-Expose-Headers',
@@ -58,23 +78,77 @@ export function buildServer(
       reply.code(origin && !isAllowedOrigin(origin, origins) ? 403 : 204).send();
       return;
     }
+    if (isMutatingPath(request.method, request.url)) {
+      const key = `${request.ip}:${request.method}:${request.url.split('?')[0]}`;
+      const now = Date.now();
+      const hit = mutationHits.get(key);
+      const current =
+        hit && hit.resetAt > now ? hit : { count: 0, resetAt: now + 60_000 };
+      current.count += 1;
+      mutationHits.set(key, current);
+      if (current.count > mutationLimit) {
+        reply.code(429).send({
+          success: false,
+          code: 'RATE_LIMITED',
+          message: 'too many mutating requests',
+        });
+        return;
+      }
+    }
     done();
   });
-  server.setErrorHandler((error, _request, reply) => {
+  server.addHook('onResponse', (request, reply, done) => {
+    recordRequest();
+    const durationMs = Date.now() - (requestStarted.get(request) ?? Date.now());
+    const body =
+      request.body && typeof request.body === 'object'
+        ? (request.body as Record<string, unknown>)
+        : undefined;
+    const entry: RequestLogEntry = {
+      event: 'api_request',
+      method: request.method,
+      path: request.url.split('?')[0] ?? request.url,
+      statusCode: reply.statusCode,
+      durationMs,
+      ...(request.id ? { requestId: request.id } : {}),
+      ...(typeof body?.actionId === 'number' ? { actionId: body.actionId } : {}),
+    };
+    console.log(JSON.stringify(entry));
+    done();
+  });
+  server.setErrorHandler((error, request, reply) => {
     const normalized = normalizeApiError(error);
+    recordApiError({
+      timestamp: new Date().toISOString(),
+      method: request.method,
+      path: request.url.split('?')[0] ?? request.url,
+      code: normalized.code,
+      statusCode: normalized.statusCode,
+      message: normalized.message,
+      ...(request.id ? { requestId: request.id } : {}),
+    });
     return reply.code(normalized.statusCode).send({
       success: false,
       code: normalized.code,
       message: normalized.message,
     });
   });
-  server.setNotFoundHandler((_request, reply) =>
-    reply.code(404).send({
+  server.setNotFoundHandler((request, reply) => {
+    recordApiError({
+      timestamp: new Date().toISOString(),
+      method: request.method,
+      path: request.url.split('?')[0] ?? request.url,
+      code: 'NOT_FOUND',
+      statusCode: 404,
+      message: 'route not found',
+      ...(request.id ? { requestId: request.id } : {}),
+    });
+    return reply.code(404).send({
       success: false,
       code: 'NOT_FOUND',
       message: 'route not found',
-    }),
-  );
+    });
+  });
   registerRoutes(
     server,
     repository,

@@ -36,6 +36,9 @@ import { listVerifiers, verifier } from '../verifiers/registry.js';
 import { featuredProofs, proofFor } from '../proofs/service.js';
 import { issueReceipt, verifyReceipt, type PortableReceipt } from '../receipts/service.js';
 import { runIntegrator } from '../integrator/service.js';
+import { spendSnapshot } from '../ops/spend-guard.js';
+import { dailyOpsSummary, recentApiErrors } from '../ops/observability.js';
+import { createIdempotencyStore } from './idempotency.js';
 
 function latestSlashProof(
   repository: Repository,
@@ -86,15 +89,25 @@ export function registerRoutes(
   repositoryPath = process.cwd(),
 ): void {
   const startedAt = Date.now();
+  const idempotency = createIdempotencyStore();
   const currentController =
     deployment.contracts.controller.contractHash;
   server.get('/api/health', async () => {
     const watchdog = repository.watchdogSummary();
+    const spending = spendSnapshot();
     return {
-      ok: true,
+      ok: !spending.tripped,
       version: '0.2.0',
       controller: currentController,
-      controllerVersion: deployment.contracts.controllerV2 ? 'v2' : 'v1',
+      controllerVersion: deployment.current ?? (deployment.contracts.controllerV2 ? 'v2' : 'v1'),
+      activeControllerVersion: deployment.current ?? (deployment.contracts.controllerV2 ? 'v2' : 'v1'),
+      spending,
+      daily: {
+        ...dailyOpsSummary(),
+        actions: repository.listActions().filter((action) => action.controllerHash === currentController).length,
+        slashes: repository.listActions().filter((action) => action.controllerHash === currentController && action.status === 'ResolvedSlash').length,
+        reserve: repository.reserve(),
+      },
       watchdog: { running: watchdog.running, lastCatch: watchdog.recentCatches[0]?.timestamp ?? null, totalEarned: watchdog.totalRewardEarned },
       integrator: repository.systemState<{ lastRun?: string }>('integrator')?.value ?? { running: false, lastRun: null },
       listener: repository.systemState('listener')?.value ?? { running: false },
@@ -111,6 +124,11 @@ export function registerRoutes(
       deploymentsPath: 'deployments/testnet.json',
     };
   });
+  server.get('/api/ops/spend', async () => spendSnapshot());
+  server.get('/api/ops/recent-errors', async () => ({
+    success: true,
+    errors: recentApiErrors(),
+  }));
   server.get('/api/invoices', async () => repository.listInvoices());
   server.get('/api/actions', async () =>
     repository
@@ -309,7 +327,7 @@ export function registerRoutes(
     );
     return quote;
   });
-  server.post('/api/challenge', async (request) => {
+  server.post('/api/challenge', async (request) => idempotency.run(request, 'challenge', async () => {
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);
     if (!action || !isChallengeEligible(action, currentController)) {
@@ -320,7 +338,7 @@ export function registerRoutes(
       throw new ApiError(409, code, 'action is not challengeable');
     }
     return jobs.startChallenge(actionId);
-  });
+  }));
   server.get('/api/jobs/:id', async (request) => {
     const job = jobs.job((request.params as { id: string }).id);
     if (!job) {
@@ -328,20 +346,20 @@ export function registerRoutes(
     }
     return job;
   });
-  server.post('/api/resolve', async (request) => {
+  server.post('/api/resolve', async (request) => idempotency.run(request, 'resolve', async () => {
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
-  });
+  }));
   server.get('/api/transactions/:hash', async (request) => {
     const hash = transactionHashSchema.parse(
       (request.params as { hash: string }).hash,
     );
     return walletChallenge.transactionStatus(hash);
   });
-  server.post('/api/challenge/wallet-resolve', async (request) => {
+  server.post('/api/challenge/wallet-resolve', async (request) => idempotency.run(request, 'wallet-resolve', async () => {
     const input = walletChallengeBodySchema.parse(request.body);
     return walletChallenge.resolveWalletChallenge(input);
-  });
+  }));
   const armDemo = async (reservedForManual: boolean) => {
     try {
       return await arm.arm({ reservedForManual });
@@ -358,14 +376,14 @@ export function registerRoutes(
       throw new ApiError(500, 'ARM_FAILED', message, { cause: error });
     }
   };
-  server.post('/api/demo/arm', async () => armDemo(true));
-  server.post('/api/demo/arm/async', async () => jobs.startArm(true));
-  server.post('/api/demo/run-integrator', async (request) => runIntegrator({
+  server.post('/api/demo/arm', async (request) => idempotency.run(request, 'demo-arm', async () => armDemo(true)));
+  server.post('/api/demo/arm/async', async (request) => idempotency.run(request, 'demo-arm-async', async () => jobs.startArm(true)));
+  server.post('/api/demo/run-integrator', async (request) => idempotency.run(request, 'demo-integrator', async () => runIntegrator({
     baseUrl: `${String(request.headers['x-forwarded-proto'] ?? 'https').split(',')[0]}://${request.headers.host ?? request.hostname}`,
     deployment,
     repository,
     repositoryPath,
-  }));
+  })));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();
     return {
@@ -375,8 +393,8 @@ export function registerRoutes(
         `account-hash-${deployment.accounts.watchdog.accountHash}`,
     };
   });
-  server.post('/api/watchdog/demo', async () => armDemo(false));
-  server.post('/api/watchdog/demo/async', async () => jobs.startArm(false));
+  server.post('/api/watchdog/demo', async (request) => idempotency.run(request, 'watchdog-demo', async () => armDemo(false)));
+  server.post('/api/watchdog/demo/async', async (request) => idempotency.run(request, 'watchdog-demo-async', async () => jobs.startArm(false)));
   const verifySandbox = async (request: any, reply: any) => {
     const amount = process.env.X402_VERIFY_PRICE ?? '1000000';
     const payTo = deployment.accounts.challenger.publicKey;

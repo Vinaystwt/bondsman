@@ -5,8 +5,8 @@
 | Malicious approver | Risk-weighted bond, challenge window, on-chain duplicate proof | Bond is less than full payout value. |
 | False challenger | Duplicate proof is checked by the controller before slash | Challenge transaction gas can be used for griefing. |
 | Colluding approver and challenger | Slash split and public evidence expose the behavior | The protocol does not infer collusion. |
-| Forged delivery evidence | Ed25519 signature verification and public-key binding | Delivery enforcement needs the parallel controller suite. |
-| Evidence replay | Root, action id, nonce, and one-use storage | Storage is backend projection until the new suite commits it on chain. |
+| Forged delivery evidence | Ed25519 signature verification, buyer public-key binding, action binding, and on-chain verifier checks | Wallet-submitted delivery disputes still need broader live traffic before being promoted from experimental. |
+| Evidence replay | Root, action id, nonce, and one-use verifier storage | Backend projection lag can briefly hide the latest verifier outcome from the API. |
 | Stale attestation | Occurrence time and challenge-window checks | Clock quality comes from the signed fixture. |
 | Operational key compromise | Separate deployer, agent, challenger, watchdog, integrator, and receipt signer keys | Key rotation and hardware custody are future work. |
 | Insufficient bond or reserve | Coverage API discloses bond and reserve exposure | It is not full insurance. |
@@ -14,3 +14,5 @@
 | Finality delay | Jobs report transaction hashes and await Casper finality | Testnet latency remains variable. |
 | Owner constrains the agent | Reasoning hash and public transactions make omissions visible | Owner retains invoice submission authority. |
 | Verifier bug | Small verifier schemas, tests, and explicit on-chain capability declaration | New verifier suites require independent audit. |
+| Operator overspend | Per-account transaction budgets, spend telemetry, and a circuit breaker before contract submission | In-process limits reset on process restart; account balances remain the source of truth. |
+| Mutating endpoint abuse | CORS allowlist, basic per-minute rate limits, idempotency headers, and structured error logs | Public demo endpoints still deliberately allow limited unauthenticated use for judging. |

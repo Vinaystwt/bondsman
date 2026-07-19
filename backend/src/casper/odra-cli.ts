@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { BondsmanConfig } from '../config/env.js';
 import { publicFallbackConfig } from '../config/env.js';
+import { assertSpendAllowed, recordSpend } from '../ops/spend-guard.js';
 
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
 const TRANSACTION_PATTERN =
@@ -141,6 +142,10 @@ export async function callContract(
     gas?: string;
   },
 ): Promise<string> {
+  assertSpendAllowed({
+    signerPath: options.signerPath,
+    gas: options.gas ?? '50 cspr',
+  });
   const command = (config: BondsmanConfig) =>
     runOdraCommand({
       repository: options.repository,
@@ -159,7 +164,13 @@ export async function callContract(
     if (!canFallbackTransaction(error, options.config)) throw error;
     return command(publicFallbackConfig(options.config));
   });
-  return transactionHash(output);
+  const hash = transactionHash(output);
+  recordSpend({
+    signerPath: options.signerPath,
+    gas: options.gas ?? '50 cspr',
+    transactionHash: hash,
+  });
+  return hash;
 }
 
 export async function readContract<T>(

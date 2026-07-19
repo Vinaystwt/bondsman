@@ -14,6 +14,7 @@ import {
 import { Repository } from '../db/repositories.js';
 import { reconcileChain } from '../listener/reconcile.js';
 import { deploymentSchema } from '../shared/deployment.js';
+import { applyActiveControllerVersion } from '../shared/active-deployment.js';
 import { watchdogReasoning } from './reasoning.js';
 import {
   createSingleFlight,
@@ -27,14 +28,14 @@ const repositoryPath = resolve(
 );
 loadDotenv({ path: join(repositoryPath, '.env'), quiet: true });
 const config = loadConfig();
-const deployment = deploymentSchema.parse(
+const deployment = applyActiveControllerVersion(deploymentSchema.parse(
   JSON.parse(
     await readFile(
       join(repositoryPath, 'deployments/testnet.json'),
       'utf8',
     ),
   ),
-);
+));
 const dataDirectory = join(repositoryPath, '.data');
 await mkdir(dataDirectory, { recursive: true });
 const repository = new Repository(

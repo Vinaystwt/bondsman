@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { loadConfig } from '../config/env.js';
 import { deploymentSchema } from '../shared/deployment.js';
+import { applyActiveControllerVersion } from '../shared/active-deployment.js';
 import {
   deploymentDatabasePath,
   openDatabase,
@@ -36,14 +37,14 @@ const repositoryPath = resolve(
 loadDotenv({ path: join(repositoryPath, '.env'), quiet: true });
 const dataDirectory = join(repositoryPath, '.data');
 await mkdir(dataDirectory, { recursive: true });
-const deployment = deploymentSchema.parse(
+const deployment = applyActiveControllerVersion(deploymentSchema.parse(
   JSON.parse(
     await readFile(
       join(repositoryPath, 'deployments/testnet.json'),
       'utf8',
     ),
   ),
-);
+));
 const port = Number(process.env.PORT ?? 3001);
 const startupState = await inspectStartupPort(
   port,

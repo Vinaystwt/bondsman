@@ -68,7 +68,7 @@ Anyone can also challenge a bad payout by hand: connect a Casper wallet, inspect
 
 ### Verifiers, proofs, and integrations
 
-The live controller settles duplicate-claim evidence on chain. The backend also ships a typed delivery-contradiction evidence registry for signed buyer or logistics rejections that arise after payout. The active suite cannot settle that second class because its immutable vault binding only supports duplicate verification; a parallel suite is required before delivery evidence can trigger a truthful on-chain slash. This distinction is documented rather than hidden.
+The live controller settles duplicate-claim evidence on chain and has verifier contracts for duplicate claims and signed delivery contradictions. The delivery verifier checks that a buyer or logistics rejection is bound to the intended action and consumes the evidence once, preventing replay. Wallet-signed challenges remain labeled experimental until they have enough production traffic to treat as the default reviewer path.
 
 Completed actions expose a cacheable proof object and a signed portable receipt. Agents can discover the service through its [A2A Agent Card](https://bondsman-backend-production.up.railway.app/.well-known/agent.json) or use remote MCP at `https://bondsman-backend-production.up.railway.app/mcp`.
 
@@ -98,12 +98,35 @@ The invoice dataset uses controlled testnet fixtures so duplicate claim scenario
 
 | Contract | Address |
 |---|---|
-| BondsmanController | `hash-6f1e1b47040f8b90f73b4bb7b8cc6303a18ae09b628fc4870c14eb6250303a2b` |
-| BondVault | `hash-80e67ef6955e1a5734168c109e18def082c596cc58dba87f50ab523bfe042db6` |
-| InvoicePool | `hash-ada888facd119474d3fb5271f23e403aa7bc033b87def9945e1aa6b2906a0b0a` |
+| BondsmanController | `hash-859c4d7c4ca016fa02ffd0f45c2ddc30705225de173369bbab25e5b21167ce16` |
+| BondVault | `hash-bb32349cd7f139f88fed900c115dba18e504412d140c38e4c0818b5a2ff391bd` |
+| InvoicePool | `hash-7c240fe8ac023d32fa8fefbf0748167163407135cf30244a3da09c1a2b554874` |
 | MockCsprUSD | `hash-410af53a3a93196081eb3b8c7dafab120efeed826b30b23cbed3873203709668` |
+| DuplicateClaimVerifier | `hash-991eb33db15d2e0e0e917bdfe6c32ed57f93a8c6cc60be712559d24b265feea2` |
+| DeliveryContradictionVerifier | `hash-6964d72173a0a04c54b16c977c586877f4c6d1f3b852aa8fb7e926dd94215177` |
 
 The canonical, up-to-date set lives in `deployments/testnet.json`, since contracts may be redeployed as the product evolves. Every address above is a live link on `testnet.cspr.live`.
+
+### Judge testing playbook
+
+1. Open the hosted app at [bondsman.vercel.app](https://bondsman.vercel.app).
+2. Confirm the backend is healthy at [the health endpoint](https://bondsman-backend-production.up.railway.app/api/health).
+3. Confirm there is a ready challenge case at [the ready endpoint](https://bondsman-backend-production.up.railway.app/api/demo/ready). A ready case must be `Executed`, duplicate-proven, and still inside its challenge window.
+4. Open [the Challenge Arena](https://bondsman.vercel.app/app/arena), use the backend-signed demo challenge, and follow the resulting challenge and resolve links to Casper Testnet.
+5. Inspect [Actions](https://bondsman.vercel.app/app/actions), [My Ledger](https://bondsman.vercel.app/app/ledger), [Agents](https://bondsman.vercel.app/rwa), and [Leaderboard](https://bondsman.vercel.app/app/leaderboard) for the projected state.
+
+Recent real duplicate slash proof:
+
+| Step | Transaction |
+|---|---|
+| Initiate | `f255ae41faa267612373fe22ff827c0f3ac9e60b6e71521a0c53b8203364001b` |
+| Approve bond spend | `ea36e1b5e23e58af10d40f6e217b5523063f5a7518d94bc3d52e804968c0fc07` |
+| Post bond | `e90e29852b2ac41bfc069c883ecea9025112cf76ee065942d280f2464ef67410` |
+| Execute payout | `c1965e592dca5369172550d0b05443d77c112d76e40803f6e96ee0096994fba5` |
+| Challenge | `5ceee10ac13d83e3f0c7d24cc4db82f043959212b1d501fc09021a9035ca1164` |
+| Resolve slash | `084a544a003335df3b6e76c72dc66d265a340ae10946127791bef8b17f835183` |
+
+The wallet-signed challenge path is available for experimentation but is not the primary judge path. The backend-signed demo path is the reliable path for review; its reward goes to the funded demo challenger key, not to a visitor wallet.
 
 ---
 

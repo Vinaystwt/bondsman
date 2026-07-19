@@ -72,7 +72,6 @@ export async function runArmStep<T>(
     step,
     signerRole: signer.role,
     signerAccount: signer.account,
-    signerPath: signer.path,
   });
   try {
     const result = await operation();
@@ -81,7 +80,6 @@ export async function runArmStep<T>(
       step,
       signerRole: signer.role,
       signerAccount: signer.account,
-      signerPath: signer.path,
       durationMs: Date.now() - startedAt,
       ...(typeof result === 'string' && /^[0-9a-f]{64}$/.test(result)
         ? { transactionHash: result }
@@ -96,7 +94,6 @@ export async function runArmStep<T>(
       step,
       signerRole: signer.role,
       signerAccount: signer.account,
-      signerPath: signer.path,
       durationMs: Date.now() - startedAt,
       reason,
     });

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { loadConfig } from '../config/env.js';
 import { deploymentSchema } from '../shared/deployment.js';
+import { applyActiveControllerVersion } from '../shared/active-deployment.js';
 import type { DecisionInvoice } from './prompt.js';
 import { runAgent } from './runner.js';
 
@@ -19,14 +20,14 @@ function required(name: string): string {
   return value;
 }
 
-const deployment = deploymentSchema.parse(
+const deployment = applyActiveControllerVersion(deploymentSchema.parse(
   JSON.parse(
     await readFile(
       join(repository, 'deployments/testnet.json'),
       'utf8',
     ),
   ),
-);
+));
 const invoice = JSON.parse(
   process.env.AGENT_INVOICE_JSON ??
     (await readFile(

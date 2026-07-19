@@ -4,27 +4,60 @@ import { Repository } from '../../src/db/repositories.js';
 import { buildServer } from '../../src/api/server.js';
 import { createDemoJobService } from '../../src/api/demo-jobs.js';
 import type { Deployment } from '../../src/shared/deployment.js';
+import {
+  assertSpendAllowed,
+  recordSpend,
+  resetSpendGuard,
+} from '../../src/ops/spend-guard.js';
 
 const hash = `hash-${'1'.repeat(64)}`;
+const v1Hash = `hash-${'9'.repeat(64)}`;
 const account = {
   publicKey: `01${'2'.repeat(64)}`,
   accountHash: '3'.repeat(64),
+};
+const watchdogAccount = {
+  publicKey: `01${'4'.repeat(64)}`,
+  accountHash: '5'.repeat(64),
 };
 const deployment = {
   network: 'casper-test',
   chainName: 'casper-test',
   nodeRpcUrl: 'https://node.testnet.casper.network/rpc',
+  current: 'v2',
   contracts: {
     mockCsprUsd: { packageHash: hash, contractHash: hash },
     bondVault: { packageHash: hash, contractHash: hash },
     controller: { packageHash: hash, contractHash: hash },
     invoicePool: { packageHash: hash, contractHash: hash },
+    controllerV1: { packageHash: v1Hash, contractHash: v1Hash },
+    controllerV2: { packageHash: hash, contractHash: hash },
+    bondVaultV2: { packageHash: hash, contractHash: hash },
+    invoicePoolV2: { packageHash: hash, contractHash: hash },
+  },
+  versions: {
+    v1: {
+      mockCsprUsd: { packageHash: hash, contractHash: hash },
+      bondVault: { packageHash: v1Hash, contractHash: v1Hash },
+      controller: { packageHash: v1Hash, contractHash: v1Hash },
+      invoicePool: { packageHash: v1Hash, contractHash: v1Hash },
+    },
+    v2: {
+      mockCsprUsd: { packageHash: hash, contractHash: hash },
+      bondVault: { packageHash: hash, contractHash: hash },
+      controller: { packageHash: hash, contractHash: hash },
+      invoicePool: { packageHash: hash, contractHash: hash },
+      verifiers: {
+        duplicateClaim: { packageHash: hash, contractHash: hash },
+        deliveryContradiction: { packageHash: hash, contractHash: hash },
+      },
+    },
   },
   accounts: {
     deployer: account,
     agent: account,
     challenger: account,
-    watchdog: account,
+    watchdog: watchdogAccount,
   },
 } as Deployment;
 
@@ -119,6 +152,12 @@ function fixture() {
     1,
     0,
     10,
+  );
+  repository.setReputation(
+    `account-hash-${watchdogAccount.accountHash}`,
+    0,
+    0,
+    0,
   );
   repository.setReserve('25');
   const resolution = {
@@ -332,6 +371,210 @@ describe('REST routes', () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(context.resolution.resolve).toHaveBeenCalledWith(4);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('reuses an idempotency result for repeated synchronous arm calls', async () => {
+    const context = fixture();
+    const headers = { 'idempotency-key': 'same-arm-click' };
+    const first = await context.server.inject({
+      method: 'POST',
+      url: '/api/demo/arm',
+      headers,
+    });
+    const second = await context.server.inject({
+      method: 'POST',
+      url: '/api/demo/arm',
+      headers,
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual(first.json());
+    expect(context.arm.arm).toHaveBeenCalledTimes(1);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('rate limits repeated mutating requests with a structured error', async () => {
+    const oldLimit = process.env.API_MUTATION_RATE_LIMIT_PER_MINUTE;
+    process.env.API_MUTATION_RATE_LIMIT_PER_MINUTE = '1';
+    const context = fixture();
+    const first = await context.server.inject({
+      method: 'POST',
+      url: '/api/resolve',
+      payload: { actionId: 4 },
+    });
+    const second = await context.server.inject({
+      method: 'POST',
+      url: '/api/resolve',
+      payload: { actionId: 4 },
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(429);
+    expect(second.json()).toEqual({
+      success: false,
+      code: 'RATE_LIMITED',
+      message: 'too many mutating requests',
+    });
+    if (oldLimit === undefined) delete process.env.API_MUTATION_RATE_LIMIT_PER_MINUTE;
+    else process.env.API_MUTATION_RATE_LIMIT_PER_MINUTE = oldLimit;
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('exposes spend telemetry and recent errors without hiding the real code', async () => {
+    const context = fixture();
+    const missing = await context.server.inject('/api/nope');
+    expect(missing.statusCode).toBe(404);
+
+    const spend = await context.server.inject('/api/ops/spend');
+    expect(spend.statusCode).toBe(200);
+    expect(spend.json()).toMatchObject({
+      code: 'SPENDING_OK',
+      tripped: false,
+      accounts: expect.arrayContaining([
+        expect.objectContaining({ account: 'agent' }),
+        expect.objectContaining({ account: 'challenger' }),
+      ]),
+    });
+
+    const errors = await context.server.inject('/api/ops/recent-errors');
+    expect(errors.statusCode).toBe(200);
+    expect(errors.json()).toMatchObject({
+      success: true,
+      errors: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'NOT_FOUND',
+          message: 'route not found',
+        }),
+      ]),
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('reports a tripped spending circuit in health', async () => {
+    resetSpendGuard();
+    const oldHour = process.env.TX_BUDGET_PER_HOUR;
+    const oldDay = process.env.TX_BUDGET_PER_DAY;
+    process.env.TX_BUDGET_PER_HOUR = '1';
+    process.env.TX_BUDGET_PER_DAY = '10';
+    recordSpend({ signerPath: '/repo/.keys/challenger.pem', gas: 1 });
+    expect(() =>
+      assertSpendAllowed({ signerPath: '/repo/.keys/challenger.pem', gas: 1 }),
+    ).toThrow('SPENDING_CIRCUIT_TRIPPED');
+
+    const context = fixture();
+    const response = await context.server.inject('/api/health');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: false,
+      spending: {
+        code: 'SPENDING_CIRCUIT_TRIPPED',
+        tripped: true,
+        accounts: expect.arrayContaining([
+          expect.objectContaining({
+            account: 'challenger',
+            tripped: true,
+          }),
+        ]),
+      },
+    });
+
+    resetSpendGuard();
+    if (oldHour === undefined) delete process.env.TX_BUDGET_PER_HOUR;
+    else process.env.TX_BUDGET_PER_HOUR = oldHour;
+    if (oldDay === undefined) delete process.env.TX_BUDGET_PER_DAY;
+    else process.env.TX_BUDGET_PER_DAY = oldDay;
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('keeps current-controller data consistent across judge-facing endpoints', async () => {
+    const context = fixture();
+    const [
+      health,
+      actions,
+      coverage,
+      featured,
+      latest,
+      agentResponse,
+      watchdogAgentResponse,
+      reserve,
+    ] = await Promise.all([
+      context.server.inject('/api/health'),
+      context.server.inject('/api/actions'),
+      context.server.inject('/api/coverage'),
+      context.server.inject('/api/proofs/featured'),
+      context.server.inject('/api/proofs/latest'),
+      context.server.inject(`/api/agents/account-hash-${account.accountHash}`),
+      context.server.inject(`/api/agents/account-hash-${watchdogAccount.accountHash}`),
+      context.server.inject('/api/reserve'),
+    ]);
+
+    for (const response of [health, actions, coverage, featured, latest, agentResponse, watchdogAgentResponse, reserve]) {
+      expect(response.statusCode).toBe(200);
+    }
+    const controller = health.json().controller;
+    const currentActions = actions.json() as Array<{ status: string; bondPosted: string }>;
+    const slashedAmount = currentActions
+      .filter((action) => action.status === 'ResolvedSlash')
+      .reduce((sum, action) => sum + BigInt(action.bondPosted), 0n)
+      .toString();
+    expect(controller).toBe(deployment.contracts.controller.contractHash);
+    expect(health.json().daily.actions).toBe(currentActions.length);
+    expect(latest.json().every((proof: Record<string, unknown>) => proof.controller === controller)).toBe(true);
+    expect(featured.json().every((proof: Record<string, unknown>) => proof.controller === controller)).toBe(true);
+    expect(agentResponse.json().actions.every((action: Record<string, unknown>) => action.agent === `account-hash-${account.accountHash}`)).toBe(true);
+    expect(watchdogAgentResponse.json().actions).toEqual([]);
+    expect(coverage.json().reserveBalance).toBe(reserve.json().balance);
+    expect(coverage.json().cumulativeSlashes).toBe(slashedAmount);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('reflects the active controller rollback suite in health and demo readiness', async () => {
+    const context = fixture();
+    const rollbackDeployment = {
+      ...deployment,
+      current: 'v1',
+      contracts: {
+        ...deployment.contracts,
+        bondVault: deployment.versions!.v1!.bondVault,
+        controller: deployment.versions!.v1!.controller,
+        invoicePool: deployment.versions!.v1!.invoicePool,
+      },
+    } as Deployment;
+    context.repository.upsertAction({
+      ...context.repository.action(6)!,
+      actionId: 88,
+      invoiceId: 2088,
+      controllerHash: rollbackDeployment.contracts.controller.contractHash,
+    });
+    const server = buildServer(
+      context.repository,
+      rollbackDeployment,
+      context.resolution,
+      context.arm,
+      context.walletChallenge,
+      context.jobs,
+    );
+
+    const health = await server.inject('/api/health');
+    const ready = await server.inject('/api/demo/ready');
+
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({
+      controllerVersion: 'v1',
+      activeControllerVersion: 'v1',
+      controller: v1Hash,
+    });
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json().best.actionId).toBe(88);
+    await server.close();
     await context.server.close();
     context.database.close();
   });

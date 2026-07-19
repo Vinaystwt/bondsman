@@ -3,6 +3,7 @@ import type { BondsmanConfig } from '../config/env.js';
 import { publicFallbackConfig } from '../config/env.js';
 import { loadPrivateKey } from './keys.js';
 import { getTransaction, transactionFinality } from './transactions.js';
+import { assertSpendAllowed, recordSpend } from '../ops/spend-guard.js';
 
 const {
   Args,
@@ -59,6 +60,10 @@ export async function directCallContract(options: {
   args: Record<string, InstanceType<typeof CLValue>>;
   gas?: number;
 }): Promise<string> {
+  assertSpendAllowed({
+    signerPath: options.signerPath,
+    gas: options.gas ?? 50_000_000_000,
+  });
   const privateKey = await loadPrivateKey(options.signerPath);
   const transaction = new ContractCallBuilder()
     .from(privateKey.publicKey)
@@ -83,13 +88,25 @@ export async function directCallContract(options: {
   return hash;
   };
   try {
-    return await submit(options.config);
+    const hash = await submit(options.config);
+    recordSpend({
+      signerPath: options.signerPath,
+      gas: options.gas ?? 50_000_000_000,
+      transactionHash: hash,
+    });
+    return hash;
   } catch (error) {
     if (!options.config.cloudApiKey) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     if (!/\b(401|403|429)\b|Unauthorized|Too Many Requests|rate.?limit/i.test(reason)) {
       throw error;
     }
-    return submit(publicFallbackConfig(options.config));
+    const hash = await submit(publicFallbackConfig(options.config));
+    recordSpend({
+      signerPath: options.signerPath,
+      gas: options.gas ?? 50_000_000_000,
+      transactionHash: hash,
+    });
+    return hash;
   }
 }
