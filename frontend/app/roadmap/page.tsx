@@ -4,56 +4,80 @@ import { Label } from '@/components/ui/Primitives';
 
 export const metadata: Metadata = {
   title: 'Roadmap',
-  description: 'Where Bondsman goes after this testnet build.',
+  description: 'Where Bondsman goes after this Buildathon submission.',
 };
 
 interface Milestone {
   quarter: string;
   title: string;
+  status: 'shipped' | 'now' | 'next';
   items: string[];
 }
 
 const TIMELINE: Milestone[] = [
   {
-    quarter: 'Q3 2026',
-    title: 'Testnet accountability loop',
+    quarter: 'Shipped · Buildathon',
+    status: 'shipped',
+    title: 'Bonded execution loop on Casper testnet',
     items: [
-      'Bonded invoice actions on Casper testnet.',
-      'Wallet signed challenges with backend resolution.',
-      'Deterministic watchdog catches duplicate claims.',
-      'Published MCP server (@vinaystwt/bondsman-mcp) exposes action, reputation, deployment, bond quote, and challenge tools.',
+      'BondsmanControllerV2 with bond vault, invoice pool and receipt signer live.',
+      'Real x402 WCSPR settlement through the CSPR.cloud facilitator.',
+      'Paid quote issuance, single-use consumption and payer-signed submit authorization.',
+      'Deterministic watchdog with independent challenge submission.',
+      'Delivery-contradiction verifier and duplicate-claim verifier both on chain.',
+      'Portable receipt with public-key signature and independent verify endpoint.',
+      'A2A agent card and MCP endpoint for autonomous agent integration.',
     ],
   },
   {
-    quarter: 'Q4 2026',
-    title: 'Agent operator tools and proof center',
+    quarter: 'Now · Post-buildathon',
+    status: 'now',
+    title: 'Operator tooling and coverage transparency',
     items: [
-      'Operator console for action review, reserve health, and slash economics.',
-      'Proof center with replayable action timelines and explorer evidence.',
-      'Sandbox x402 verification path documented for service integration.',
+      'Operator console for action review, reserve health and slash economics.',
+      'Public canonical-proof feed and coverage endpoint for integrators.',
+      'Delivery evidence tooling for real buyer signers.',
+      'Portable receipt viewer and third-party verifier packages.',
     ],
   },
   {
-    quarter: 'Q1 2027',
-    title: 'Underwriting and policy layer',
+    quarter: 'Next · Underwriting and policy',
+    status: 'next',
+    title: 'Underwriting pool and portable reputation',
     items: [
       'Underwriting pool with reserve analytics and loss history.',
-      'Policy templates for challenge windows, tiers, and fault classes.',
-      'Delivery attestation, due date, and amount mismatch proof adapters.',
+      'Policy templates for challenge windows, tiers and fault classes.',
+      'Additional fault verifiers: due-date mismatch, amount mismatch, oracle-backed attestation.',
       'Portable agent reputation across operator pools.',
     ],
   },
   {
-    quarter: 'Q2 2027 and beyond',
-    title: 'Mainnet path',
+    quarter: 'Later · Mainnet path',
+    status: 'next',
+    title: 'Production capital and external oracles',
     items: [
-      'Mainnet contracts and production csprUSD integration.',
-      'Oracle backed delivery attestation for real invoice workflows.',
-      'x402 settlement once the token and facilitator path support production payments.',
-      'Agent and challenger reputation APIs for integrators.',
+      'Mainnet controller and production csprUSD integration.',
+      'External oracle networks for delivery attestation.',
+      'Formal security review of the controller and verifiers.',
+      'Agent reputation APIs for integrators and marketplaces.',
     ],
   },
 ];
+
+const STATUS: Record<Milestone['status'], { label: string; className: string }> = {
+  shipped: {
+    label: 'shipped',
+    className: 'border-accent/40 bg-accent/10 text-accent',
+  },
+  now: {
+    label: 'now',
+    className: 'border-rule bg-ink text-bone',
+  },
+  next: {
+    label: 'next',
+    className: 'border-rule bg-surface text-muted',
+  },
+};
 
 export default function RoadmapPage() {
   return (
@@ -61,11 +85,11 @@ export default function RoadmapPage() {
       <header className="max-w-3xl space-y-4">
         <Label>Roadmap</Label>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-          Bondsman product roadmap
+          From a settled bonded loop to mainnet capital.
         </h1>
         <p className="text-lg leading-relaxed text-muted">
-          The path from a working testnet accountability loop to production
-          settlement, operator tooling, and portable agent reputation.
+          The Buildathon submission proves the bonded execution loop end to end
+          on Casper testnet. This is what comes next.
         </p>
       </header>
 
@@ -82,6 +106,11 @@ export default function RoadmapPage() {
               <div className="flex flex-wrap items-baseline gap-3">
                 <span className="serial text-[0.62rem] text-muted">{m.quarter}</span>
                 <h3 className="text-xl font-semibold text-bone">{m.title}</h3>
+                <span
+                  className={`serial rounded border px-2 py-0.5 text-[0.55rem] ${STATUS[m.status].className}`}
+                >
+                  {STATUS[m.status].label}
+                </span>
               </div>
               <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
                 {m.items.map((it) => (
@@ -99,14 +128,17 @@ export default function RoadmapPage() {
       <section aria-label="Next steps" className="rounded-md border border-rule bg-surface p-6">
         <Label>Next steps</Label>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <Link href="/build" className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent">
-            Open the MCP build page
+          <Link
+            href="/proof"
+            className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+          >
+            Read the canonical proof
           </Link>
-          <Link href="/app" className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent">
-            Explore the testnet deployment
-          </Link>
-          <Link href="/app/arena" className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent">
-            Try a challenge in the Arena
+          <Link
+            href="/build"
+            className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+          >
+            Integrate with Bondsman
           </Link>
         </div>
       </section>

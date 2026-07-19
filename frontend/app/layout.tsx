@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: '%s · Bondsman',
   },
   description:
-    'Bondsman makes an autonomous agent stake real capital before it can move your money, and takes it when the agent is wrong.',
+    'Bondsman is bonded execution infrastructure for autonomous finance. Verified faults slash the bond, reward the watchdog and create a portable proof.',
 };
 
 export default function RootLayout({

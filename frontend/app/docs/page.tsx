@@ -31,38 +31,39 @@ export default async function DocsPage() {
         </p>
       </header>
 
-      <DocSection id="quickstart" title="Test this in five minutes">
+      <DocSection id="quickstart" title="Read the proof in three minutes">
         <p>
-          The fastest path for a judge or reviewer, start to finish, with no
-          local setup.
+          The fastest path for a judge or reviewer. No local setup, no wallet
+          required.
         </p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Open the <Link href="/proof">Proof Center</Link>. Every completed
-            slash and refund is listed with its amounts, split, challenger,
-            and explorer links. Open any transaction on testnet.cspr.live and
-            read the same numbers on chain.
+            Open the <Link href="/proof">Proof Center</Link>. It leads with the
+            canonical action, No. 0027: a real x402 settlement, a paid quote, a
+            bonded action, a signed delivery contradiction, an autonomous
+            watchdog challenge and a slashed bond.
           </li>
           <li>
-            Open the <Link href="/app/arena">Arena</Link>. The latest completed
-            slash proof loads first; a ready duplicate-claim case sits below
-            it with a live countdown.
+            Follow every transaction to{' '}
+            <code>testnet.cspr.live</code> from the chronological rail. The
+            numbers on chain match the numbers on the page.
           </li>
           <li>
-            Press Run live challenge. A real Casper transaction submits within
-            seconds; the wait for finality shows as a three-step progression
-            and survives reloads. Expect a few minutes; the result also lands
-            in the Proof Center.
+            Copy or download the portable receipt. Reverify the signature at
+            <code className="mx-1 rounded bg-surface px-1 py-0.5 text-bone">
+              /api/receipt/27/verify
+            </code>
+            or in any Ed25519 verifier.
           </li>
           <li>
-            Open <Link href="/two-agents">Two agents</Link> to watch the
-            autonomous loop: the model-driven approver pays a duplicate, the
-            deterministic watchdog catches and slashes it, no human in the
-            path.
+            Open <Link href="/two-agents">Two agents</Link> to watch the same
+            approver and watchdog loop against the deterministic duplicate-claim
+            test vector.
           </li>
           <li>
-            Install the MCP package to drive the same protocol from any agent
-            runtime:
+            Read <Link href="/build">Integrate</Link> for the A2A discovery,
+            x402 payment, paid quote and bonded submit flow. MCP is also
+            available:
           </li>
         </ol>
         <CodeBlock
@@ -74,20 +75,21 @@ bondsman-mcp`}
 
       <DocSection id="thesis" title="Problem and thesis">
         <p>
-          An agent can approve a payout in milliseconds. Today it risks nothing
-          when it is wrong. Software is starting to move money on its own, and
-          when it makes a confident mistake, the loss lands on someone else.
+          Autonomous financial agents already move money on their own. When one
+          is wrong, the loss lands on someone downstream. An HTTP 200 is not
+          accountability.
         </p>
         <p>
-          Bondsman is a notary for money. It makes an agent stake real capital
-          before it can move funds, and takes that stake when the agent is wrong.
-          The rule is <strong>no bond, no action</strong>. Issuance puts assets on
-          chain. Bondsman decides what happens when an agent moving those assets
-          is wrong.
+          Bondsman is bonded execution infrastructure for autonomous finance. It
+          makes an agent post a risk-priced slashable bond before any
+          consequential action. Verified faults slash the bond, reward the
+          watchdog, credit the protection reserve and reduce agent reputation.
+          The rule is <strong>no bond, no action</strong>.
         </p>
         <p>
-          Every slash here is a real transaction you can open on the explorer.
-          Accountability that never executes is a simulation.
+          Every slash here is a real Casper testnet transaction. Delivery
+          contradiction is the flagship delayed-evidence fault class. Duplicate
+          claim is the deterministic test vector.
         </p>
       </DocSection>
 
@@ -169,17 +171,16 @@ bondsman-mcp`}
       </DocSection>
 
       <DocSection id="faq" title="Economics and security">
-        <Faq q="Why not just check for duplicates before paying?">
+        <Faq q="Why bond every action instead of verifying up front?">
           <p>
             Optimistic verification puts the cost only on disputed actions, not
             every payout, and the challenger is paid from the slash, so
-            verification is self funding. The duplicate is one member of a fault
-            class whose proof arrives after payout: delivery that never happened,
+            verification is self funding. The largest fault class is the one
+            whose proof arrives after payout: delivery that never happened,
             fraud surfaced by later attestations, claims resubmitted under
-            different identifiers that only collide after normalization. It is the
-            demo member because it is provable on chain with zero oracle trust.
-            And even a perfect agent needs bonding, because depositors cannot
-            verify perfection in advance. Delegating capital requires collateral,
+            different identifiers that only collide after normalization. Even
+            a perfect agent needs bonding, because depositors cannot verify
+            perfection in advance. Delegating capital requires collateral,
             which is true of humans too.
           </p>
         </Faq>
@@ -236,9 +237,12 @@ bondsman-mcp`}
         </Faq>
         <Faq q="Is x402 settlement live?">
           <p>
-            The quote endpoint uses Casper x402 settlement with WCSPR through
-            the CSPR.cloud facilitator. The sandbox verifier remains available
-            only as a reference path and never reports a payment receipt.
+            Yes. The quote endpoint uses real x402 settlement with WCSPR on
+            Casper testnet through the CSPR.cloud facilitator. The canonical
+            proof shows the actual settlement transaction, the paid quote hash,
+            the consuming action and the resolved slash. Every paid action
+            submission now requires an Ed25519 authorization from the same
+            Casper account that paid for the quote.
           </p>
         </Faq>
       </DocSection>
@@ -291,16 +295,17 @@ bondsman-mcp`}
           an invoice-financing pool at risk of paying the same claim twice. The
           claim hash is the fingerprint the contract uses to prove a duplicate.
         </p>
-        <h3>Build with MCP</h3>
+        <h3>Integrate</h3>
         <p>
-          <Link href="/build">Build</Link> shows the six MCP tools any external
-          Casper agent can call: list_actions, get_action, get_reputation,
-          get_bond_requirement, get_deployments, challenge_action. MCP is the
-          interface. There is no SDK by design.
+          <Link href="/build">Integrate</Link> shows how any autonomous agent
+          discovers Bondsman through the A2A agent card, pays for a quote via
+          x402, submits a bonded action with a payer-signed authorization and
+          verifies the portable receipt. MCP is also available for MCP-native
+          agents.
         </p>
         <p className="mt-8">
-          Want to see it run? <Link href="/demo">Try the demo</Link> and slash a
-          real bond, or watch the approver and watchdog settle one without you.
+          Want the settled evidence? <Link href="/proof">Open the canonical
+          proof</Link> for Action No. 0027.
         </p>
       </DocSection>
     </DocsLayout>

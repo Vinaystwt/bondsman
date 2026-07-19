@@ -26,6 +26,36 @@ export function formatMoney(atomic: string | bigint): string {
   return `${formatAmount(atomic)} csprUSD`;
 }
 
+/** Format a WCSPR base-unit amount. WCSPR uses 9 decimals like CSPR. */
+export function formatWcspr(atomic: string | bigint): string {
+  return `${formatAmount(atomic)} WCSPR`;
+}
+
+/** Format a raw base-unit amount without a token suffix. */
+export function formatBase(atomic: string | bigint): string {
+  return formatAmount(atomic);
+}
+
+/** Convert a Casper testnet ISO or Date to a short UTC display. */
+export function formatIsoUtc(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const s = d.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'UTC',
+    });
+    return `${s} UTC`;
+  } catch {
+    return String(iso);
+  }
+}
+
 /** Truncate a hash for display: first 8 and last 6, joined by an ellipsis. */
 export function truncateHash(hash: string): string {
   const clean = stripPrefix(hash);

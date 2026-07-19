@@ -55,15 +55,38 @@ export default function HowItWorks() {
       />
 
       <Section
-        label="The proof"
-        title="The contract proves the fraud"
+        label="The flagship fault"
+        title="Delayed delivery evidence, verified by the contract"
+        body={
+          <>
+            <p>
+              The most consequential fault in autonomous finance is the one that
+              arrives after the payout has already cleared. A buyer signs and
+              publishes attestation that the goods never arrived, or that delivery
+              was rejected. Bondsman&apos;s delivery-contradiction verifier reads
+              that signed attestation and matches it to an executed action.
+            </p>
+            <p>
+              No human weighs the evidence. The contract checks the signature,
+              binds it to the action, and slashes the bond. This is the fault the
+              canonical proof demonstrates.
+            </p>
+          </>
+        }
+      />
+
+      <Section
+        label="The deterministic test vector"
+        title="Duplicate claim is proven at zero oracle trust"
         body={
           <p>
-            No human judges a payout. The most common fraud, paying the same
-            invoice twice, is proven directly. Each invoice carries a{' '}
-            <Term name="claim hash">claim hash</Term>. When a payout reuses a
-            hash that was already paid, the invoice pool sees the collision and
-            the slash follows. It is a fact on the chain, not a verdict.
+            A second verifier proves duplicate invoice payouts by claim-hash
+            collision. Each invoice carries a{' '}
+            <Term name="claim hash">claim hash</Term>. If a payout reuses one that
+            was already paid, the invoice pool sees the collision and the slash
+            follows. Duplicate claim is the deterministic test vector for the
+            protocol. Delivery contradiction is the flagship delayed-evidence
+            fault.
           </p>
         }
         diagram={
@@ -122,33 +145,34 @@ export default function HowItWorks() {
         title="Approver and watchdog, no human"
         body={
           <p>
-            A model-driven agent approves payouts. A deterministic watchdog
-            watches them. When a payout is a duplicate, the watchdog challenges
-            it and the contract slashes the bond, paying the watchdog its share.
-            Two on-chain accounts settle against each other with no person in
-            the loop.
+            A model-driven approver posts a bond and executes a payout. A
+            deterministic watchdog runs independently, ingests signed contradiction
+            evidence, matches it to executed actions, and submits the challenge.
+            The contract slashes the bond and pays the watchdog its share. Two
+            on-chain accounts settle against each other with no person in the
+            loop.
           </p>
         }
         diagram={
           <Diagram
             name="agent-economy"
-            alt="The approver agent pays a duplicate. The deterministic watchdog detects it, challenges, and the contract slashes the bond and pays the watchdog."
+            alt="The approver posts a bond and executes. The deterministic watchdog observes signed contradiction evidence, challenges, and the contract slashes the bond and pays the watchdog."
           />
         }
       />
 
       <Appear className="mt-20 rounded-lg border border-rule bg-surface p-8">
-        <h2 className="text-2xl font-semibold text-bone">Now watch it happen</h2>
+        <h2 className="text-2xl font-semibold text-bone">See it settled</h2>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
-          The demo runs the whole loop on Casper testnet. Read the full reference
-          in the docs if you want every detail.
+          The canonical proof for Action No. 0027 shows the whole mechanic
+          against real Casper testnet transactions.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href="/demo"
+            href="/proof"
             className="rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
           >
-            Try the demo
+            Inspect the canonical proof
           </Link>
           <Link
             href="/docs"

@@ -10,8 +10,8 @@ const PUBLIC_LINKS = [
   { href: '/proof', label: 'Proof' },
   { href: '/how-it-works', label: 'How it works' },
   { href: '/two-agents', label: 'Two agents' },
-  { href: '/rwa', label: 'Invoice pool' },
-  { href: '/build', label: 'Build' },
+  { href: '/rwa', label: 'Invoice adapter' },
+  { href: '/build', label: 'Integrate' },
   { href: '/roadmap', label: 'Roadmap' },
   { href: '/docs', label: 'Docs' },
 ];

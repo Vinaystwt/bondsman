@@ -13,8 +13,8 @@ export default function Footer() {
             </span>
           </div>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
-            A notary for money. An autonomous agent stakes capital before it can
-            move your funds, and loses it when it is wrong.
+            Bonded execution infrastructure for autonomous finance. Post a bond,
+            act under accountability, prove it with a portable receipt.
           </p>
         </div>
 
@@ -31,10 +31,11 @@ export default function Footer() {
         <FooterCol
           title="Learn"
           links={[
+            { href: '/proof', label: 'Canonical proof' },
             { href: '/how-it-works', label: 'How it works' },
-            { href: '/rwa', label: 'Invoice Pool' },
+            { href: '/rwa', label: 'Invoice adapter' },
+            { href: '/build', label: 'Integrate' },
             { href: '/docs', label: 'Documentation' },
-            { href: '/demo', label: 'Try the demo' },
           ]}
         />
         <FooterCol

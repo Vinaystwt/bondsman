@@ -8,9 +8,9 @@ import { truncateHash } from '@/lib/format';
 import CopyHash from '@/components/ui/CopyHash';
 
 export const metadata: Metadata = {
-  title: 'The invoice pool',
+  title: 'The invoice adapter',
   description:
-    'Bondsman guards an invoice-financing pool from duplicate payouts.',
+    'Invoices are the first Bondsman adapter. Delivery contradiction is the flagship fault. Duplicate claim is the deterministic test vector.',
 };
 
 export default async function RWAPage() {
@@ -39,16 +39,16 @@ export default async function RWAPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-16 px-6 py-16">
       <header className="max-w-3xl space-y-4">
-        <Label>The use case</Label>
+        <Label>The first adapter</Label>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-          A pool that stops paying twice
+          Invoices are the first Bondsman adapter.
         </h1>
         <p className="text-lg leading-relaxed text-muted">
-          Invoice financing pools pay vendors early and collect from the debtor
-          later. The failure that eats these pools is paying the same invoice
-          twice: a duplicate claim slips through, the money leaves, and no one
-          catches it before the next reporting cycle. Bondsman puts a bonded
-          agent between the pool and the payout.
+          Autonomous invoice-payout agents make two kinds of consequential
+          mistake. Delivery that never happened is the flagship delayed-evidence
+          fault: it is what the canonical proof settled. Duplicate claim is the
+          deterministic test vector: a claim-hash collision the contract proves
+          with zero oracle trust. Both slash the bond.
         </p>
       </header>
 
@@ -60,20 +60,22 @@ export default async function RWAPage() {
           value={<Money atomic={totalPool.toString()} bare />}
           suffix="csprUSD"
         />
-        <Stat label="Duplicates caught" value={String(slashed)} tone="slash" />
+        <Stat label="Faults slashed" value={String(slashed)} tone="slash" />
       </section>
 
-      <section aria-label="How the proof works" className="space-y-6">
+      <section aria-label="How the two verifiers work" className="space-y-6">
         <div className="space-y-2">
-          <Label>The proof</Label>
+          <Label>The two verifiers</Label>
           <h2 className="text-2xl font-semibold text-bone">
-            One claim, one payout, enforced by the contract
+            Two on-chain verifiers cover the invoice payout adapter
           </h2>
           <p className="text-sm leading-relaxed text-muted">
-            Every invoice has a claim hash, a fingerprint of what it claims.
-            When an agent proposes a payout, the contract checks whether that
-            fingerprint was already paid. If it was, any challenger can slash
-            the bond and the reserve grows.
+            The delivery-contradiction verifier reads a signed attestation from
+            the buyer key and matches it to an executed action; the on-chain
+            verifier checks the signature and evidence root. The duplicate-claim
+            verifier watches the paid-claim registry: if a payout reuses a claim
+            hash already paid, the contract proves the collision. In both cases
+            the bond splits between the challenger and the protection reserve.
           </p>
         </div>
         <figure className="overflow-hidden rounded-md border border-rule bg-surface p-6">
@@ -116,10 +118,9 @@ export default async function RWAPage() {
           ))}
         </ul>
         <p className="text-xs leading-relaxed text-muted">
-          Invoice numbers, debtors, due dates, and delivery flags are controlled
-          testnet fixtures for reproducible duplicate-claim demonstrations. The
-          claim hash is the fingerprint the contract uses to prove a duplicate;
-          it is not itself a transaction.
+          Invoice numbers, debtors, due dates and delivery flags are controlled
+          testnet fixtures for reproducible verification. The bond, execution,
+          challenge and slash are all real Casper testnet transactions.
         </p>
       </section>
 
@@ -127,8 +128,8 @@ export default async function RWAPage() {
         <section aria-label="Reserve" className="space-y-3 border-t border-rule pt-8">
           <Label>Protection reserve</Label>
           <p className="text-sm leading-relaxed text-muted">
-            The reserve grows only when a duplicate is caught. Its balance is a
-            measure of fraud stopped, not fee revenue.
+            The reserve grows only when a bond is slashed by a verified fault.
+            Its balance is a measure of accountability enforced, not fee revenue.
           </p>
           <p className="font-mono text-3xl text-accent tabular">
             <Money atomic={reserve.balance} />

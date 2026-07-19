@@ -234,3 +234,200 @@ export interface WalletResolveResult {
   challengeExplorerLink: string;
   resolveExplorerLink: string;
 }
+
+export type CanonicalOutcome = 'SLASHED' | 'REFUNDED';
+
+export interface CanonicalTimelineStage {
+  stage:
+    | 'initiate'
+    | 'bond_posted'
+    | 'execute'
+    | 'evidence_arrived'
+    | 'challenge'
+    | 'resolve';
+  at: string | null;
+  actor: string;
+  txHash?: string | null;
+  explorerUrl?: string | null;
+  signature?: string | null;
+  outcome?: CanonicalOutcome;
+  payload?: Record<string, unknown>;
+}
+
+export interface CanonicalPayment {
+  protocol: string;
+  scheme: string;
+  network: string;
+  asset: string;
+  assetPackage: string;
+  paymentAmount: string;
+  payer: string;
+  payTo: string;
+  facilitator: string;
+  settlementTransaction: string;
+  settlementExplorerUrl: string;
+  settled: boolean;
+}
+
+export interface CanonicalPaidQuote {
+  quoteHash: string;
+  actionType: string;
+  faultClass: string;
+  verifier: string;
+  principalAmount: string;
+  requiredBond: string;
+  challengeWindow: number;
+  issuedAt: string;
+  expiresAt: string;
+  consumedAt: string | null;
+  consumedActionId: number | null;
+  status: string;
+}
+
+export interface CanonicalDeliveryAttestation {
+  eventType: string;
+  occurredAt: string;
+  receivedAt: string;
+  buyerPublicKey: string;
+  evidenceRoot: string;
+  signatureVerified: boolean;
+  usedActionId: number;
+}
+
+export interface CanonicalEconomicImpact {
+  challengerReward: string;
+  challengerRewardSource: string;
+  reserveCredit: string;
+  reserveCreditSource: string;
+  currentReserveSnapshot: string;
+  reputationBefore: number | null;
+  reputationDelta: number | null;
+  reputationDeltaSource: string;
+  reputationAfter: number | null;
+  resolutionEventTransaction: string;
+  resolutionEventExplorerUrl: string;
+}
+
+export interface CanonicalFaultCondition {
+  class: string;
+  verifierModule: string;
+  evidenceRoot: string;
+  verificationDetails: string;
+}
+
+export interface CanonicalParticipant {
+  account: string;
+  role: string;
+}
+
+export interface CanonicalReasoning {
+  text: string;
+  commitHash: string;
+  recomputedHash: string;
+  verifiedMatches: boolean;
+}
+
+export interface CanonicalProof {
+  proofSchemaVersion: number;
+  actionId: string;
+  controller: string;
+  outcome: CanonicalOutcome;
+  faultClass: string;
+  oneLine: string;
+  timeline: CanonicalTimelineStage[];
+  participants: {
+    approver: CanonicalParticipant;
+    challenger: CanonicalParticipant;
+  };
+  valueAtRisk: string;
+  bond: string;
+  faultCondition: CanonicalFaultCondition;
+  payment?: CanonicalPayment;
+  paidQuote?: CanonicalPaidQuote;
+  deliveryAttestation?: CanonicalDeliveryAttestation;
+  modelReasoning?: CanonicalReasoning;
+  economicImpact: CanonicalEconomicImpact;
+  receiptUrl: string;
+  cachedAt: string;
+}
+
+export interface PortableReceipt {
+  protocol: string;
+  version: string;
+  schemaId: string;
+  network: string;
+  actionId: string;
+  controller: string;
+  actor: string;
+  actorRole: string;
+  actionType: string;
+  verifier: string;
+  faultClass: string;
+  principal: string;
+  bond: string;
+  outcome: CanonicalOutcome;
+  faultCode: string;
+  challenger: string;
+  challengerType: string;
+  challengeSigning: string;
+  watchdogChallengeTransaction: string;
+  resolveTransaction: string;
+  economics: CanonicalEconomicImpact;
+  deployHashes: Record<string, string>;
+  reasoningCommitment: CanonicalReasoning;
+  deliveryEvidence?: CanonicalDeliveryAttestation;
+  payment?: CanonicalPayment;
+  paidQuote?: CanonicalPaidQuote;
+  issuedAt: string;
+  signerPublicKey: string;
+  signature: string;
+}
+
+export interface ReceiptVerification {
+  valid: boolean;
+  reason?: string;
+}
+
+export interface Verifier {
+  id: string;
+  title: string;
+  onChain: boolean;
+  schema: Record<string, unknown>;
+  example: Record<string, unknown>;
+}
+
+export interface Coverage {
+  reserveBalance: string;
+  openBondedExposure: string;
+  coverageRatio: number;
+  cumulativeSlashes: string;
+  cumulativeRefunds: string;
+  maxSingleActionCoverage: string;
+  largestPossibleUncoveredLoss: string;
+  explanation: {
+    bondCoverageRatio: string;
+    reserveRole: string;
+    uncoveredCap: string;
+  };
+}
+
+export interface AgentCardSkill {
+  id: string;
+  name: string;
+  description: string;
+  tags?: string[];
+  examples?: string[];
+}
+
+export interface AgentCard {
+  name: string;
+  description: string;
+  url: string;
+  provider: { organization: string; url: string };
+  version: string;
+  capabilities: Record<string, boolean>;
+  authentication: { schemes: string[] };
+  defaultInputModes: string[];
+  defaultOutputModes: string[];
+  skills: AgentCardSkill[];
+}

@@ -2,14 +2,20 @@ import type {
   ActionDetail,
   ActionSummary,
   AgentReputation,
+  AgentCard,
+  CanonicalProof,
+  Coverage,
   Deployment,
   DemoReady,
   DemoProofs,
   DemoJob,
   Health,
   Invoice,
+  PortableReceipt,
+  ReceiptVerification,
   Reserve,
   TransactionStatus,
+  Verifier,
   WalletResolveResult,
   Watchdog,
 } from './types';
@@ -131,6 +137,15 @@ export const api = {
   reserve: () => serverGet<Reserve>('/api/reserve'),
   deployments: () => serverGet<Deployment>('/api/deployments'),
   watchdog: () => serverGet<Watchdog>('/api/watchdog'),
+  canonicalProof: () => serverGet<CanonicalProof>('/api/proofs/canonical'),
+  featuredProofs: () => serverGet<CanonicalProof[]>('/api/proofs/featured'),
+  proof: (id: number | string) => serverGet<CanonicalProof>(`/api/proof/${id}`),
+  receipt: (id: number | string) => serverGet<PortableReceipt>(`/api/receipt/${id}`),
+  receiptVerify: (id: number | string) =>
+    serverGet<ReceiptVerification>(`/api/receipt/${id}/verify`),
+  verifiers: () => serverGet<Verifier[]>('/api/verifiers'),
+  coverage: () => serverGet<Coverage>('/api/coverage'),
+  agentCard: () => serverGet<AgentCard>('/.well-known/agent.json'),
 };
 
 // Client-side reads, proxied through Next at /api/*.

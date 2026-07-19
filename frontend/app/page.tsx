@@ -2,227 +2,160 @@ import Link from 'next/link';
 import { api, safeGet } from '@/lib/api';
 import Hero from '@/components/landing/Hero';
 import EmailCapture from '@/components/landing/EmailCapture';
+import CanonicalSummary from '@/components/proof/CanonicalSummary';
+import WhatIsReal from '@/components/proof/WhatIsReal';
 import Appear from '@/components/ui/Appear';
 import Diagram from '@/components/Diagram';
 import { Label } from '@/components/ui/Primitives';
-import { txExplorer } from '@/lib/format';
-import type { ActionSummary } from '@/lib/types';
 
-function sum(values: string[]): string {
-  return values.reduce((acc, v) => acc + BigInt(v || '0'), 0n).toString();
-}
+export const revalidate = 30;
 
 export default async function Home() {
-  const [healthRes, actionsRes, reserveRes, watchdogRes] = await Promise.all([
+  const [healthRes, canonicalRes] = await Promise.all([
     safeGet(() => api.health()),
-    safeGet(() => api.actions()),
-    safeGet(() => api.reserve()),
-    safeGet(() => api.watchdog()),
+    safeGet(() => api.canonicalProof()),
   ]);
 
   const reachable = healthRes.reachable;
-  const actions: ActionSummary[] = actionsRes.reachable ? actionsRes.data : [];
-  const slashedActions = actions.filter((a) => a.status === 'ResolvedSlash');
+  const controllerVersion = healthRes.reachable
+    ? healthRes.data.version
+    : undefined;
 
-  const bonded = sum(actions.map((a) => a.bondPosted));
-  const slashed = sum(slashedActions.map((a) => a.bondPosted));
-  const reserve = reserveRes.reachable ? reserveRes.data.balance : '0';
-  const watchdogEarned = watchdogRes.reachable
-    ? watchdogRes.data.totalRewardEarned
-    : null;
+  const canonical = canonicalRes.reachable ? canonicalRes.data : null;
+  const canonicalId = canonical?.actionId ?? '27';
 
-  const recent = [...actions].sort((a, b) => b.actionId - a.actionId)[0];
-  const featuredSlash = [...slashedActions].sort(
-    (a, b) => Number(b.amount) - Number(a.amount),
-  )[0];
-  const explorerHref =
-    featuredSlash?.transactions.resolve
-      ? txExplorer(featuredSlash.transactions.resolve)
-      : null;
+  const receiptRes = canonical
+    ? await safeGet(() => api.receiptVerify(canonicalId))
+    : { reachable: false, data: null } as const;
+  const receiptValid = receiptRes.reachable ? receiptRes.data.valid : null;
 
   return (
     <>
-      <Hero
-        bonded={bonded}
-        slashed={slashed}
-        reserve={reserve}
-        watchdogEarned={watchdogEarned}
-        recent={recent}
-        reachable={reachable}
-      />
+      <Hero reachable={reachable} controllerVersion={controllerVersion} />
 
-      {/* Problem */}
+      {/* Canonical proof of action 27, above the fold on scroll. */}
       <Band>
         <Appear className="max-w-3xl">
-          <Label>The problem</Label>
+          <Label>The proof, before the pitch</Label>
           <h2 className="mt-3 text-3xl font-semibold leading-snug tracking-tight text-bone sm:text-4xl">
-            An agent can approve a payout in milliseconds. Today it risks nothing
-            when it is wrong.
+            One external agent paid. Bondsman locked a bond. A watchdog
+            challenged. The contract took the bond.
           </h2>
-          <p className="mt-5 max-w-prose leading-relaxed text-muted">
-            Software is starting to move money on its own. When it makes a
-            confident mistake, the loss lands on someone else. Bondsman puts the
-            agent&apos;s own capital on the line first, so being wrong has a cost
-            that lands where the decision was made.
+          <p className="mt-4 max-w-prose leading-relaxed text-muted">
+            The card below is the canonical production proof for Action No.
+            0027. It is not a mockup. Every hash opens on the Casper testnet
+            explorer.
           </p>
         </Appear>
+        <div className="mt-8">
+          {canonical ? (
+            <CanonicalSummary proof={canonical} receiptValid={receiptValid} />
+          ) : (
+            <div className="rounded-lg border border-dashed border-rule bg-surface/40 p-8 text-sm leading-relaxed text-muted">
+              <p className="text-bone">Live canonical proof unavailable</p>
+              <p className="mt-2">
+                The backend is not responding right now. Action No. 0027 remains
+                settled on Casper testnet. Try again in a moment, or open the
+                receipt directly from the Proof Center.
+              </p>
+              <Link
+                href="/proof"
+                className="mt-4 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
+              >
+                Open the Proof Center
+              </Link>
+            </div>
+          )}
+        </div>
       </Band>
 
-      {/* Lifecycle */}
+      {/* Why a normal API response is not enough. */}
       <Band>
-        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
           <Appear className="max-w-md">
-            <Label>The lifecycle</Label>
+            <Label>The gap</Label>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              One path, two endings
+              An HTTP 200 is not accountability.
             </h2>
-            <p className="mt-4 leading-relaxed text-muted">
-              Every action is bonded, executed, then open to challenge. It ends
-              with the bond returned, or the bond taken. Green holds, red is a
-              taken bond.
+            <p className="mt-5 leading-relaxed text-muted">
+              Autonomous financial agents already move real money. When one is
+              wrong, the loss lands on someone downstream. Bondsman turns each
+              consequential action into a bond posted before execution, a
+              contradictory-evidence window after it, and a portable proof
+              anyone can verify. The agent is answerable in economic terms, not
+              apologetic ones.
             </p>
           </Appear>
           <Diagram
             name="lifecycle"
-            alt="The lifecycle of a bonded action: intent, bond, execute, challenge window, then either a refund or a slash."
+            alt="Bond, execute, challenge window, then refund or slash."
           />
         </div>
       </Band>
 
-      {/* Two-agent economy */}
+      {/* Architecture. Who does what. */}
       <Band>
-        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <Diagram
             name="agent-economy"
-            alt="One agent approves and pays a duplicate. A deterministic watchdog detects it, challenges, and the contract slashes the bond."
+            alt="An external agent pays a paid quote. The approver posts a bond and executes. The deterministic watchdog challenges delayed contradiction evidence. The contract slashes the bond, funding the challenger and the reserve."
             className="order-2 lg:order-1"
           />
           <Appear className="order-1 max-w-md lg:order-2">
             <Label>Approver and watchdog</Label>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              One agent approves. A watchdog catches it.
+              Two accounts, one contract, no human referee.
             </h2>
             <p className="mt-4 leading-relaxed text-muted">
-              A model-driven agent approves payouts. A deterministic watchdog
-              monitors every payout. When one is a duplicate, the watchdog
-              challenges and the contract settles. No human in the loop, two
-              on-chain accounts, real transactions.
+              A model-driven approver posts the bond and executes the payout. A
+              deterministic watchdog runs independently and challenges when
+              signed contradiction evidence arrives. The Casper contract, not
+              the operator, decides the outcome.
             </p>
             <Link
-              href="/demo"
-              className="mt-6 inline-block rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
+              href="/how-it-works"
+              className="mt-6 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
             >
-              See it in action
+              How it works, end to end
             </Link>
           </Appear>
         </div>
       </Band>
 
-      {/* Use case */}
+      {/* Honest scope. */}
       <Band>
-        <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
-          <Appear className="max-w-md">
-            <Label>The use case</Label>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              Paying invoices, without paying twice
-            </h2>
-            <p className="mt-5 leading-relaxed text-muted">
-              An agent processing accounts payable approves invoices for payment.
-              The expensive, common failure is paying the same invoice twice: a
-              duplicate slips through and the money is gone. Bondsman gives every
-              invoice a claim hash, a fingerprint of what it claims. When a payout
-              reuses a fingerprint that was already paid, the contract proves the
-              duplicate and slashes the bond. The agent loses its own stake before
-              anyone else loses a cent.
-            </p>
-          </Appear>
-          <Diagram
-            name="slash-split"
-            alt="A slashed bond splits in half: one half to the challenger, one half to the reserve."
-          />
-        </div>
+        <WhatIsReal />
       </Band>
 
-      {/* Positioning */}
-      <Band>
-        <div className="grid gap-8 md:grid-cols-2">
-          <Appear className="rounded-lg border border-rule bg-surface p-7">
-            <Label>The layer after issuance</Label>
-            <p className="mt-3 text-xl leading-snug text-bone">
-              Issuance puts assets on chain. Bondsman decides what happens when an
-              agent moving those assets is wrong.
-            </p>
-          </Appear>
-          <Appear delay={0.08} className="rounded-lg border border-rule bg-surface p-7">
-            <Label>Live on chain</Label>
-            <p className="mt-3 text-xl leading-snug text-bone">
-              Every slash here is a real transaction you can open on the explorer.
-              Accountability only matters when the contract can execute it.
-            </p>
-            {explorerHref && (
-              <a
-                href={explorerHref}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-block text-sm text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
-              >
-                Open a real slash on the explorer
-              </a>
-            )}
-          </Appear>
-        </div>
-      </Band>
-
-      {/* Why Casper */}
-      <Band>
-        <Appear className="max-w-2xl">
-          <Label>Why Casper</Label>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-            Built where the truth is the chain
-          </h2>
-        </Appear>
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          {[
-            ['Typed on-chain events', 'Casper emits typed events the listener reads directly, so the projection stays faithful to the chain.'],
-            ['Final and deterministic', 'A resolved slash is settled, not pending. The outcome is a fact, not a guess.'],
-            ['Room for many small bonds', 'Costs stay low enough that bonding every action, not just large ones, is practical.'],
-          ].map(([t, d], i) => (
-            <Appear key={t} delay={i * 0.06}>
-              <div className="h-full rounded-lg border border-rule bg-surface p-5">
-                <h3 className="font-semibold text-bone">{t}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{d}</p>
-              </div>
-            </Appear>
-          ))}
-        </div>
-      </Band>
-
-      {/* Closing */}
+      {/* Integration CTA. */}
       <Band className="border-t border-rule">
         <Appear className="max-w-3xl">
           <h2 className="text-4xl font-semibold tracking-tight text-bone sm:text-5xl">
             No bond, no action.
           </h2>
           <p className="mt-5 max-w-prose leading-relaxed text-muted">
-            Try the demo now, or leave your email and we will reach out when
-            Bondsman moves past testnet.
+            Bondsman ships as an A2A agent and MCP endpoint. Any autonomous
+            agent can discover it, buy a paid quote through x402, and act under
+            an economic accountability layer.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/demo"
+              href="/build"
               className="rounded-md bg-accent px-7 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
             >
-              Try the live demo
+              Integrate with Bondsman
             </Link>
             <Link
-              href="/app/arena"
+              href="/proof"
               className="rounded-md border border-rule px-7 py-3 text-bone transition-colors hover:border-accent/50"
             >
-              Open the Arena
+              Open the proof
             </Link>
           </div>
           <div className="mt-8 border-t border-rule pt-6">
-            <p className="text-xs text-muted">Get updates when Bondsman ships to mainnet.</p>
+            <p className="text-xs text-muted">
+              Get updates when Bondsman moves past testnet.
+            </p>
             <div className="mt-3 max-w-md">
               <EmailCapture />
             </div>
