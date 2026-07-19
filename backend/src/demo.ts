@@ -16,6 +16,7 @@ import {
 } from './casper/actions.js';
 import { callContract } from './casper/odra-cli.js';
 import { readContract } from './casper/odra-cli.js';
+import { activeContracts } from './casper/contracts.js';
 import { blake2b256 } from './agent/hashing.js';
 import { evidenceFile } from './evidence/store.js';
 
@@ -62,6 +63,7 @@ if (isMain) {
     ),
   );
   const seedState = await seed();
+  const contracts = activeContracts(deployment);
   const demoSignerPath = join(repository, '.keys/demo-agent.pem');
   const options = {
     repository,
@@ -100,7 +102,7 @@ if (isMain) {
       repository,
       config,
       signerPath: join(repository, '.keys/challenger.pem'),
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'resolve_action',
       arguments: ['--action_id', String(duplicate.actionId)],
     });
@@ -133,7 +135,7 @@ if (isMain) {
       repository,
       config,
       signerPath: demoSignerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'get_bond_required',
       arguments: [
         '--amount',
@@ -159,7 +161,7 @@ if (isMain) {
       repository,
       config,
       signerPath: demoSignerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'post_bond',
       arguments: ['--action_id', String(clean.actionId)],
     });
@@ -167,7 +169,7 @@ if (isMain) {
       repository,
       config,
       signerPath: demoSignerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'execute_action',
       arguments: ['--action_id', String(clean.actionId)],
     });
@@ -185,7 +187,7 @@ if (isMain) {
       repository,
       config,
       signerPath: demoSignerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'execute_action',
       arguments: ['--action_id', String(clean.actionId)],
     });
@@ -214,7 +216,7 @@ if (isMain) {
       repository,
       config,
       signerPath: demoSignerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'resolve_action',
       arguments: ['--action_id', String(clean.actionId)],
     });

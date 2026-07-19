@@ -28,7 +28,7 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-const server = new McpServer({ name: 'bondsman-mcp', version: '0.1.0' });
+const server = new McpServer({ name: 'bondsman-mcp', version: '0.2.0' });
 
 function content(value: unknown) {
   return {
@@ -77,6 +77,48 @@ server.registerTool(
     inputSchema: {},
   },
   async () => content(await apiGet('/api/deployments')),
+);
+
+server.registerTool(
+  'get_verifiers',
+  {
+    description:
+      'List the fault classes and verifier status advertised by the Bondsman backend.',
+    inputSchema: {},
+  },
+  async () => content(await apiGet('/api/verifiers')),
+);
+
+server.registerTool(
+  'verify_receipt',
+  {
+    description:
+      'Verify a signed Bondsman receipt for a completed action.',
+    inputSchema: { actionId: z.number().int().nonnegative() },
+  },
+  async ({ actionId }) =>
+    content(await apiGet(`/api/receipt/${actionId}/verify`)),
+);
+
+server.registerTool(
+  'submit_bonded_action',
+  {
+    description:
+      'V2 dependent tool. The current public controller remains on V1 until V2 deployment is proven.',
+    inputSchema: {
+      invoiceId: z.number().int().nonnegative(),
+      amount: z.string().regex(/^\d+$/),
+      faultClass: z.string().optional(),
+    },
+  },
+  async (input) =>
+    content({
+      success: false,
+      code: 'V2_REQUIRED',
+      message:
+        'submit_bonded_action requires the V2 controller deployment. Use the backend demo arm endpoint for the current V1 testnet flow.',
+      input,
+    }),
 );
 
 server.registerTool(

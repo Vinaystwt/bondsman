@@ -6,6 +6,7 @@ import {
   callContract,
   readContract,
 } from '../casper/odra-cli.js';
+import { activeContracts } from '../casper/contracts.js';
 import { blake2b256, claimHash } from './hashing.js';
 import { requestDecision } from './anthropic.js';
 import type { DecisionInvoice } from './prompt.js';
@@ -38,13 +39,14 @@ async function nextActionId(
   options: RunnerOptions,
   signerPath: string,
 ): Promise<number> {
+  const contracts = activeContracts(options.deployment);
   for (let actionId = 0; actionId < 10_000; actionId += 1) {
     try {
       await readContract({
         repository: options.repository,
         config: options.config,
         signerPath,
-        contract: 'BondsmanController',
+        contract: contracts.controller,
         entrypoint: 'get_action',
         arguments: ['--action_id', String(actionId)],
       });
@@ -68,6 +70,7 @@ export async function runAgent(
   options: RunnerOptions,
 ): Promise<AgentRun> {
   const signerPath = join(options.repository, '.keys/agent.pem');
+  const contracts = activeContracts(options.deployment);
   const decision = await requestDecision(
     invoice,
     options.apiKey,
@@ -98,7 +101,7 @@ export async function runAgent(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'initiate_action',
     arguments: [
       '--invoice_id',
@@ -115,7 +118,7 @@ export async function runAgent(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'get_bond_required',
     arguments: [
       '--amount',
@@ -128,7 +131,7 @@ export async function runAgent(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'MockCsprUSD',
+    contract: contracts.token,
     entrypoint: 'approve',
     arguments: [
       '--spender',
@@ -141,7 +144,7 @@ export async function runAgent(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'post_bond',
     arguments: ['--action_id', String(actionId)],
   });
@@ -149,7 +152,7 @@ export async function runAgent(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'execute_action',
     arguments: ['--action_id', String(actionId)],
   });

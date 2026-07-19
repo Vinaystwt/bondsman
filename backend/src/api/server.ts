@@ -45,7 +45,14 @@ export function buildServer(
       reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Vary', 'Origin');
       reply.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-      reply.header('Access-Control-Allow-Headers', 'content-type');
+      reply.header(
+        'Access-Control-Allow-Headers',
+        'authorization,content-type,payment-signature,x-payment',
+      );
+      reply.header(
+        'Access-Control-Expose-Headers',
+        'PAYMENT-REQUIRED,PAYMENT-RESPONSE,X-Payment-Required',
+      );
     }
     if (request.method === 'OPTIONS') {
       reply.code(origin && !isAllowedOrigin(origin, origins) ? 403 : 204).send();

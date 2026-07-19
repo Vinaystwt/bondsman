@@ -10,7 +10,7 @@ const REAL = [
 
 const SCOPE = [
   'Invoice data uses controlled testnet fixtures so duplicate-claim cases are reproducible.',
-  'x402 verification uses a metering sandbox until facilitator-compatible settlement is connected.',
+  'x402 quote metering settles through WCSPR when the integrator account is funded with WCSPR.',
   'The approver currently runs against the demo invoice set, ready to swap for a live invoice or oracle feed.',
 ];
 

@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { callContract } from '../casper/odra-cli.js';
+import { activeContracts, v2Enabled } from '../casper/contracts.js';
 import { loadPrivateKey } from '../casper/keys.js';
 import { SignerQueue } from '../casper/signer-queue.js';
 import { loadConfig } from '../config/env.js';
@@ -54,6 +55,7 @@ if (
 
 const watchdogAddress =
   `account-hash-${deployment.accounts.watchdog.accountHash}`;
+const contracts = activeContracts(deployment);
 const reconcile = () =>
   reconcileChain({
     repositoryPath,
@@ -68,15 +70,26 @@ const transact = (actionId: number) =>
       repository: repositoryPath,
       config,
       signerPath: watchdogPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'challenge_action',
-      arguments: ['--action_id', String(actionId)],
+      arguments: [
+        '--action_id',
+        String(actionId),
+        ...(v2Enabled(deployment)
+          ? [
+              '--fault_class',
+              'duplicate_claim',
+              '--evidence',
+              '0',
+            ]
+          : []),
+      ],
     });
     const resolve = await callContract({
       repository: repositoryPath,
       config,
       signerPath: watchdogPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'resolve_action',
       arguments: ['--action_id', String(actionId)],
     });

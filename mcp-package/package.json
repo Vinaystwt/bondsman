@@ -1,7 +1,7 @@
 {
   "name": "@vinaystwt/bondsman-mcp",
-  "version": "0.1.0",
-  "description": "MCP server for Bondsman on Casper. Six tools an agent can call to check reputation, quote a bond, submit a challenge, and settle on chain.",
+  "version": "0.2.0",
+  "description": "MCP server for Bondsman on Casper. Tools for live actions, verifiers, receipts, reputation, deployments, and challenges.",
   "keywords": [
     "mcp",
     "bondsman",
@@ -21,7 +21,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "bondsman-mcp": "./dist/index.js"
+    "bondsman-mcp": "dist/index.js"
   },
   "files": [
     "dist",

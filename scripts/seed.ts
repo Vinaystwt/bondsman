@@ -10,6 +10,7 @@ import {
   callContract,
   readContract,
 } from '../backend/src/casper/odra-cli.js';
+import { activeContracts, v2Enabled } from '../backend/src/casper/contracts.js';
 import {
   chainActions,
   executeBondedInvoice,
@@ -153,6 +154,7 @@ export async function seed(): Promise<SeedState> {
     ),
   );
   const deployerPath = resolve(config.deployerSecretKeyPath);
+  const contracts = activeContracts(deployment);
   const deployer = await loadPrivateKey(deployerPath);
   const keys = await ensureSubaccountKeys(join(repository, '.keys'));
   const demoSignerPath = join(repository, '.keys/demo-agent.pem');
@@ -212,7 +214,7 @@ export async function seed(): Promise<SeedState> {
         repository,
         config,
         signerPath: deployerPath,
-        contract: 'InvoicePool',
+        contract: contracts.pool,
         entrypoint: 'get_invoice',
         arguments: ['--invoice_id', String(invoice.id)],
       });
@@ -221,7 +223,7 @@ export async function seed(): Promise<SeedState> {
         repository,
         config,
         signerPath: deployerPath,
-        contract: 'InvoicePool',
+        contract: contracts.pool,
         entrypoint: 'submit_invoice',
         arguments: [
           '--invoice_id',
@@ -232,6 +234,16 @@ export async function seed(): Promise<SeedState> {
           invoice.vendor,
           '--claim_hash',
           bytesArgument(Buffer.from(invoice.claimHash, 'hex')),
+          ...(v2Enabled(deployment)
+            ? [
+                '--purchase_order_hash',
+                bytesArgument(Buffer.alloc(32)),
+                '--expected_delivery_deadline',
+                '0',
+                '--buyer_signature_pubkey',
+                bytesArgument(Buffer.alloc(32)),
+              ]
+            : []),
         ],
       });
     }
@@ -300,9 +312,20 @@ export async function seed(): Promise<SeedState> {
       repository,
       config,
       signerPath: join(repository, '.keys/challenger.pem'),
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'challenge_action',
-      arguments: ['--action_id', String(current.actionId)],
+      arguments: [
+        '--action_id',
+        String(current.actionId),
+        ...(v2Enabled(deployment)
+          ? [
+              '--fault_class',
+              'duplicate_claim',
+              '--evidence',
+              '0',
+            ]
+          : []),
+      ],
     });
   }
   const prior = await (async () => {

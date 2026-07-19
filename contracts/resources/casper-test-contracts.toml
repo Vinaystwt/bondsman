@@ -1,4 +1,4 @@
-last_updated = "2026-06-30T03:07:02Z"
+last_updated = "2026-07-18T19:04:48Z"
 
 [[contracts]]
 name = "MockCsprUSD"
@@ -19,3 +19,28 @@ package_hash = "hash-9bedae33a4f53adcaab4f6c74a2c214b051361e0fe85671be3f82f0ca4c
 name = "InvoicePool"
 package_name = "InvoicePool"
 package_hash = "hash-bb2077d5cc0d2d8340cfe8a3d6e4f7cecbeeb5b18888730d0e0e703c46bdec3d"
+
+[[contracts]]
+name = "BondVaultV2"
+package_name = "BondVaultV2"
+package_hash = "hash-af49601e7d571557a1ce7b02b82db8f96e75845d190e750b8acbd742e8201fa1"
+
+[[contracts]]
+name = "BondsmanControllerV2"
+package_name = "BondsmanControllerV2"
+package_hash = "hash-65977c2fa202ce6bf12f2b4072f6abdee2c2b1b6256b91ecf78890508d0431c0"
+
+[[contracts]]
+name = "InvoicePoolV2"
+package_name = "InvoicePoolV2"
+package_hash = "hash-ce92c8d6ce742bd5c4e915325498045ce4f2f208ec26d34754cc8af92228202b"
+
+[[contracts]]
+name = "DuplicateClaimVerifierV2"
+package_name = "DuplicateClaimVerifierV2"
+package_hash = "hash-392004b4f3577681bf2c62f64688537a85e45c1ffc908159b88055f9c6cfe90d"
+
+[[contracts]]
+name = "DeliveryContradictionVerifierV2"
+package_name = "DeliveryContradictionVerifierV2"
+package_hash = "hash-e88ecd10eebcfe95eb0b7218f7c89a7656c5c5d3917e7052c1f3bb225806660a"

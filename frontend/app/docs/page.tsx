@@ -236,10 +236,9 @@ bondsman-mcp`}
         </Faq>
         <Faq q="Is x402 settlement live?">
           <p>
-            The Casper x402 facilitator supports testnet, while this deployment
-            keeps verification metering in a labeled sandbox until the token and
-            facilitator-compatible settlement path are connected. Production
-            x402 settlement remains on the planned mainnet path.
+            The quote endpoint uses Casper x402 settlement with WCSPR through
+            the CSPR.cloud facilitator. The sandbox verifier remains available
+            only as a reference path and never reports a payment receipt.
           </p>
         </Faq>
       </DocSection>

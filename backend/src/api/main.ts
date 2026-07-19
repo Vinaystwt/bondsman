@@ -22,6 +22,7 @@ import {
 } from './ready-pool.js';
 import { getTransaction } from '../casper/transactions.js';
 import { readContract } from '../casper/odra-cli.js';
+import { activeContracts } from '../casper/contracts.js';
 import {
   inspectStartupPort,
   startupDiagnostic,
@@ -61,6 +62,7 @@ const database = openDatabase(
 );
 const repository = new Repository(database);
 const config = loadConfig();
+const contracts = activeContracts(deployment);
 await clearLegacyEvidence(repositoryPath);
 const reconcile = () => reconcileChain({
   repositoryPath,
@@ -71,7 +73,7 @@ const reconcile = () => reconcileChain({
 const resolution = createResolutionService(
   repositoryPath,
   config,
-  deployment.contracts.controller.contractHash,
+  deployment,
   reconcile,
 );
 const walletChallenge = createWalletChallengeService({
@@ -83,7 +85,7 @@ const walletChallenge = createWalletChallengeService({
       repository: repositoryPath,
       config,
       signerPath: join(repositoryPath, '.keys/agent.pem'),
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'get_action',
       arguments: ['--action_id', String(actionId)],
     });

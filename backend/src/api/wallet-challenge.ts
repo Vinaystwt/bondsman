@@ -84,7 +84,9 @@ function splitFromEvents(
 ): { challengerShare: string; reserveShare: string } {
   const event = repository
     .eventsForAction(actionId)
-    .find((candidate) => candidate.eventType === 'BondSlashed');
+    .find((candidate) =>
+      ['BondSlashed', 'ResolvedSlashV2'].includes(candidate.eventType),
+    );
   if (!event) {
     throw new ApiError(
       500,
@@ -94,7 +96,9 @@ function splitFromEvents(
   }
   const fields = JSON.parse(event.data) as Record<string, unknown>;
   const challengerShare = String(fields.challenger_amount ?? '');
-  const reserveShare = String(fields.pool_amount ?? '');
+  const reserveShare = String(
+    fields.pool_amount ?? fields.reserve_amount ?? '',
+  );
   if (
     !/^[0-9]+$/.test(challengerShare) ||
     !/^[0-9]+$/.test(reserveShare)

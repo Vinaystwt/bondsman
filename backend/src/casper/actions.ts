@@ -8,6 +8,7 @@ import {
   callContract,
   readContract,
 } from './odra-cli.js';
+import { activeContracts } from './contracts.js';
 
 export interface ChainActionView {
   actionId: number;
@@ -44,13 +45,14 @@ export async function chainActions(
   const signerPath =
     options.signerPath ??
     join(options.repository, '.keys/agent.pem');
+  const contracts = activeContracts(options.deployment);
   for (let actionId = 0; actionId < 10_000; actionId += 1) {
     try {
       const serialized = await readContract<string>({
         repository: options.repository,
         config: options.config,
         signerPath,
-        contract: 'BondsmanController',
+        contract: contracts.controller,
         entrypoint: 'get_action',
         arguments: ['--action_id', String(actionId)],
       });
@@ -76,13 +78,14 @@ export async function executeBondedInvoice(
   const signerPath =
     options.signerPath ??
     join(options.repository, '.keys/agent.pem');
+  const contracts = activeContracts(options.deployment);
   const actionId = (await chainActions(options)).length;
   const digest = blake2b256(reasoning);
   const initiate = await callContract({
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'initiate_action',
     arguments: [
       '--invoice_id',
@@ -99,7 +102,7 @@ export async function executeBondedInvoice(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'get_bond_required',
     arguments: [
       '--amount',
@@ -115,7 +118,7 @@ export async function executeBondedInvoice(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'MockCsprUSD',
+    contract: contracts.token,
     entrypoint: 'approve',
     arguments: [
       '--spender',
@@ -128,7 +131,7 @@ export async function executeBondedInvoice(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'post_bond',
     arguments: ['--action_id', String(actionId)],
   });
@@ -136,7 +139,7 @@ export async function executeBondedInvoice(
     repository: options.repository,
     config: options.config,
     signerPath,
-    contract: 'BondsmanController',
+    contract: contracts.controller,
     entrypoint: 'execute_action',
     arguments: ['--action_id', String(actionId)],
   });

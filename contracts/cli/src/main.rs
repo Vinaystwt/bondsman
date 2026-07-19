@@ -1,8 +1,13 @@
 use bond_vault::bond_vault::{BondVault, BondVaultInitArgs};
+use bond_vault_v2::bond_vault_v2::BondVaultV2;
 use bondsman_controller::bondsman_controller::{
     BondsmanController, BondsmanControllerInitArgs,
 };
+use bondsman_controller_v2::bondsman_controller_v2::BondsmanControllerV2;
+use delivery_contradiction_verifier_v2::delivery_contradiction_verifier_v2::DeliveryContradictionVerifierV2;
+use duplicate_claim_verifier_v2::duplicate_claim_verifier_v2::DuplicateClaimVerifierV2;
 use invoice_pool::invoice_pool::{InvoicePool, InvoicePoolInitArgs};
+use invoice_pool_v2::invoice_pool_v2::InvoicePoolV2;
 use mock_cspr_usd::mock_cspr_usd::MockCsprUSD;
 use odra::{
     casper_types::U256,
@@ -85,6 +90,11 @@ fn main() {
         .contract::<BondVault>()
         .contract::<BondsmanController>()
         .contract::<InvoicePool>()
+        .contract::<BondVaultV2>()
+        .contract::<BondsmanControllerV2>()
+        .contract::<InvoicePoolV2>()
+        .contract::<DuplicateClaimVerifierV2>()
+        .contract::<DeliveryContradictionVerifierV2>()
         .build()
         .run();
 }

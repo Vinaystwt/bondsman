@@ -13,6 +13,6 @@ const deployment = deploymentSchema.parse(JSON.parse(await readFile(join(root, '
 const repository = new Repository(openDatabase(deploymentDatabasePath(join(root, '.data'), deployment.contracts.controller.contractHash)));
 const result = await runIntegrator({
   baseUrl: process.env.BONDSMAN_BASE_URL ?? 'https://bondsman-backend-production.up.railway.app',
-  deployment, repository,
+  deployment, repository, repositoryPath: root,
 });
 console.log(JSON.stringify(result, null, 2));

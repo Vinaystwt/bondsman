@@ -14,6 +14,14 @@ import {
   parseSandboxPayment,
   paymentRequired,
 } from '../verify/payment.js';
+import {
+  parsePaymentHeader,
+  quoteRequirements,
+  quoteResponse,
+  sendPaymentRequired,
+  settleX402Payment,
+  x402Config,
+} from '../verify/x402.js';
 import { verifyClaimCollision } from '../verify/service.js';
 import {
   challengeIneligibilityCode,
@@ -55,6 +63,16 @@ function latestSlashProof(
     resolveTx: detail.transactions.resolve ?? null,
     explorerLinks: detail.explorerLinks,
   };
+}
+
+function quoteAmount(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const value = (body as Record<string, unknown>).amount;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    throw new ApiError(400, 'INVALID_QUOTE_AMOUNT', 'amount must be a positive integer string');
+  }
+  return value;
 }
 
 export function registerRoutes(
@@ -151,9 +169,12 @@ export function registerRoutes(
       },
     };
   });
-  server.get('/api/verifiers', async () => listVerifiers());
+  server.get('/api/verifiers', async () => listVerifiers(deployment));
   server.get('/api/verifiers/:faultClass', async (request) => {
-    const found = verifier((request.params as { faultClass: string }).faultClass);
+    const found = verifier(
+      (request.params as { faultClass: string }).faultClass,
+      deployment,
+    );
     if (!found) throw new ApiError(404, 'NOT_FOUND', 'verifier not found');
     return found;
   });
@@ -241,6 +262,53 @@ export function registerRoutes(
       },
     };
   });
+  server.post('/v1/actions/quote', async (request, reply) => {
+    const requirements = quoteRequirements(deployment);
+    let paymentPayload;
+    try {
+      paymentPayload = parsePaymentHeader(request, requirements);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return sendPaymentRequired(reply, requirements, reason);
+    }
+    if (!paymentPayload) {
+      return sendPaymentRequired(reply, requirements);
+    }
+    const settlement = await settleX402Payment({
+      deployment,
+      paymentPayload,
+      paymentRequirements: requirements,
+    });
+    if (!settlement.success || !settlement.transaction) {
+      const reason = [
+        settlement.errorReason ?? 'settlement_failed',
+        settlement.errorMessage,
+      ].filter(Boolean).join(': ');
+      return sendPaymentRequired(
+        reply,
+        requirements,
+        reason || 'x402 settlement failed',
+      );
+    }
+    const facilitator = new URL(x402Config(deployment).facilitatorUrl).host;
+    const amount = quoteAmount(request.body);
+    const quote = quoteResponse({
+      repository,
+      deployment,
+      receipt: {
+        amount: requirements.amount,
+        transaction: settlement.transaction,
+        facilitator,
+        ...(settlement.payer ? { payer: settlement.payer } : {}),
+      },
+      ...(amount ? { amount } : {}),
+    });
+    reply.header(
+      'PAYMENT-RESPONSE',
+      Buffer.from(JSON.stringify(quote.paymentReceipt)).toString('base64'),
+    );
+    return quote;
+  });
   server.post('/api/challenge', async (request) => {
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);
@@ -296,6 +364,7 @@ export function registerRoutes(
     baseUrl: `${String(request.headers['x-forwarded-proto'] ?? 'https').split(',')[0]}://${request.headers.host ?? request.hostname}`,
     deployment,
     repository,
+    repositoryPath,
   }));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();

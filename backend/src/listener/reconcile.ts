@@ -7,6 +7,7 @@ import {
   readContract,
   readEvents,
 } from '../casper/odra-cli.js';
+import { activeContracts } from '../casper/contracts.js';
 import { claimHash } from '../agent/hashing.js';
 import type { DecisionInvoice } from '../agent/prompt.js';
 import {
@@ -71,6 +72,7 @@ function transactionForEvent(
   transactions: Record<string, string> | undefined,
   type: string,
 ): string | null {
+  const normalizedType = type.replace(/V2$/, '');
   const key = {
     ActionInitiated: 'initiate',
     BondPosted: 'postBond',
@@ -83,8 +85,21 @@ function transactionForEvent(
     BondSlashed: 'resolve',
     PayoutApproved: 'execute',
     DuplicateDetected: 'execute',
+    ActionInitiatedV2: 'initiate',
+    ActionChallengedV2: 'challenge',
+    ResolvedSlashV2: 'resolve',
+    PayoutApprovedV2: 'execute',
+    DuplicateDetectedV2: 'execute',
+    ResolvedRefundV2: 'resolve',
   }[type] as string | undefined;
-  return key ? transactions?.[key] ?? null : null;
+  const normalizedKey = key ?? ({
+    ActionInitiated: 'initiate',
+    ActionChallenged: 'challenge',
+    ResolvedSlash: 'resolve',
+    PayoutApproved: 'execute',
+    DuplicateDetected: 'execute',
+  }[normalizedType] as string | undefined);
+  return normalizedKey ? transactions?.[normalizedKey] ?? null : null;
 }
 
 async function importPendingInvoice(
@@ -119,6 +134,7 @@ export async function reconcileChain(
   options: ReconcileOptions,
 ): Promise<void> {
   const signerPath = join(options.repositoryPath, '.keys/agent.pem');
+  const contracts = activeContracts(options.deployment);
   const controllerHash =
     options.deployment.contracts.controller.contractHash;
   const evidence = new Map<number, ActionEvidence | undefined>();
@@ -140,10 +156,10 @@ export async function reconcileChain(
   const actionIds = new Set<number>();
   let reserveChanged = false;
   for (const contract of [
-    'MockCsprUSD',
-    'BondVault',
-    'BondsmanController',
-    'InvoicePool',
+    contracts.token,
+    contracts.vault,
+    contracts.controller,
+    contracts.pool,
   ]) {
     const cursor = options.repository.eventCursor(contract);
     const events = await readEvents({
@@ -176,7 +192,7 @@ export async function reconcileChain(
         ),
       });
       options.repository.advanceEventCursor(contract, event.index);
-      reserveChanged = reserveChanged || contract === 'InvoicePool';
+      reserveChanged = reserveChanged || contract === contracts.pool;
     }
   }
 
@@ -185,7 +201,7 @@ export async function reconcileChain(
       repository: options.repositoryPath,
       config: options.config,
       signerPath,
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'get_action',
       arguments: ['--action_id', String(actionId)],
     });
@@ -203,7 +219,7 @@ export async function reconcileChain(
         repository: options.repositoryPath,
         config: options.config,
         signerPath,
-        contract: 'InvoicePool',
+        contract: contracts.pool,
         entrypoint: 'is_action_duplicate',
         arguments: ['--action_id', String(actionId)],
       })) === 'true';
@@ -258,25 +274,34 @@ export async function reconcileChain(
       },
     };
     options.repository.upsertAction(record);
-    const reputationJson = await readContract<string>({
-      repository: options.repositoryPath,
-      config: options.config,
-      signerPath,
-      contract: 'BondsmanController',
-      entrypoint: 'get_reputation',
-      arguments: ['--agent', record.agent],
-    });
-    const reputation = JSON.parse(reputationJson) as {
-      clean: string;
-      slashed: string;
-      score: string;
-    };
-    options.repository.setReputation(
-      record.agent,
-      Number(reputation.clean),
-      Number(reputation.slashed),
-      Number(reputation.score),
-    );
+    try {
+      const reputationJson = await readContract<string>({
+        repository: options.repositoryPath,
+        config: options.config,
+        signerPath,
+        contract: contracts.controller,
+        entrypoint: 'get_reputation',
+        arguments: ['--agent', record.agent],
+      });
+      const reputation = JSON.parse(reputationJson) as {
+        clean: string;
+        slashed: string;
+        score: string;
+      };
+      options.repository.setReputation(
+        record.agent,
+        Number(reputation.clean),
+        Number(reputation.slashed),
+        Number(reputation.score),
+      );
+    } catch (error) {
+      if (options.deployment.current !== 'v2') throw error;
+      const reason =
+        error instanceof Error ? error.message : String(error);
+      if (!/get_reputation|unrecognized subcommand|No such entry/i.test(reason)) {
+        throw error;
+      }
+    }
     const invoice = options.repository
       .listInvoices()
       .find((candidate) => candidate.id === record.invoiceId);
@@ -293,7 +318,7 @@ export async function reconcileChain(
       repository: options.repositoryPath,
       config: options.config,
       signerPath,
-      contract: 'InvoicePool',
+      contract: contracts.pool,
       entrypoint: 'reserve_balance',
       arguments: [],
     });
@@ -311,6 +336,7 @@ export async function resolveExpiredClean(
 ): Promise<string[]> {
   const hashes: string[] = [];
   const signerPath = join(options.repositoryPath, '.keys/agent.pem');
+  const contracts = activeContracts(options.deployment);
   for (const actionId of options.repository.expiredCleanActions(
     Date.now(),
   )) {
@@ -319,7 +345,7 @@ export async function resolveExpiredClean(
         repository: options.repositoryPath,
         config: options.config,
         signerPath,
-        contract: 'BondsmanController',
+        contract: contracts.controller,
         entrypoint: 'resolve_action',
         arguments: ['--action_id', String(actionId)],
       }),

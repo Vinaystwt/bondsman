@@ -1,3 +1,5 @@
+import type { Deployment } from '../shared/deployment.js';
+
 export interface FaultVerifierSpec {
   id: 'duplicate_claim' | 'delivery_contradiction';
   title: string;
@@ -39,10 +41,20 @@ const verifiers: FaultVerifierSpec[] = [
   },
 ];
 
-export function listVerifiers(): FaultVerifierSpec[] {
-  return verifiers;
+export function listVerifiers(deployment?: Deployment): FaultVerifierSpec[] {
+  if (deployment?.current !== 'v2') return verifiers;
+  return verifiers.map((candidate) => {
+    if (candidate.id !== 'delivery_contradiction') return candidate;
+    const { limitation: _limitation, ...rest } = candidate;
+    return { ...rest, onChain: true };
+  });
 }
 
-export function verifier(id: string): FaultVerifierSpec | undefined {
-  return verifiers.find((candidate) => candidate.id === id);
+export function verifier(
+  id: string,
+  deployment?: Deployment,
+): FaultVerifierSpec | undefined {
+  return listVerifiers(deployment).find(
+    (candidate) => candidate.id === id,
+  );
 }

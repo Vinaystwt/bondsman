@@ -7,6 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { createResolutionService } from '../api/resolution.js';
 import { readContract } from '../casper/odra-cli.js';
+import { activeContracts } from '../casper/contracts.js';
 import { loadConfig } from '../config/env.js';
 import {
   deploymentDatabasePath,
@@ -40,10 +41,11 @@ const repository = new Repository(
     ),
   ),
 );
+const contracts = activeContracts(deployment);
 const resolution = createResolutionService(
   repositoryPath,
   config,
-  deployment.contracts.controller.contractHash,
+  deployment,
 );
 const tools = createToolHandlers({
   repository,
@@ -53,7 +55,7 @@ const tools = createToolHandlers({
       repository: repositoryPath,
       config,
       signerPath: join(repositoryPath, '.keys/challenger.pem'),
-      contract: 'BondsmanController',
+      contract: contracts.controller,
       entrypoint: 'get_bond_required',
       arguments: [
         '--amount',

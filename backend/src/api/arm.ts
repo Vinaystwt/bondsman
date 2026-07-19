@@ -12,6 +12,7 @@ import {
   isRateLimitedError,
   readContract,
 } from '../casper/odra-cli.js';
+import { activeContracts, v2Enabled } from '../casper/contracts.js';
 import {
   fundToTarget,
   transferableTopUp,
@@ -38,7 +39,7 @@ const FIFTEEN_MINUTES_MS = 900_000;
 export const DEMO_GAS_TARGET_MOTES = 300_000_000_000n;
 const DEMO_TRANSFER_GAS_RESERVE_MOTES = 50_000_000_000n;
 const DEMO_OWNER_GAS_RESERVE_MOTES = 50_000_000_000n;
-const MAX_UNPROJECTED_ACTION_PROBES = 3;
+const MAX_UNPROJECTED_ACTION_PROBES = 200;
 
 export function demoSignerPlan(
   deployerPath: string,
@@ -109,6 +110,7 @@ export async function runArmStep<T>(
 export async function selectResumablePending(
   actions: ChainActionView[],
   isInvoicePaid: (invoiceId: number) => Promise<boolean>,
+  matchesAction: (action: ChainActionView) => Promise<boolean> = async () => true,
 ): Promise<ChainActionView | undefined> {
   for (const action of [...actions].reverse()) {
     if (
@@ -117,6 +119,7 @@ export async function selectResumablePending(
     ) {
       continue;
     }
+    if (!(await matchesAction(action))) continue;
     if (!(await isInvoicePaid(action.invoiceId))) return action;
   }
   return undefined;
@@ -424,6 +427,7 @@ export function createDemoArmService(
   ) => {
     const deployerPath = resolve(config.deployerSecretKeyPath);
     const agentPath = join(repositoryPath, '.keys/agent.pem');
+    const contracts = activeContracts(deployment);
     const signers = demoSignerPlan(deployerPath, agentPath);
     const deployerSigner: ArmSigner = {
       role: 'deployer/owner',
@@ -478,7 +482,7 @@ export function createDemoArmService(
           repository: repositoryPath,
           config,
           signerPath: agentPath,
-          contract: 'BondsmanController',
+          contract: contracts.controller,
           entrypoint: 'get_action',
           arguments: ['--action_id', String(actionId)],
         }),
@@ -487,6 +491,7 @@ export function createDemoArmService(
       projectedActionViews(repository),
       readRawAction,
     );
+    const collision = demoInvoices[0]!;
     const pending = await selectResumablePending(
       cursor.actions,
       async (candidateInvoiceId) => {
@@ -494,7 +499,7 @@ export function createDemoArmService(
           repository: repositoryPath,
           config,
           signerPath: deployerPath,
-          contract: 'InvoicePool',
+          contract: contracts.pool,
           entrypoint: 'get_invoice',
           arguments: [
             '--invoice_id',
@@ -504,9 +509,12 @@ export function createDemoArmService(
         const candidate = JSON.parse(serialized) as RawInvoice;
         return candidate.paid === true || candidate.paid === 'true';
       },
+      async (candidateAction) => {
+        const candidate = await readRawAction(candidateAction.actionId);
+        return bytesHex(candidate.claim_hash) === collision.claimHash;
+      },
     );
     const invoiceId = pending?.invoiceId ?? requestedInvoiceId;
-    const collision = demoInvoices[0]!;
     const invoice: SeedInvoice = {
       ...collision,
       id: invoiceId,
@@ -520,7 +528,7 @@ export function createDemoArmService(
           repository: repositoryPath,
           config,
           signerPath: deployerPath,
-          contract: 'InvoicePool',
+          contract: contracts.pool,
           entrypoint: 'get_invoice',
           arguments: ['--invoice_id', String(invoice.id)],
         });
@@ -533,7 +541,7 @@ export function createDemoArmService(
           await transact(
             'submit_invoice',
             deployerSigner,
-            'InvoicePool',
+            contracts.pool,
             'submit_invoice',
             [
               '--invoice_id',
@@ -544,6 +552,16 @@ export function createDemoArmService(
               invoice.vendor,
               '--claim_hash',
               bytesArgument(Buffer.from(invoice.claimHash, 'hex')),
+              ...(v2Enabled(deployment)
+                ? [
+                    '--purchase_order_hash',
+                    bytesArgument(Buffer.alloc(32)),
+                    '--expected_delivery_deadline',
+                    '0',
+                    '--buyer_signature_pubkey',
+                    bytesArgument(Buffer.alloc(32)),
+                  ]
+                : []),
             ],
           );
         } catch (error) {
@@ -552,7 +570,7 @@ export function createDemoArmService(
             repository: repositoryPath,
             config,
             signerPath: deployerPath,
-            contract: 'InvoicePool',
+            contract: contracts.pool,
             entrypoint: 'get_invoice',
             arguments: ['--invoice_id', String(invoice.id)],
           });
@@ -581,7 +599,7 @@ export function createDemoArmService(
         transactions.initiate = await transact(
           'initiate_action',
           agentSigner,
-          'BondsmanController',
+          contracts.controller,
           'initiate_action',
           [
             '--invoice_id',
@@ -603,7 +621,7 @@ export function createDemoArmService(
           transactions.initiate = await transact(
             'initiate_action',
             agentSigner,
-            'BondsmanController',
+            contracts.controller,
             'initiate_action',
             [
               '--invoice_id',
@@ -675,7 +693,7 @@ export function createDemoArmService(
         transactions.postBond = await transact(
           'post_bond',
           agentSigner,
-          'BondsmanController',
+          contracts.controller,
           'post_bond',
           ['--action_id', String(actionId)],
         );
@@ -693,7 +711,7 @@ export function createDemoArmService(
         transactions.execute = await transact(
           'execute_action',
           agentSigner,
-          'BondsmanController',
+          contracts.controller,
           'execute_action',
           ['--action_id', String(actionId)],
         );
@@ -707,7 +725,7 @@ export function createDemoArmService(
       repository: repositoryPath,
       config,
       signerPath: agentPath,
-      contract: 'InvoicePool',
+      contract: contracts.pool,
       entrypoint: 'is_action_duplicate',
       arguments: ['--action_id', String(actionId)],
     });

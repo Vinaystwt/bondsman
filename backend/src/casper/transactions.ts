@@ -45,6 +45,15 @@ function executionError(raw: unknown): string | null | undefined {
   const info = record(rpcResult(raw)?.execution_info);
   if (!info) return undefined;
   const result = record(info.execution_result);
+  if (record(result?.Success)) return null;
+  const topLevelFailure = record(result?.Failure);
+  if (topLevelFailure) {
+    return String(
+      topLevelFailure.error_message ??
+        topLevelFailure.errorMessage ??
+        'transaction execution failed',
+    );
+  }
   const version2 = record(result?.Version2);
   if (version2) {
     const message = version2.error_message;
@@ -53,6 +62,7 @@ function executionError(raw: unknown): string | null | undefined {
       : String(message);
   }
   const version1 = record(result?.Version1);
+  if (record(version1?.Success)) return null;
   const failure = record(version1?.Failure);
   if (failure) {
     return String(
@@ -62,7 +72,7 @@ function executionError(raw: unknown): string | null | undefined {
     );
   }
   if (version1?.Success) return null;
-  return 'transaction execution result is unsupported';
+  return undefined;
 }
 
 export function transactionFinality(

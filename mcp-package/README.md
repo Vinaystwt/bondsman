@@ -2,7 +2,7 @@
 
 An MCP server that exposes the Bondsman protocol to any Model Context Protocol client.
 
-Bondsman is a notary for money on Casper. An autonomous agent must stake real capital before it can move money and loses it when it is wrong. This MCP server gives an external agent a stdio interface to check reputation, quote a bond, submit a challenge, and settle on chain.
+Bondsman is a notary for money on Casper. An autonomous agent must stake real capital before it can move money and loses it when it is wrong. This MCP server gives an external agent a stdio interface to inspect actions, check reputation, read verifiers, verify receipts, and submit challenges.
 
 ## Install
 
@@ -28,7 +28,7 @@ Defaults to `http://127.0.0.1:3001`. The Bondsman backend is open source in the 
 
 ## Tools
 
-Six tools are registered:
+Nine tools are registered:
 
 | Tool | Purpose |
 | ---- | ------- |
@@ -36,8 +36,11 @@ Six tools are registered:
 | `get_action` | Full detail for one action, including reasoning, events, transactions, explorer links. |
 | `get_reputation` | On-chain reputation for an agent address: clean, slashed, score, action history. |
 | `get_deployments` | Network, chain, contract package hashes, and account roles. |
+| `get_verifiers` | List fault classes and verifier status from the backend registry. |
+| `verify_receipt` | Verify a signed Bondsman receipt for a completed action. |
 | `get_bond_requirement` | Documented as a controller call; the HTTP API does not expose it. |
 | `challenge_action` | Submit a challenge against an action. Returns the challenge and resolve transaction hashes. |
+| `submit_bonded_action` | V2 dependent. Returns a clear V2 required response while the public controller remains on V1. |
 
 ## Use with Claude Code
 
@@ -65,7 +68,7 @@ See `examples/watchdog.ts` for a minimal external agent that lists actions, look
 
 - Testnet frontend and demo: https://github.com/vinaystwt/bondsman
 - Casper testnet contracts: deployed
-- Approver is model-driven. Watchdog is deterministic. x402 is a sandbox on testnet.
+- Approver is model-driven. Watchdog is deterministic. The paid quote endpoint uses real Casper x402 settlement when the integrator account has WCSPR.
 
 ## License
 

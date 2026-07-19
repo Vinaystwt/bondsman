@@ -90,7 +90,7 @@ The required bond scales with the size of the payout, and rises further if the a
 
 Bondsman is deployed as a live Casper Testnet prototype with real on-chain execution. The core accountability loop is active today: agents post bonds, payouts execute through the invoice pool, duplicate claims can be challenged, bonds can be slashed, reserves update, and agent reputation changes on chain.
 
-The invoice dataset uses controlled testnet fixtures so duplicate-claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP-18 asset. The x402 endpoint is an explicitly labeled sandbox at `/api/labs/x402-sandbox`; it does not settle payment or fabricate a transaction receipt. See `docs/X402_STATUS.md` for the currently verified facilitator limitation.
+The invoice dataset uses controlled testnet fixtures so duplicate claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP 18 asset. The paid quote endpoint at `/v1/actions/quote` uses real Casper x402 settlement through WCSPR and the CSPR.cloud facilitator when the integrator account has WCSPR. The older `/api/labs/x402-sandbox` path remains only as a labeled reference and never fabricates a settlement receipt. See `docs/X402_STATUS.md` for the current payment status.
 
 ---
 
@@ -125,9 +125,9 @@ Tools exposed: `get_action`, `list_actions`, `get_reputation`, `get_bond_require
 ## Roadmap
 
 - **Q3 2026.** Harden the bond and slash logic through external review. Replace the testnet stablecoin with live csprUSD. Sign a first design partner running a real invoice or private credit pool on Casper.
-- **Q4 2026.** Agent operator tools and a proof center. The x402 metered verification path documented for real service integration.
+- **Q4 2026.** Agent operator tools and a proof center. The x402 metered quote path documented for real service integration.
 - **Q1 2027.** An underwriting and policy layer: reserve analytics, policy templates for challenge windows and risk tiers, and a portable agent reputation passport other Casper protocols can read.
-- **Q2 2027 and the mainnet path.** Production contracts with production csprUSD, oracle backed delivery attestation, x402 settlement once the token and facilitator support production payments, and reputation APIs for integrators.
+- **Q2 2027 and the mainnet path.** Production contracts with production csprUSD, oracle backed delivery attestation, production x402 settlement, and reputation APIs for integrators.
 
 Full detail on the [roadmap page](https://bondsman.vercel.app/roadmap).
 

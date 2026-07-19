@@ -540,4 +540,121 @@ describe('REST routes', () => {
     await context.server.close();
     context.database.close();
   });
+
+  it('requires real x402 payment for the bond quote endpoint', async () => {
+    const context = fixture();
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      payload: { amount: '50000000000000' },
+    });
+    expect(response.statusCode).toBe(402);
+    expect(response.headers['payment-required']).toBeTruthy();
+    expect(response.json()).toMatchObject({
+      success: false,
+      code: 'X402_PAYMENT_REQUIRED',
+      payment: {
+        x402Version: 2,
+        accepts: [
+          {
+            scheme: 'exact',
+            network: 'casper:casper-test',
+            asset:
+              '3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e',
+            amount: '100000000',
+          },
+        ],
+      },
+    });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('surfaces the facilitator reason when x402 settlement fails', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        success: false,
+        errorReason: 'insufficient_funds',
+        errorMessage: 'payer has no WCSPR',
+      })),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: { signature: '00' },
+    })).toString('base64');
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: { amount: '50000000000000' },
+    });
+    expect(response.statusCode).toBe(402);
+    expect(response.json().message).toContain('insufficient_funds');
+    expect(response.json().message).toContain('payer has no WCSPR');
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('returns a paid quote after x402 settlement succeeds', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        success: true,
+        transaction: '7'.repeat(64),
+        network: 'casper:casper-test',
+        payer: `00${'4'.repeat(64)}`,
+      })),
+    }));
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: { signature: '00' },
+    })).toString('base64');
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: { amount: '50000000000000' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['payment-response']).toBeTruthy();
+    expect(response.json()).toMatchObject({
+      actionType: 'invoice_payout',
+      riskTier: 'HIGH',
+      requiredBond: '2500000000000',
+      challengeWindow: 1800,
+      policyModule: 'duplicate-claim-v1',
+      paymentReceipt: {
+        network: 'casper-test',
+        asset: 'WCSPR',
+        amount: '100000000',
+        transaction: '7'.repeat(64),
+        facilitator: 'x402-facilitator.cspr.cloud',
+        settled: true,
+      },
+    });
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
 });

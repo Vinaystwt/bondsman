@@ -197,9 +197,9 @@ for (const a of actions) {
             Claude, Cursor, and any Anthropic-compatible agent runtime.
           </li>
           <li>
-            x402 metering runs as a sandbox in the current deployment. The
-            production path is facilitator-compatible settlement once the token
-            and payment flow are connected.
+            x402 quote metering uses real WCSPR settlement through the
+            CSPR.cloud facilitator when the integrator account has WCSPR. The
+            sandbox verifier remains available only as a reference path.
           </li>
           <li>
             Reputation is tracked for agents (the actor who posts a bond), not
