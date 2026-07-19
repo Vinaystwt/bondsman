@@ -266,6 +266,22 @@ describe('canonical proof evidence', () => {
     tamperedAction.actionId = '28';
     expect(verifyReceipt(tamperedAction).valid).toBe(false);
 
+    const tamperedOutcome = structuredClone(receipt!) as PortableReceipt;
+    tamperedOutcome.outcome = 'REFUNDED';
+    expect(verifyReceipt(tamperedOutcome).valid).toBe(false);
+
+    const tamperedBond = structuredClone(receipt!) as PortableReceipt;
+    tamperedBond.bond = '1';
+    expect(verifyReceipt(tamperedBond).valid).toBe(false);
+
+    const tamperedEvidence = structuredClone(receipt!) as PortableReceipt;
+    tamperedEvidence.deliveryEvidence!.evidenceRoot = `0x${'f'.repeat(64)}`;
+    expect(verifyReceipt(tamperedEvidence).valid).toBe(false);
+
+    const malformedSignature = structuredClone(receipt!) as PortableReceipt;
+    malformedSignature.signature = 'not-base64';
+    expect(verifyReceipt(malformedSignature).valid).toBe(false);
+
     database.close();
     await rm(repositoryPath, { recursive: true, force: true });
   });

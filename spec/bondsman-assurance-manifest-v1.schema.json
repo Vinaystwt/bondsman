@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bondsman.dev/schemas/bondsman-assurance-manifest-v1.json",
+  "title": "Bondsman Assurance Manifest v1",
+  "type": "object",
+  "required": [
+    "schemaId",
+    "scenarioId",
+    "scenarioHash",
+    "template",
+    "actionCategory",
+    "amount",
+    "riskIndicators",
+    "modelAnalysisHash",
+    "riskTier",
+    "bondPolicy",
+    "faultClass",
+    "challengeWindowSeconds",
+    "evidenceRequirements",
+    "implementationStatus",
+    "expectedReceiptFields",
+    "casperNetwork",
+    "boundaries"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schemaId": { "const": "bondsman.assurance-manifest.v1" },
+    "scenarioId": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "scenarioHash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "template": {
+      "type": "object",
+      "required": ["id", "name", "implementationStatus"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "implementationStatus": {
+          "enum": ["executable_now", "blueprint"]
+        }
+      }
+    },
+    "actionCategory": {
+      "enum": ["RWA", "DeFi", "x402", "Treasury"]
+    },
+    "amount": {
+      "type": "object",
+      "required": ["value", "asset", "decimals"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "asset": { "type": "string" },
+        "decimals": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "riskIndicators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "explanation"],
+        "properties": {
+          "code": { "type": "string" },
+          "severity": { "enum": ["low", "medium", "high"] },
+          "explanation": { "type": "string" }
+        }
+      }
+    },
+    "modelAnalysisHash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "riskTier": { "enum": ["standard", "elevated", "high"] },
+    "bondPolicy": {
+      "type": "object",
+      "required": ["authority", "estimatedBond", "bondBasisPoints"],
+      "properties": {
+        "authority": { "const": "deterministic_policy" },
+        "estimatedBond": { "type": "string", "pattern": "^[0-9]+$" },
+        "bondBasisPoints": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "faultClass": { "enum": ["duplicate_claim", "delivery_contradiction"] },
+    "verifier": {
+      "type": ["string", "null"]
+    },
+    "proposedVerifier": {
+      "type": ["string", "null"]
+    },
+    "challengeWindowSeconds": { "type": "integer", "minimum": 1 },
+    "evidenceRequirements": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "implementationStatus": { "enum": ["executable_now", "blueprint"] },
+    "quoteRequestShape": {
+      "type": ["object", "null"]
+    },
+    "submitRequirements": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expectedReceiptFields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "casperNetwork": { "type": "string" },
+    "contractReferences": {
+      "type": ["object", "null"]
+    },
+    "boundaries": {
+      "type": "object",
+      "required": [
+        "submitsTransaction",
+        "makesPayment",
+        "challengesAction",
+        "settlesQuote"
+      ],
+      "properties": {
+        "submitsTransaction": { "const": false },
+        "makesPayment": { "const": false },
+        "challengesAction": { "const": false },
+        "settlesQuote": { "const": false }
+      }
+    }
+  }
+}

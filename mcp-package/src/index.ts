@@ -28,7 +28,30 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-const server = new McpServer({ name: 'bondsman-mcp', version: '0.2.0' });
+async function apiPostResult<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<{
+  status: number;
+  ok: boolean;
+  body: T;
+  headers: Record<string, string | null>;
+}> {
+  const init: RequestInit = { method: 'POST' };
+  init.headers = { 'content-type': 'application/json', ...headers };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  const res = await fetch(`${API_BASE}${path}`, init);
+  const text = await res.text();
+  return {
+    status: res.status,
+    ok: res.ok,
+    body: text ? JSON.parse(text) as T : null as T,
+    headers: {
+      paymentRequired: res.headers.get('payment-required'),
+      paymentResponse: res.headers.get('payment-response'),
+      xPaymentRequired: res.headers.get('x-payment-required'),
+    },
+  };
+}
+
+const server = new McpServer({ name: 'bondsman-mcp', version: '0.3.0' });
 
 function content(value: unknown) {
   return {
@@ -40,7 +63,7 @@ server.registerTool(
   'list_actions',
   {
     description:
-      'List every bonded action from the live Bondsman projection, most recent first.',
+      'Read-only: list every bonded action from the live Bondsman projection, most recent first.',
     inputSchema: {},
   },
   async () => content(await apiGet('/api/actions')),
@@ -50,7 +73,7 @@ server.registerTool(
   'get_action',
   {
     description:
-      'Full detail for one action: reasoning, events, on-chain transactions, explorer links.',
+      'Read-only: full detail for one action, including reasoning, events, on-chain transactions, and explorer links.',
     inputSchema: { actionId: z.number().int().nonnegative() },
   },
   async ({ actionId }) => content(await apiGet(`/api/actions/${actionId}`)),
@@ -60,7 +83,7 @@ server.registerTool(
   'get_reputation',
   {
     description:
-      'On-chain reputation for an agent address: clean, slashed, score, action history.',
+      'Read-only: on-chain reputation for an agent address: clean, slashed, score, action history.',
     inputSchema: { agentAddress: z.string().min(1) },
   },
   async ({ agentAddress }) =>
@@ -73,7 +96,7 @@ server.registerTool(
   'get_deployments',
   {
     description:
-      'Network, chain name, contract package hashes, and known account roles for the running Bondsman deployment.',
+      'Read-only: network, chain name, contract package hashes, and known account roles for the running Bondsman deployment.',
     inputSchema: {},
   },
   async () => content(await apiGet('/api/deployments')),
@@ -83,7 +106,7 @@ server.registerTool(
   'get_verifiers',
   {
     description:
-      'List the fault classes and verifier status advertised by the Bondsman backend.',
+      'Read-only: list the fault classes and verifier status advertised by the Bondsman backend.',
     inputSchema: {},
   },
   async () => content(await apiGet('/api/verifiers')),
@@ -93,7 +116,7 @@ server.registerTool(
   'verify_receipt',
   {
     description:
-      'Verify a signed Bondsman receipt for a completed action.',
+      'Read-only: verify a signed Bondsman receipt for a completed action.',
     inputSchema: { actionId: z.number().int().nonnegative() },
   },
   async ({ actionId }) =>
@@ -101,53 +124,112 @@ server.registerTool(
 );
 
 server.registerTool(
+  'get_assurance_templates',
+  {
+    description:
+      'Design-only: list supported Assurance Studio templates and whether they are executable today or blueprints.',
+    inputSchema: {},
+  },
+  async () => content(await apiGet('/api/assurance/templates')),
+);
+
+server.registerTool(
+  'design_assurance_policy',
+  {
+    description:
+      'Design-only: produce a Bondsman assurance manifest without payment, challenge, settlement, or Casper transaction submission.',
+    inputSchema: {
+      templateId: z.enum([
+        'invoice_delivery',
+        'duplicate_invoice_test',
+        'treasury_payment',
+        'dex_execution',
+        'x402_service_delivery',
+      ]),
+      description: z.string().min(8).max(1000),
+      amount: z.string().regex(/^[1-9]\d*$/),
+      agentConfidence: z.number().min(0).max(1),
+      counterpartyStatus: z.enum(['new', 'known', 'trusted', 'unknown']),
+      evidenceSource: z.enum([
+        'signed_delivery_attestation',
+        'paid_claim_registry',
+        'multisig_approval',
+        'oracle_report',
+        'execution_receipt',
+      ]),
+      maxLossBps: z.number().int().min(1).max(10000),
+      urgency: z.enum(['low', 'normal', 'high']),
+    },
+  },
+  async (input) => content(await apiPost('/api/assurance/analyze', input)),
+);
+
+server.registerTool(
+  'quote_bonded_action',
+  {
+    description:
+      'Paid HTTP: request a bonded-action quote. Without a payment-signature this returns the x402 402 requirement and does not mutate protocol state.',
+    inputSchema: {
+      amount: z.string().regex(/^[1-9]\d*$/).optional(),
+      faultClass: z.enum(['duplicate_claim', 'delivery_contradiction']).optional(),
+      paymentSignature: z.string().optional(),
+    },
+  },
+  async ({ paymentSignature, ...body }) =>
+    content(await apiPostResult('/v1/actions/quote', body, paymentSignature
+      ? { 'payment-signature': paymentSignature }
+      : undefined)),
+);
+
+server.registerTool(
   'submit_bonded_action',
   {
     description:
-      'V2 dependent tool. The current public controller remains on V1 until V2 deployment is proven.',
+      'Paid HTTP execution: submit a bonded action only after x402 quote settlement and payer submit authorization. This is not a sponsored public mutation.',
     inputSchema: {
-      invoiceId: z.number().int().nonnegative(),
-      amount: z.string().regex(/^\d+$/),
-      faultClass: z.string().optional(),
+      quoteHash: z.string().min(1),
+      faultClass: z.enum(['duplicate_claim', 'delivery_contradiction']),
+      buyerPublicKey: z.string().optional(),
+      eventType: z.enum(['delivery_rejected', 'goods_not_received']).optional(),
+      submitAuthorization: z.object({
+        publicKey: z.string().min(1),
+        timestamp: z.number().int().positive(),
+        nonce: z.string().min(1),
+        signature: z.string().min(1),
+      }),
     },
   },
-  async (input) =>
-    content({
-      success: false,
-      code: 'V2_REQUIRED',
-      message:
-        'submit_bonded_action requires the V2 controller deployment. Use the backend demo arm endpoint for the current V1 testnet flow.',
-      input,
-    }),
+  async (input) => content(await apiPost('/v1/actions/submit', input)),
 );
 
 server.registerTool(
-  'get_bond_requirement',
+  'replay_canonical_proof',
   {
     description:
-      'Not exposed on the HTTP API. Use get_deployments and the pricing tiers documented in the Bondsman docs to compute the bond, or call the controller directly.',
-    inputSchema: {
-      amount: z.string().regex(/^\d+$/),
-      agentAddress: z.string().min(1),
-    },
+      'Read-only: replay canonical Action 27 evidence, receipt, and quote-consumption checks.',
+    inputSchema: {},
   },
-  async ({ amount, agentAddress }) =>
-    content({
-      note: 'get_bond_requirement is available via the local controller; the HTTP API does not expose it. Use the tier table in the Bondsman docs or call the controller from a Casper client.',
-      amount,
-      agentAddress,
-    }),
+  async () => content(await apiGet('/api/replay/canonical')),
 );
 
 server.registerTool(
-  'challenge_action',
+  'check_canonical_quote',
   {
     description:
-      'Submit a challenge against an action via the Bondsman backend key. Returns the challenge and resolve transaction hashes.',
-    inputSchema: { actionId: z.number().int().nonnegative() },
+      'Read-only: verify that canonical Action 27 paid quote is consumed and cannot be replayed.',
+    inputSchema: {},
   },
-  async ({ actionId }) =>
-    content(await apiPost('/api/challenge', { actionId })),
+  async () => content(await apiPost('/api/replay/canonical/quote-check')),
+);
+
+server.registerTool(
+  'public_capabilities',
+  {
+    description:
+      'Read-only: report public Bondsman capabilities and which mutation modes are disabled.',
+    inputSchema: {},
+  },
+  async () => content(await apiGet('/api/public-capabilities')),
 );
 
 await server.connect(new StdioServerTransport());

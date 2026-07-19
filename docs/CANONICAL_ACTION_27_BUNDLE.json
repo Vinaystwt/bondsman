@@ -1,0 +1,276 @@
+{
+  "actionId": 27,
+  "challengeTransaction": "10c53143b07a7f9c8cd8ad6b6638d3454083a788ec3b739ad28af20b8abc4889",
+  "checks": {
+    "deliveryAttestationValid": true,
+    "paymentSettled": true,
+    "quoteConsumedActionId": 27,
+    "quotePayerBound": true,
+    "quotePayerPresent": true,
+    "quoteReplayAllowed": false,
+    "quoteSingleUse": true,
+    "quoteStatus": "consumed",
+    "reasoningCommitmentValid": true,
+    "receiptValid": true,
+    "settlementTransactionPresent": true,
+    "slashResolutionPresent": true,
+    "watchdogChallengePresent": true
+  },
+  "checksum": "0x451bfe9ca8408f2f0b1a02122f10e4f6a8c4af78612cb815a3a3f6aa79f604a5",
+  "evidenceLabels": {
+    "action": "CANONICAL_REPLAY",
+    "challenge": "REAL_HISTORICAL_TRANSACTION",
+    "deliveryInput": "CONTROLLED_TESTNET_FIXTURE",
+    "payment": "REAL_HISTORICAL_TRANSACTION",
+    "quote": "REAL_HISTORICAL_TRANSACTION",
+    "quoteProbe": "LIVE_REQUEST",
+    "receipt": "SIGNED_PORTABLE_EVIDENCE"
+  },
+  "generatedAt": "2026-07-19T18:21:22.915Z",
+  "paidQuote": {
+    "actionType": "invoice_payout",
+    "challengeWindow": 1800,
+    "consumedActionId": 27,
+    "consumedAt": "2026-07-19T10:41:26.904Z",
+    "expiresAt": "2026-07-19T10:55:30.397Z",
+    "faultClass": "delivery_contradiction",
+    "issuedAt": "2026-07-19T10:40:30.398Z",
+    "principalAmount": "50000000000000",
+    "quoteHash": "0x8c3401bd019bfca6ff9e9ce0497ddf495bb19719e27d935c7a724bb4d5deca5f",
+    "requiredBond": "2600000000000",
+    "status": "consumed",
+    "verifier": "delivery-contradiction-v2"
+  },
+  "proof": {
+    "actionId": "27",
+    "bond": "2800000000000",
+    "cachedAt": "2026-07-19T11:21:17.184Z",
+    "controller": "hash-859c4d7c4ca016fa02ffd0f45c2ddc30705225de173369bbab25e5b21167ce16",
+    "deliveryAttestation": {
+      "buyerPublicKey": "y55zB1XTRZgfZsXTF3gPQZK552hcwsH+TTqhfEEwdS0=",
+      "eventType": "goods_not_received",
+      "evidenceRoot": "0xdcc37a3235f6b449e648a643c976a3dd05667b9e6439aa2047b1938933bdd3a6",
+      "occurredAt": "2026-07-19T10:41:21.904Z",
+      "receivedAt": "2026-07-19T10:41:26.996Z",
+      "signatureVerified": true,
+      "usedActionId": 27
+    },
+    "economicImpact": {
+      "challengerReward": "1400000000000",
+      "challengerRewardSource": "chain_event",
+      "currentReserveSnapshot": "10150000000000",
+      "reputationAfter": null,
+      "reputationBefore": null,
+      "reputationDelta": -50,
+      "reputationDeltaSource": "protocol_rule",
+      "reserveCredit": "1400000000000",
+      "reserveCreditSource": "chain_event",
+      "resolutionEventExplorerUrl": "https://testnet.cspr.live/transaction/7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e",
+      "resolutionEventTransaction": "7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e"
+    },
+    "faultClass": "delivery_contradiction",
+    "faultCondition": {
+      "class": "delivery_contradiction",
+      "evidenceRoot": "0xdcc37a3235f6b449e648a643c976a3dd05667b9e6439aa2047b1938933bdd3a6",
+      "verificationDetails": "Signed delivery contradiction evidence was verified on chain.",
+      "verifierModule": "delivery-contradiction"
+    },
+    "modelReasoning": {
+      "commitHash": "7f0a59bcbc1bf507b84f25a9c0386c1bb196c13b524aa43b3b06d10023cc542c",
+      "recomputedHash": "7f0a59bcbc1bf507b84f25a9c0386c1bb196c13b524aa43b3b06d10023cc542c",
+      "text": "Delivery attested by the agent; buyer delivery evidence remains challengeable during the watchdog window.",
+      "verifiedMatches": true
+    },
+    "oneLine": "Approver bond was slashed after delivery_contradiction verification.",
+    "outcome": "SLASHED",
+    "paidQuote": {
+      "actionType": "invoice_payout",
+      "challengeWindow": 1800,
+      "consumedActionId": 27,
+      "consumedAt": "2026-07-19T10:41:26.904Z",
+      "expiresAt": "2026-07-19T10:55:30.397Z",
+      "faultClass": "delivery_contradiction",
+      "issuedAt": "2026-07-19T10:40:30.398Z",
+      "principalAmount": "50000000000000",
+      "quoteHash": "0x8c3401bd019bfca6ff9e9ce0497ddf495bb19719e27d935c7a724bb4d5deca5f",
+      "requiredBond": "2600000000000",
+      "status": "consumed",
+      "verifier": "delivery-contradiction-v2"
+    },
+    "participants": {
+      "approver": {
+        "account": "account-hash-ea2a1d98965a16b0e1234a3c3d251732cfb831bcf21ee060ecbae471bdf42fdf",
+        "role": "model-driven"
+      },
+      "challenger": {
+        "account": "account-hash-80b98aa54801f01eb434094bc8d6401b4c9ecab2396810d2ae250ef276608428",
+        "role": "deterministic"
+      }
+    },
+    "payment": {
+      "asset": "WCSPR",
+      "assetPackage": "3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
+      "facilitator": "x402-facilitator.cspr.cloud",
+      "network": "casper:casper-test",
+      "payer": "003b3362ea7af5776a37530df663afa7bc7c673ebcdd167f8934e2ac68d7eb9c77",
+      "paymentAmount": "100000000",
+      "payTo": "002cfb8f00d21230301310fc0d7633350ad7326d80b7f61561f77529dff71e918f",
+      "protocol": "x402",
+      "scheme": "exact",
+      "settled": true,
+      "settlementExplorerUrl": "https://testnet.cspr.live/transaction/19523afd40fa295319df71684eed9e6ae2dbd13add64531bb2417365d2f3fd56",
+      "settlementTransaction": "19523afd40fa295319df71684eed9e6ae2dbd13add64531bb2417365d2f3fd56"
+    },
+    "proofSchemaVersion": 3,
+    "receiptUrl": "/api/receipt/27",
+    "timeline": [
+      {
+        "actor": "approver",
+        "at": null,
+        "explorerUrl": "https://testnet.cspr.live/transaction/5d6ac66e676d08b4229595ee5ada058a421a1f2f91214e63ce0db1d64b5237d0",
+        "stage": "initiate",
+        "txHash": "5d6ac66e676d08b4229595ee5ada058a421a1f2f91214e63ce0db1d64b5237d0"
+      },
+      {
+        "actor": "approver",
+        "at": null,
+        "explorerUrl": "https://testnet.cspr.live/transaction/ef6eb3441002f0be22415b40d6deb2b78a19f2af78771637b2585d5dccc7d21d",
+        "stage": "bond_posted",
+        "txHash": "ef6eb3441002f0be22415b40d6deb2b78a19f2af78771637b2585d5dccc7d21d"
+      },
+      {
+        "actor": "approver",
+        "at": null,
+        "explorerUrl": "https://testnet.cspr.live/transaction/7f45b8071c876c1b08146cd91081f6589e244a612ef0787bd93c27367480cdaf",
+        "stage": "execute",
+        "txHash": "7f45b8071c876c1b08146cd91081f6589e244a612ef0787bd93c27367480cdaf"
+      },
+      {
+        "actor": "buyer_signer",
+        "at": "2026-07-19T10:41:26.996Z",
+        "payload": {
+          "actionId": 27,
+          "buyerPublicKeyRawHex": "cb9e730755d345981f66c5d317780f4192b9e7685cc2c1fe4d3aa17c4130752d",
+          "eventType": "goods_not_received",
+          "evidenceHex": "1b00000000000000d292f6799f010000f05bf7799f010000bb5098459cbf1e67c4fd19724a66a756fda5e177e412d63c63a86ba68786f370063262caa9fa956ec687b1889fda16d59da983a726b9b3fe809ebc012260e47ec82882e0d8e491366257a51a8e7b51d816396a1ed14f5ae94c10eed2092f3f05",
+          "invoiceId": 1784457630418,
+          "nonce": "bb5098459cbf1e67c4fd19724a66a756fda5e177e412d63c63a86ba68786f370",
+          "occurredAt": 1784457681904
+        },
+        "signature": "BjJiyqn6lW7Gh7GIn9oW1Z2pg6cmubP+gJ68ASJg5H7IKILg2OSRNmJXpRqOe1HYFjlqHtFPWulMEO7SCS8/BQ==",
+        "stage": "evidence_arrived"
+      },
+      {
+        "actor": "watchdog",
+        "at": null,
+        "explorerUrl": "https://testnet.cspr.live/transaction/10c53143b07a7f9c8cd8ad6b6638d3454083a788ec3b739ad28af20b8abc4889",
+        "stage": "challenge",
+        "txHash": "10c53143b07a7f9c8cd8ad6b6638d3454083a788ec3b739ad28af20b8abc4889"
+      },
+      {
+        "actor": "watchdog",
+        "at": null,
+        "explorerUrl": "https://testnet.cspr.live/transaction/7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e",
+        "outcome": "SLASHED",
+        "stage": "resolve",
+        "txHash": "7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e"
+      }
+    ],
+    "valueAtRisk": "50000000000000"
+  },
+  "receipt": {
+    "actionId": "27",
+    "actionType": "invoice_payout",
+    "actor": "account-hash-ea2a1d98965a16b0e1234a3c3d251732cfb831bcf21ee060ecbae471bdf42fdf",
+    "actorRole": "approver",
+    "bond": "2800000000000",
+    "challenger": "account-hash-80b98aa54801f01eb434094bc8d6401b4c9ecab2396810d2ae250ef276608428",
+    "challengerType": "watchdog",
+    "challengeSigning": "watchdog-key",
+    "controller": "hash-859c4d7c4ca016fa02ffd0f45c2ddc30705225de173369bbab25e5b21167ce16",
+    "deliveryEvidence": {
+      "buyerPublicKey": "y55zB1XTRZgfZsXTF3gPQZK552hcwsH+TTqhfEEwdS0=",
+      "eventType": "goods_not_received",
+      "evidenceRoot": "0xdcc37a3235f6b449e648a643c976a3dd05667b9e6439aa2047b1938933bdd3a6",
+      "occurredAt": "2026-07-19T10:41:21.904Z",
+      "receivedAt": "2026-07-19T10:41:26.996Z",
+      "signatureVerified": true,
+      "usedActionId": 27
+    },
+    "deployHashes": {
+      "approve": "a960893e1523a8d2499220d125ca8642a91f4bc534df3884bb4792e560c6d971",
+      "challenge": "10c53143b07a7f9c8cd8ad6b6638d3454083a788ec3b739ad28af20b8abc4889",
+      "execute": "7f45b8071c876c1b08146cd91081f6589e244a612ef0787bd93c27367480cdaf",
+      "initiate": "5d6ac66e676d08b4229595ee5ada058a421a1f2f91214e63ce0db1d64b5237d0",
+      "postBond": "ef6eb3441002f0be22415b40d6deb2b78a19f2af78771637b2585d5dccc7d21d",
+      "resolve": "7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e"
+    },
+    "economics": {
+      "challengerReward": "1400000000000",
+      "challengerRewardSource": "chain_event",
+      "currentReserveSnapshot": "10150000000000",
+      "reputationAfter": null,
+      "reputationBefore": null,
+      "reputationDelta": -50,
+      "reputationDeltaSource": "protocol_rule",
+      "reserveCredit": "1400000000000",
+      "reserveCreditSource": "chain_event"
+    },
+    "faultClass": "delivery_contradiction",
+    "faultCode": "DELIVERY_CONTRADICTION_VERIFIED",
+    "issuedAt": "2026-07-19T11:21:18.355Z",
+    "network": "casper-test",
+    "outcome": "SLASHED",
+    "paidQuote": {
+      "actionType": "invoice_payout",
+      "challengeWindow": 1800,
+      "consumedActionId": 27,
+      "consumedAt": "2026-07-19T10:41:26.904Z",
+      "expiresAt": "2026-07-19T10:55:30.397Z",
+      "faultClass": "delivery_contradiction",
+      "issuedAt": "2026-07-19T10:40:30.398Z",
+      "principalAmount": "50000000000000",
+      "quoteHash": "0x8c3401bd019bfca6ff9e9ce0497ddf495bb19719e27d935c7a724bb4d5deca5f",
+      "requiredBond": "2600000000000",
+      "status": "consumed",
+      "verifier": "delivery-contradiction-v2"
+    },
+    "payment": {
+      "asset": "WCSPR",
+      "assetPackage": "3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
+      "facilitator": "x402-facilitator.cspr.cloud",
+      "network": "casper:casper-test",
+      "payer": "003b3362ea7af5776a37530df663afa7bc7c673ebcdd167f8934e2ac68d7eb9c77",
+      "paymentAmount": "100000000",
+      "payTo": "002cfb8f00d21230301310fc0d7633350ad7326d80b7f61561f77529dff71e918f",
+      "protocol": "x402",
+      "scheme": "exact",
+      "settled": true,
+      "settlementExplorerUrl": "https://testnet.cspr.live/transaction/19523afd40fa295319df71684eed9e6ae2dbd13add64531bb2417365d2f3fd56",
+      "settlementTransaction": "19523afd40fa295319df71684eed9e6ae2dbd13add64531bb2417365d2f3fd56"
+    },
+    "principal": "50000000000000",
+    "protocol": "bondsman",
+    "reasoningCommitment": {
+      "commitHash": "7f0a59bcbc1bf507b84f25a9c0386c1bb196c13b524aa43b3b06d10023cc542c",
+      "recomputedHash": "7f0a59bcbc1bf507b84f25a9c0386c1bb196c13b524aa43b3b06d10023cc542c",
+      "text": "Delivery attested by the agent; buyer delivery evidence remains challengeable during the watchdog window.",
+      "verifiedMatches": true
+    },
+    "resolveTransaction": "7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e",
+    "schemaId": "bondsman.portable-receipt.golden-path.v2",
+    "signature": "96kyz1Lrd2gn4GzIneMGGaZ7XvZ10RP6p/DADYJlobpYKCALTBmmpC5oX49SaE+dxQ9fdIFz1lTEQWj2gELzAw==",
+    "signerPublicKey": "MCowBQYDK2VwAyEAfsRmaqS4Kww8E7iBMqoPV5/7OSqEVai5DcxiCIbliPg=",
+    "verifier": "delivery-contradiction-v2",
+    "version": "2",
+    "watchdogChallengeTransaction": "10c53143b07a7f9c8cd8ad6b6638d3454083a788ec3b739ad28af20b8abc4889"
+  },
+  "resolutionTransaction": "7692d1954d6130149308161bb78b379dc58896f079dde2afc685d86fb94be16e",
+  "schemaId": "bondsman.canonical-action-bundle.v1",
+  "settlementTransaction": "19523afd40fa295319df71684eed9e6ae2dbd13add64531bb2417365d2f3fd56",
+  "source": "production_api_snapshot",
+  "sourceBaseUrl": "https://bondsman-backend-production.up.railway.app",
+  "verification": {
+    "valid": true
+  }
+}

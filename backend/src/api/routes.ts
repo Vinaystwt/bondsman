@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Repository } from '../db/repositories.js';
 import type { Deployment } from '../shared/deployment.js';
 import type { ResolutionService } from './resolution.js';
@@ -44,6 +46,23 @@ import { runIntegrator } from '../integrator/service.js';
 import { spendSnapshot } from '../ops/spend-guard.js';
 import { dailyOpsSummary, recentApiErrors } from '../ops/observability.js';
 import { createIdempotencyStore } from './idempotency.js';
+import {
+  canonicalActionId,
+  canonicalReplay,
+  quoteReplayCheck,
+  validateCanonical,
+} from '../evidence/replay.js';
+import {
+  analyzeAssurance,
+  assuranceInputSchema,
+  modelConfigured,
+  templates as assuranceTemplates,
+} from '../assurance/service.js';
+import {
+  publicArenaEnabled,
+  publicWalletChallengeEnabled,
+  requireOperator,
+} from './operator-auth.js';
 
 function latestSlashProof(
   repository: Repository,
@@ -103,6 +122,57 @@ function submitPayloadHash(input: unknown): string {
     .slice(0, 64)}`;
 }
 
+function mutationModesEnabled(): boolean {
+  return publicArenaEnabled() || publicWalletChallengeEnabled();
+}
+
+function publicCapabilities() {
+  return {
+    productCategory: 'bonded_execution_assurance',
+    proofConsole: {
+      enabled: true,
+      canonicalActionId: canonicalActionId(),
+    },
+    assuranceStudio: {
+      enabled: process.env.ASSURANCE_STUDIO_ENABLED !== 'false',
+      mode: 'design_only',
+      liveModelAvailable: modelConfigured(),
+    },
+    liveQuoteProbe: {
+      enabled: true,
+      createsTransactionWithoutPayment: false,
+    },
+    paidHttpIntegration: {
+      enabled: true,
+      quoteSurface: '/v1/actions/quote',
+      submitSurface: '/v1/actions/submit',
+    },
+    receiptVerification: { enabled: true },
+    sponsoredLiveRun: { enabled: false },
+    publicChallengeArena: { enabled: publicArenaEnabled() },
+    externalWalletChallenge: { enabled: publicWalletChallengeEnabled() },
+    operatorDemoWrites: { enabled: true, public: false },
+    mcp: { mode: 'read_design_and_verification' },
+  };
+}
+
+async function readAssuranceSchema(repositoryPath: string) {
+  const candidates = [
+    join(repositoryPath, 'spec/bondsman-assurance-manifest-v1.schema.json'),
+    join(process.cwd(), 'spec/bondsman-assurance-manifest-v1.schema.json'),
+    join(process.cwd(), '../spec/bondsman-assurance-manifest-v1.schema.json'),
+  ];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(await readFile(candidate, 'utf8'));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 export function registerRoutes(
   server: FastifyInstance,
   repository: Repository,
@@ -115,18 +185,44 @@ export function registerRoutes(
 ): void {
   const startedAt = Date.now();
   const idempotency = createIdempotencyStore();
+  const assuranceHits = new Map<string, { count: number; resetAt: number }>();
   const currentController =
     deployment.contracts.controller.contractHash;
   server.get('/api/health', async () => {
     const watchdog = repository.watchdogSummary();
     const spending = spendSnapshot();
+    const integratorState =
+      repository.systemState<{ running?: boolean; lastRun?: string | null; limitation?: string | null }>('integrator')?.value ??
+      { running: false, lastRun: null };
+    const canonical = await validateCanonical({
+      repositoryPath,
+      repository,
+      deployment,
+      controllerHash: currentController,
+      actionId: canonicalActionId(),
+    });
+    const publicExperience = {
+      proofConsoleReady: canonical.ready,
+      assuranceStudioReady: process.env.ASSURANCE_STUDIO_ENABLED !== 'false',
+      assuranceModelAvailable: modelConfigured(),
+      canonicalActionId: canonical.actionId,
+      canonicalProofAvailable: canonical.errors.every((error) =>
+        !/action|quote|transaction/i.test(error),
+      ) || canonical.ready,
+      canonicalReceiptValid: !canonical.errors.includes('receipt verification failed') &&
+        !canonical.errors.includes('receipt missing'),
+      liveQuoteProbeAvailable: true,
+      publicMutationModesEnabled: mutationModesEnabled(),
+      ...(canonical.ready ? {} : { canonicalErrors: canonical.errors }),
+    };
     return {
-      ok: !spending.tripped,
+      ok: !spending.tripped && canonical.ready && watchdog.running,
       version: '0.2.0',
       controller: currentController,
       controllerVersion: deployment.current ?? (deployment.contracts.controllerV2 ? 'v2' : 'v1'),
       activeControllerVersion: deployment.current ?? (deployment.contracts.controllerV2 ? 'v2' : 'v1'),
       spending,
+      publicExperience,
       daily: {
         ...dailyOpsSummary(),
         actions: repository.listActions().filter((action) => action.controllerHash === currentController).length,
@@ -134,7 +230,10 @@ export function registerRoutes(
         reserve: repository.reserve(),
       },
       watchdog: { running: watchdog.running, lastCatch: watchdog.recentCatches[0]?.timestamp ?? null, totalEarned: watchdog.totalRewardEarned },
-      integrator: repository.systemState<{ lastRun?: string }>('integrator')?.value ?? { running: false, lastRun: null },
+      integrator: {
+        ...integratorState,
+        limitation: integratorState.limitation ?? null,
+      },
       listener: repository.systemState('listener')?.value ?? { running: false },
       expiryResolution:
         repository.systemState('listener_expiry_resolution')?.value ?? null,
@@ -151,11 +250,42 @@ export function registerRoutes(
       deploymentsPath: 'deployments/testnet.json',
     };
   });
-  server.get('/api/ops/spend', async () => spendSnapshot());
-  server.get('/api/ops/recent-errors', async () => ({
+  server.get('/api/ops/spend', async (request) => {
+    requireOperator(request);
+    return spendSnapshot();
+  });
+  server.get('/api/ops/recent-errors', async (request) => {
+    requireOperator(request);
+    return {
     success: true,
     errors: recentApiErrors(),
+    };
+  });
+  server.get('/api/public-capabilities', async () => publicCapabilities());
+  server.get('/api/assurance/templates', async () => ({
+    schemaId: 'bondsman.assurance-templates.v1',
+    templates: assuranceTemplates,
   }));
+  server.get('/api/assurance/schema', async () =>
+    readAssuranceSchema(repositoryPath));
+  server.post('/api/assurance/analyze', async (request) => {
+    if (process.env.ASSURANCE_STUDIO_ENABLED === 'false') {
+      throw new ApiError(503, 'ASSURANCE_STUDIO_DISABLED', 'Assurance Studio is disabled');
+    }
+    const now = Date.now();
+    const key = request.ip;
+    const hit = assuranceHits.get(key);
+    const current = hit && hit.resetAt > now
+      ? hit
+      : { count: 0, resetAt: now + 60_000 };
+    current.count += 1;
+    assuranceHits.set(key, current);
+    if (current.count > Number(process.env.ASSURANCE_RATE_LIMIT_PER_MINUTE ?? 20)) {
+      throw new ApiError(429, 'ASSURANCE_RATE_LIMITED', 'too many assurance analyses');
+    }
+    const input = assuranceInputSchema.parse(request.body);
+    return analyzeAssurance(input, { deployment });
+  });
   server.get('/api/invoices', async () => repository.listInvoices());
   server.get('/api/actions', async () =>
     repository
@@ -256,10 +386,33 @@ export function registerRoutes(
   server.get('/api/proofs/featured', async () =>
     featuredProofs(repository, currentController, deployment));
   server.get('/api/proofs/canonical', async () => {
+    const validation = await validateCanonical({
+      repositoryPath,
+      repository,
+      deployment,
+      controllerHash: currentController,
+      actionId: canonicalActionId(),
+    });
+    if (!validation.ready) {
+      throw new ApiError(
+        503,
+        'CANONICAL_NOT_READY',
+        `canonical action ${validation.actionId} is not ready: ${validation.errors.join('; ')}`,
+      );
+    }
     const proof = canonicalProof(repository, currentController, deployment);
     if (!proof) throw new ApiError(404, 'NOT_FOUND', 'canonical proof not found');
     return proof;
   });
+  server.get('/api/replay/canonical', async () =>
+    canonicalReplay({
+      repositoryPath,
+      repository,
+      deployment,
+      controllerHash: currentController,
+    }));
+  server.post('/api/replay/canonical/quote-check', async () =>
+    quoteReplayCheck({ repository, actionId: canonicalActionId() }));
   server.get('/api/receipt/:id', async (request) => {
     const actionId = Number((request.params as { id: string }).id);
     const receipt = await issueReceipt({
@@ -285,10 +438,13 @@ export function registerRoutes(
     return verifyReceipt(receipt);
   });
   server.post('/api/receipt/:id/verify', async (request) => verifyReceipt(request.body as PortableReceipt));
-  server.get('/api/demo/ready', async () =>
-    demoReadyResponse(repository, currentController),
+  server.get('/api/demo/ready', async (request) => {
+    requireOperator(request);
+    return demoReadyResponse(repository, currentController);
+  },
   );
-  server.get('/api/demo/proofs', async () => {
+  server.get('/api/demo/proofs', async (request) => {
+    requireOperator(request);
     const ready = demoReadyResponse(repository, currentController);
     const actions = repository.listActions();
     let totalSlashes = 0;
@@ -476,6 +632,7 @@ export function registerRoutes(
       }
     }));
   server.post('/api/challenge', async (request) => idempotency.run(request, 'challenge', async () => {
+    requireOperator(request);
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);
     if (!action || !isChallengeEligible(action, currentController)) {
@@ -488,6 +645,7 @@ export function registerRoutes(
     return jobs.startChallenge(actionId);
   }));
   server.get('/api/jobs/:id', async (request) => {
+    requireOperator(request);
     const job = jobs.job((request.params as { id: string }).id);
     if (!job) {
       throw new ApiError(404, 'NOT_FOUND', 'demo job not found');
@@ -495,6 +653,7 @@ export function registerRoutes(
     return job;
   });
   server.post('/api/resolve', async (request) => idempotency.run(request, 'resolve', async () => {
+    requireOperator(request);
     const { actionId } = actionBodySchema.parse(request.body);
     return { resolve: await resolution.resolve(actionId) };
   }));
@@ -505,6 +664,14 @@ export function registerRoutes(
     return walletChallenge.transactionStatus(hash);
   });
   server.post('/api/challenge/wallet-resolve', async (request) => idempotency.run(request, 'wallet-resolve', async () => {
+    requireOperator(request);
+    if (!publicWalletChallengeEnabled()) {
+      throw new ApiError(
+        403,
+        'WALLET_CHALLENGE_DISABLED',
+        'external wallet challenge resolution is disabled in production',
+      );
+    }
     const input = walletChallengeBodySchema.parse(request.body);
     return walletChallenge.resolveWalletChallenge(input);
   }));
@@ -524,14 +691,23 @@ export function registerRoutes(
       throw new ApiError(500, 'ARM_FAILED', message, { cause: error });
     }
   };
-  server.post('/api/demo/arm', async (request) => idempotency.run(request, 'demo-arm', async () => armDemo(true)));
-  server.post('/api/demo/arm/async', async (request) => idempotency.run(request, 'demo-arm-async', async () => jobs.startArm(true)));
-  server.post('/api/demo/run-integrator', async (request) => idempotency.run(request, 'demo-integrator', async () => runIntegrator({
+  server.post('/api/demo/arm', async (request) => idempotency.run(request, 'demo-arm', async () => {
+    requireOperator(request);
+    return armDemo(true);
+  }));
+  server.post('/api/demo/arm/async', async (request) => idempotency.run(request, 'demo-arm-async', async () => {
+    requireOperator(request);
+    return jobs.startArm(true);
+  }));
+  server.post('/api/demo/run-integrator', async (request) => idempotency.run(request, 'demo-integrator', async () => {
+    requireOperator(request);
+    return runIntegrator({
     baseUrl: `${String(request.headers['x-forwarded-proto'] ?? 'https').split(',')[0]}://${request.headers.host ?? request.hostname}`,
     deployment,
     repository,
     repositoryPath,
-  })));
+    });
+  }));
   server.get('/api/watchdog', async () => {
     const summary = repository.watchdogSummary();
     return {
@@ -541,8 +717,14 @@ export function registerRoutes(
         `account-hash-${deployment.accounts.watchdog.accountHash}`,
     };
   });
-  server.post('/api/watchdog/demo', async (request) => idempotency.run(request, 'watchdog-demo', async () => armDemo(false)));
-  server.post('/api/watchdog/demo/async', async (request) => idempotency.run(request, 'watchdog-demo-async', async () => jobs.startArm(false)));
+  server.post('/api/watchdog/demo', async (request) => idempotency.run(request, 'watchdog-demo', async () => {
+    requireOperator(request);
+    return armDemo(false);
+  }));
+  server.post('/api/watchdog/demo/async', async (request) => idempotency.run(request, 'watchdog-demo-async', async () => {
+    requireOperator(request);
+    return jobs.startArm(false);
+  }));
   const verifySandbox = async (request: any, reply: any) => {
     const amount = process.env.X402_VERIFY_PRICE ?? '1000000';
     const payTo = deployment.accounts.challenger.publicKey;
@@ -600,9 +782,12 @@ export function registerRoutes(
     version: '1.0.0', capabilities: { streaming: true, pushNotifications: false },
     authentication: { schemes: ['x402'] }, defaultInputModes: ['application/json'], defaultOutputModes: ['application/json'],
     skills: [
-      { id: 'quote_bonded_action', name: 'Quote a bonded action', description: 'Get a risk priced bond quote for an autonomous financial action.', tags: ['bonding', 'risk', 'autonomous'], examples: ['Quote a bond for a 50,000 invoice payout'] },
-      { id: 'submit_bonded_action', name: 'Submit a bonded action', description: 'Post a bond and execute a payout under Bondsman accountability.', tags: ['execution', 'bonding'] },
-      { id: 'verify_receipt', name: 'Verify a Bondsman receipt', description: 'Independently verify a signed Bondsman action receipt.', tags: ['verification', 'proof'] },
+      { id: 'design_assurance_policy', name: 'Design assurance policy', description: 'Design-only analysis that produces a portable assurance manifest without submitting transactions.', tags: ['design-only', 'assurance', 'policy'] },
+      { id: 'quote_bonded_action', name: 'Quote a bonded action', description: 'x402-paid quote surface for supported bonded action classes.', tags: ['paid-http', 'quote', 'bonding'], examples: ['Quote a bond for a 50,000 invoice payout'] },
+      { id: 'submit_bonded_action', name: 'Submit a bonded action', description: 'Production paid-action submission; requires a settled quote and payer submit authorization.', tags: ['paid-http', 'execution', 'operator-sensitive'] },
+      { id: 'replay_canonical_proof', name: 'Replay canonical proof', description: 'Read-only replay of canonical Action 27 evidence, receipt, and quote consumption checks.', tags: ['read-only', 'canonical', 'proof'] },
+      { id: 'verify_receipt', name: 'Verify a Bondsman receipt', description: 'Independently verify a signed Bondsman action receipt.', tags: ['read-only', 'verification', 'proof'] },
+      { id: 'discover_verifiers', name: 'Discover verifiers', description: 'Read supported verifier metadata and implementation status.', tags: ['read-only', 'verifiers'] },
     ],
   }));
   server.get('/api/deployments', async () => deployment);

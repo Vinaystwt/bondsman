@@ -18,6 +18,8 @@
     "api": "npm --workspace backend run api",
     "seed": "npm --workspace backend run seed",
     "demo:prearm": "npm --workspace backend run demo:prearm",
+    "canonical:export": "tsx scripts/canonical-export.ts",
+    "example:casper-agent": "tsx examples/casper-agent-assurance/index.ts",
     "test": "npm --workspace backend test",
     "typecheck": "npm --workspace backend run typecheck",
     "demo": "npm --workspace backend run demo"

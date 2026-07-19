@@ -176,16 +176,20 @@ export function canonicalProof(
   controllerHash: string,
   deployment: Deployment,
 ): Record<string, unknown> | undefined {
-  const action = repository.listActions()
-    .filter((candidate) =>
-      candidate.controllerHash === controllerHash &&
-      candidate.status === 'ResolvedSlash' &&
-      candidate.faultClass === 'delivery_contradiction' &&
-      candidate.challengerType === 'watchdog' &&
-      repository.paidQuoteForAction(candidate.actionId)?.status === 'consumed',
-    )
-    .sort((left, right) => right.actionId - left.actionId)[0];
-  return action
-    ? proofFor(repository, action.actionId, controllerHash, deployment)
-    : undefined;
+  const configured = Number(process.env.CANONICAL_ACTION_ID ?? 27);
+  if (!Number.isInteger(configured) || configured < 0) return undefined;
+  const action = repository.action(configured);
+  const quote = repository.paidQuoteForAction(configured);
+  if (
+    !action ||
+    action.controllerHash !== controllerHash ||
+    action.status !== 'ResolvedSlash' ||
+    action.faultClass !== 'delivery_contradiction' ||
+    action.challengerType !== 'watchdog' ||
+    quote?.status !== 'consumed' ||
+    quote.consumedActionId !== configured
+  ) {
+    return undefined;
+  }
+  return proofFor(repository, configured, controllerHash, deployment);
 }

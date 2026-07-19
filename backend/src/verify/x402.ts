@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Repository } from '../db/repositories.js';
 import type { Deployment } from '../shared/deployment.js';
+import { policyFor } from '../policy/engine.js';
 
 const DEFAULT_WCSPR_PACKAGE =
   '3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e';
@@ -294,15 +295,12 @@ export function quoteResponse(options: {
   const reputationRow = options.repository.reputation(agent);
   const reputation =
     typeof reputationRow?.score === 'number' ? reputationRow.score : -20;
-  const baseBps =
-    amount >= 50_000n * TOKEN_UNIT
-      ? 500n
-      : amount >= 10_000n * TOKEN_UNIT
-        ? 300n
-        : 200n;
-  const penaltyBps =
-    reputation < 0 ? BigInt(Math.min(Math.abs(reputation), 300)) : 0n;
-  const requiredBond = (amount * (baseBps + penaltyBps)) / 10_000n;
+  const policy = policyFor({
+    amount: amount.toString(),
+    faultClass,
+    reputationScore: reputation,
+  });
+  const requiredBond = BigInt(policy.estimatedBond);
   const quoteExpiry = new Date(Date.now() + 15 * 60_000).toISOString();
   const quoteHash =
     `0x${createHash('blake2b512')
@@ -315,22 +313,16 @@ export function quoteResponse(options: {
       }))
       .digest('hex')
       .slice(0, 64)}`;
-  const verifier =
-    faultClass === 'delivery_contradiction'
-      ? 'delivery-contradiction-v2'
-      : 'duplicate-claim-v2';
+  const verifier = policy.verifier;
   const quote = {
     actionType: 'invoice_payout',
     faultClass,
     verifier,
-    riskTier: amount >= 50_000n * TOKEN_UNIT ? 'HIGH' : 'STANDARD',
+    riskTier: policy.riskTier.toUpperCase(),
     requiredBond: requiredBond.toString(),
-    challengeWindow: 1800,
+    challengeWindow: policy.challengeWindowSeconds,
     agentReputation: reputation,
-    policyModule:
-      faultClass === 'delivery_contradiction'
-        ? 'delivery-contradiction-v2'
-        : 'duplicate-claim-v2',
+    policyModule: verifier,
     quoteExpiry,
     quoteHash,
     paymentReceipt: {
@@ -350,7 +342,7 @@ export function quoteResponse(options: {
     verifier,
     amount: amount.toString(),
     requiredBond: requiredBond.toString(),
-    challengeWindow: 1800,
+    challengeWindow: policy.challengeWindowSeconds,
     quoteExpiry,
     payer: options.receipt.payer ?? null,
     settlementTx: options.receipt.transaction,

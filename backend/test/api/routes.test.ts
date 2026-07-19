@@ -1,10 +1,14 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
 import { buildServer } from '../../src/api/server.js';
 import { createDemoJobService } from '../../src/api/demo-jobs.js';
 import type { Deployment } from '../../src/shared/deployment.js';
+import { blake2b256 } from '../../src/agent/hashing.js';
 import {
   canonicalSubmitAuthorizationPayload,
   payerFromCasperPublicKey,
@@ -25,6 +29,7 @@ const watchdogAccount = {
   publicKey: `01${'4'.repeat(64)}`,
   accountHash: '5'.repeat(64),
 };
+const operatorHeaders = { authorization: 'Bearer test-operator-token' };
 const deployment = {
   network: 'casper-test',
   chainName: 'casper-test',
@@ -107,9 +112,82 @@ function submitAuthorization(input: {
   };
 }
 
+function seedCanonical(repository: Repository) {
+  const reasoning = 'Release was contradicted by signed buyer non-delivery evidence.';
+  repository.upsertAction({
+    actionId: 27,
+    invoiceId: 4027,
+    agent: `account-hash-${account.accountHash}`,
+    amount: '50000000000000',
+    claimHash: 'canonical-delivery-claim',
+    reasoning,
+    reasoningHash: blake2b256(reasoning).toString('hex'),
+    bondRequired: '2800000000000',
+    bondPosted: '2800000000000',
+    windowEnd: Date.now() - 60_000,
+    status: 'ResolvedSlash',
+    challenger: `account-hash-${watchdogAccount.accountHash}`,
+    challengerType: 'watchdog',
+    challengeSigning: 'watchdog-key',
+    controllerHash: deployment.contracts.controller.contractHash,
+    duplicateProven: false,
+    faultClass: 'delivery_contradiction',
+    evidenceRoot: `0x${'a'.repeat(64)}`,
+    reservedForManual: false,
+    transactions: {
+      execute: '7'.repeat(64),
+      challenge: '8'.repeat(64),
+      resolve: '9'.repeat(64),
+    },
+  });
+  repository.upsertPaidQuote({
+    quoteHash: `0x${'b'.repeat(64)}`,
+    actionType: 'invoice_payout',
+    faultClass: 'delivery_contradiction',
+    verifier: 'delivery-contradiction-v2',
+    amount: '50000000000000',
+    requiredBond: '2800000000000',
+    challengeWindow: 1800,
+    quoteExpiry: new Date(Date.now() + 60_000).toISOString(),
+    payer: `00${'5'.repeat(64)}`,
+    settlementTx: '6'.repeat(64),
+    paymentAmount: '100000000',
+    facilitator: 'x402-facilitator.cspr.cloud',
+    status: 'consumed',
+    submitPayloadHash: `0x${'c'.repeat(64)}`,
+    consumedActionId: 27,
+    createdAt: Date.now() - 120_000,
+    consumedAt: Date.now() - 60_000,
+  });
+  repository.upsertDeliveryAttestation({
+    evidenceRoot: `0x${'a'.repeat(64)}`,
+    invoiceId: 4027,
+    actionId: 27,
+    eventType: 'goods_not_received',
+    occurredAt: Date.now() - 180_000,
+    buyerPublicKey: Buffer.alloc(32, 7).toString('base64'),
+    signature: Buffer.alloc(64, 8).toString('base64'),
+    payload: { invoiceId: 4027, actionId: 27, eventType: 'goods_not_received' },
+    receivedAt: Date.now() - 120_000,
+    usedActionId: 27,
+  });
+}
+
 function fixture() {
+  process.env.OPERATOR_API_TOKEN = 'test-operator-token';
   const database = openDatabase(':memory:');
   const repository = new Repository(database);
+  const repositoryPath = join(
+    tmpdir(),
+    `bondsman-routes-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+  mkdirSync(join(repositoryPath, '.keys'), { recursive: true });
+  const { privateKey: receiptKey } = generateKeyPairSync('ed25519');
+  writeFileSync(
+    join(repositoryPath, '.keys/receipt-signer.pem'),
+    receiptKey.export({ format: 'pem', type: 'pkcs8' }),
+    'utf8',
+  );
   repository.upsertAction({
     actionId: 4,
     invoiceId: 1046,
@@ -216,6 +294,11 @@ function fixture() {
     0,
     0,
   );
+  seedCanonical(repository);
+  repository.setWatchdogHeartbeat(
+    `account-hash-${deployment.accounts.watchdog.accountHash}`,
+    Date.now(),
+  );
   repository.setReserve('25');
   const resolution = {
     challenge: vi.fn().mockResolvedValue('a'.repeat(64)),
@@ -314,6 +397,7 @@ function fixture() {
       arm,
       walletChallenge,
       createDemoJobService({ repository, resolution, arm }),
+      repositoryPath,
     ),
   };
 }
@@ -340,7 +424,7 @@ describe('REST routes', () => {
     ).toContain('testnet.cspr.live');
     expect(
       (await context.server.inject('/api/actions')).json(),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(
       (await context.server.inject('/api/actions')).json()[1],
     ).toMatchObject({
@@ -351,7 +435,7 @@ describe('REST routes', () => {
       ok: true,
       version: '0.2.0',
       controller: deployment.contracts.controller.contractHash,
-      watchdog: { running: false },
+      watchdog: { running: true },
       deploymentsPath: 'deployments/testnet.json',
     });
     await context.server.close();
@@ -360,7 +444,10 @@ describe('REST routes', () => {
 
   it('returns ready manual demo cases without starting a fresh arm', async () => {
     const context = fixture();
-    const response = await context.server.inject('/api/demo/ready');
+    const response = await context.server.inject({
+      url: '/api/demo/ready',
+      headers: operatorHeaders,
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -384,16 +471,19 @@ describe('REST routes', () => {
 
   it('returns persisted Casper proof and ready cases without a fresh transaction', async () => {
     const context = fixture();
-    const response = await context.server.inject('/api/demo/proofs');
+    const response = await context.server.inject({
+      url: '/api/demo/proofs',
+      headers: operatorHeaders,
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       latestManualSlash: null,
       latestWatchdogSlash: {
-        actionId: 3,
+        actionId: 27,
         status: 'ResolvedSlash',
-        challengeTx: 'f'.repeat(64),
-        resolveTx: 'd'.repeat(64),
+        challengeTx: '8'.repeat(64),
+        resolveTx: '9'.repeat(64),
       },
       readyCases: [
         expect.objectContaining({ actionId: 6, safeToChallengeNow: true }),
@@ -411,7 +501,10 @@ describe('REST routes', () => {
       windowEnd: Date.now() + 60_000,
     });
 
-    const response = await context.server.inject('/api/demo/ready');
+    const response = await context.server.inject({
+      url: '/api/demo/ready',
+      headers: operatorHeaders,
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
@@ -432,6 +525,7 @@ describe('REST routes', () => {
     const challenged = await context.server.inject({
       method: 'POST',
       url: '/api/challenge',
+      headers: operatorHeaders,
       payload: { actionId: 4 },
     });
     expect(challenged.statusCode).toBe(200);
@@ -441,12 +535,16 @@ describe('REST routes', () => {
       status: expect.stringMatching(/queued|submitting_challenge|challenge_finalized|resolving|resolved/),
     });
     expect(context.resolution.challenge).toHaveBeenCalledWith(4);
-    const job = await context.server.inject(`/api/jobs/${challenged.json().id}`);
+    const job = await context.server.inject({
+      url: `/api/jobs/${challenged.json().id}`,
+      headers: operatorHeaders,
+    });
     expect(job.statusCode).toBe(200);
 
     const resolved = await context.server.inject({
       method: 'POST',
       url: '/api/resolve',
+      headers: operatorHeaders,
       payload: { actionId: 4 },
     });
     expect(resolved.statusCode).toBe(200);
@@ -461,12 +559,12 @@ describe('REST routes', () => {
     const first = await context.server.inject({
       method: 'POST',
       url: '/api/demo/arm',
-      headers,
+      headers: { ...headers, ...operatorHeaders },
     });
     const second = await context.server.inject({
       method: 'POST',
       url: '/api/demo/arm',
-      headers,
+      headers: { ...headers, ...operatorHeaders },
     });
 
     expect(first.statusCode).toBe(200);
@@ -484,11 +582,13 @@ describe('REST routes', () => {
     const first = await context.server.inject({
       method: 'POST',
       url: '/api/resolve',
+      headers: operatorHeaders,
       payload: { actionId: 4 },
     });
     const second = await context.server.inject({
       method: 'POST',
       url: '/api/resolve',
+      headers: operatorHeaders,
       payload: { actionId: 4 },
     });
 
@@ -510,7 +610,10 @@ describe('REST routes', () => {
     const missing = await context.server.inject('/api/nope');
     expect(missing.statusCode).toBe(404);
 
-    const spend = await context.server.inject('/api/ops/spend');
+    const spend = await context.server.inject({
+      url: '/api/ops/spend',
+      headers: operatorHeaders,
+    });
     expect(spend.statusCode).toBe(200);
     expect(spend.json()).toMatchObject({
       code: 'SPENDING_OK',
@@ -521,7 +624,10 @@ describe('REST routes', () => {
       ]),
     });
 
-    const errors = await context.server.inject('/api/ops/recent-errors');
+    const errors = await context.server.inject({
+      url: '/api/ops/recent-errors',
+      headers: operatorHeaders,
+    });
     expect(errors.statusCode).toBe(200);
     expect(errors.json()).toMatchObject({
       success: true,
@@ -532,6 +638,152 @@ describe('REST routes', () => {
         }),
       ]),
     });
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('advertises public capabilities and returns assurance manifests without mutation', async () => {
+    const context = fixture();
+    const capabilities = await context.server.inject('/api/public-capabilities');
+    expect(capabilities.statusCode).toBe(200);
+    expect(capabilities.json()).toMatchObject({
+      productCategory: 'bonded_execution_assurance',
+      proofConsole: { enabled: true, canonicalActionId: 27 },
+      assuranceStudio: { enabled: true, mode: 'design_only' },
+      sponsoredLiveRun: { enabled: false },
+      publicChallengeArena: { enabled: false },
+      externalWalletChallenge: { enabled: false },
+      operatorDemoWrites: { enabled: true, public: false },
+    });
+
+    const templates = await context.server.inject('/api/assurance/templates');
+    expect(templates.statusCode).toBe(200);
+    expect(templates.json().templates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'invoice_delivery',
+          implementationStatus: 'executable_now',
+        }),
+        expect.objectContaining({
+          id: 'dex_execution',
+          implementationStatus: 'blueprint',
+        }),
+      ]),
+    );
+
+    const schema = await context.server.inject('/api/assurance/schema');
+    expect(schema.statusCode).toBe(200);
+    expect(schema.json()).toMatchObject({
+      title: 'Bondsman Assurance Manifest v1',
+      properties: {
+        boundaries: expect.any(Object),
+      },
+    });
+
+    const before = context.repository.listActions().length;
+    const analysis = await context.server.inject({
+      method: 'POST',
+      url: '/api/assurance/analyze',
+      payload: {
+        templateId: 'invoice_delivery',
+        description: 'Pay a supplier only when delivery evidence remains challengeable.',
+        amount: '50000000000000',
+        agentConfidence: 0.82,
+        counterpartyStatus: 'new',
+        evidenceSource: 'signed_delivery_attestation',
+        maxLossBps: 600,
+        urgency: 'normal',
+      },
+    });
+    expect(analysis.statusCode).toBe(200);
+    expect(analysis.json()).toMatchObject({
+      modelAnalysis: {
+        source: 'deterministic_fallback',
+      },
+      manifest: {
+        schemaId: 'bondsman.assurance-manifest.v1',
+        implementationStatus: 'executable_now',
+        faultClass: 'delivery_contradiction',
+        boundaries: {
+          submitsTransaction: false,
+          makesPayment: false,
+          challengesAction: false,
+          settlesQuote: false,
+        },
+      },
+    });
+    expect(context.repository.listActions()).toHaveLength(before);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('replays canonical action 27 and rejects anonymous operator endpoints', async () => {
+    const context = fixture();
+    const canonical = await context.server.inject('/api/proofs/canonical');
+    expect(canonical.statusCode).toBe(200);
+    expect(canonical.json()).toMatchObject({
+      actionId: '27',
+      faultClass: 'delivery_contradiction',
+      paidQuote: { status: 'consumed', consumedActionId: 27 },
+    });
+
+    const replay = await context.server.inject('/api/replay/canonical');
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({
+      actionId: 27,
+      source: 'live_projection',
+      checks: {
+        quoteSingleUse: true,
+        quoteReplayAllowed: false,
+        receiptValid: true,
+      },
+    });
+
+    const quoteCheck = await context.server.inject({
+      method: 'POST',
+      url: '/api/replay/canonical/quote-check',
+    });
+    expect(quoteCheck.statusCode).toBe(200);
+    expect(quoteCheck.json()).toMatchObject({
+      success: true,
+      actionId: 27,
+      singleUse: true,
+      wouldAcceptNewSubmission: false,
+      expectedRejectionCode: 'QUOTE_ALREADY_CONSUMED',
+    });
+
+    const ops = await context.server.inject('/api/ops/spend');
+    expect(ops.statusCode).toBe(401);
+    expect(ops.json()).toMatchObject({
+      code: 'OPERATOR_AUTH_REQUIRED',
+    });
+    const challenge = await context.server.inject({
+      method: 'POST',
+      url: '/api/challenge',
+      payload: { actionId: 4 },
+    });
+    expect(challenge.statusCode).toBe(401);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('keeps external wallet resolution disabled unless explicitly enabled', async () => {
+    const oldWallet = process.env.PUBLIC_WALLET_CHALLENGE_ENABLED;
+    delete process.env.PUBLIC_WALLET_CHALLENGE_ENABLED;
+    const context = fixture();
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/api/challenge/wallet-resolve',
+      headers: operatorHeaders,
+      payload: { actionId: 5, challengeDeployHash: 'f'.repeat(64) },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: 'WALLET_CHALLENGE_DISABLED',
+    });
+    expect(context.walletChallenge.resolveWalletChallenge).not.toHaveBeenCalled();
+    if (oldWallet === undefined) delete process.env.PUBLIC_WALLET_CHALLENGE_ENABLED;
+    else process.env.PUBLIC_WALLET_CHALLENGE_ENABLED = oldWallet;
     await context.server.close();
     context.database.close();
   });
@@ -649,7 +901,10 @@ describe('REST routes', () => {
     );
 
     const health = await server.inject('/api/health');
-    const ready = await server.inject('/api/demo/ready');
+    const ready = await server.inject({
+      url: '/api/demo/ready',
+      headers: operatorHeaders,
+    });
 
     expect(health.statusCode).toBe(200);
     expect(health.json()).toMatchObject({
@@ -672,7 +927,10 @@ describe('REST routes', () => {
       actionId: 3,
       status: 'resolving',
     });
-    const response = await context.server.inject(`/api/jobs/${job.id}`);
+    const response = await context.server.inject({
+      url: `/api/jobs/${job.id}`,
+      headers: operatorHeaders,
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -689,6 +947,7 @@ describe('REST routes', () => {
     const response = await context.server.inject({
       method: 'POST',
       url: '/api/demo/arm',
+      headers: operatorHeaders,
     });
 
     expect(response.statusCode).toBe(200);
@@ -719,6 +978,7 @@ describe('REST routes', () => {
     const response = await context.server.inject({
       method: 'POST',
       url: '/api/demo/arm',
+      headers: operatorHeaders,
     });
 
     expect(response.statusCode).toBe(503);
@@ -742,6 +1002,7 @@ describe('REST routes', () => {
     const response = await context.server.inject({
       method: 'POST',
       url: '/api/demo/arm',
+      headers: operatorHeaders,
     });
 
     expect(response.statusCode).toBe(500);
@@ -773,6 +1034,7 @@ describe('REST routes', () => {
     const demo = await context.server.inject({
       method: 'POST',
       url: '/api/watchdog/demo',
+      headers: operatorHeaders,
     });
     expect(demo.statusCode).toBe(200);
     expect(demo.json()).toMatchObject({
@@ -789,6 +1051,8 @@ describe('REST routes', () => {
   });
 
   it('exposes transaction finality and resolves a wallet challenge', async () => {
+    const oldWallet = process.env.PUBLIC_WALLET_CHALLENGE_ENABLED;
+    process.env.PUBLIC_WALLET_CHALLENGE_ENABLED = 'true';
     const context = fixture();
     const challengeDeployHash = 'f'.repeat(64);
     const status = await context.server.inject(
@@ -804,6 +1068,7 @@ describe('REST routes', () => {
     const resolved = await context.server.inject({
       method: 'POST',
       url: '/api/challenge/wallet-resolve',
+      headers: operatorHeaders,
       payload: { actionId: 5, challengeDeployHash },
     });
     expect(resolved.statusCode).toBe(200);
@@ -816,6 +1081,8 @@ describe('REST routes', () => {
     expect(
       context.walletChallenge.resolveWalletChallenge,
     ).toHaveBeenCalledWith({ actionId: 5, challengeDeployHash });
+    if (oldWallet === undefined) delete process.env.PUBLIC_WALLET_CHALLENGE_ENABLED;
+    else process.env.PUBLIC_WALLET_CHALLENGE_ENABLED = oldWallet;
     await context.server.close();
     context.database.close();
   });
@@ -871,6 +1138,9 @@ describe('REST routes', () => {
 
   it('requires real x402 payment for the bond quote endpoint', async () => {
     const context = fixture();
+    const before = (
+      context.database.prepare('SELECT COUNT(*) AS count FROM paid_quotes').get() as { count: number }
+    ).count;
     const response = await context.server.inject({
       method: 'POST',
       url: '/v1/actions/quote',
@@ -894,6 +1164,10 @@ describe('REST routes', () => {
         ],
       },
     });
+    const after = (
+      context.database.prepare('SELECT COUNT(*) AS count FROM paid_quotes').get() as { count: number }
+    ).count;
+    expect(after).toBe(before);
     await context.server.close();
     context.database.close();
   });

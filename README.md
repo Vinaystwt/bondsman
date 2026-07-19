@@ -49,7 +49,7 @@ Bondsman runs two agents against each other, with no human in the loop:
 
 ![The two-agent economy](frontend/public/diagrams/agent-economy.svg)
 
-Anyone can also challenge a bad payout by hand: connect a Casper wallet, inspect the evidence, sign the challenge, and the reward goes to that wallet. A backend-signed fallback exists for a frictionless demo path when a wallet is not connected; it is labeled honestly and the reward in that case goes to the demo key, not the visitor.
+Production public judging is now centered on the canonical proof console and Assurance Studio. Legacy public challenge and wallet challenge modes are disabled in production; fresh demo actions, challenges, resolutions, and watchdog demo writes are operator-only.
 
 ---
 
@@ -62,9 +62,9 @@ Anyone can also challenge a bad payout by hand: connect a Casper wallet, inspect
   - `BondVault`, custodies bonds, refunds clean ones, and splits a slash between the challenger and the reserve.
   - `BondsmanController`, owns the action lifecycle, the risk-weighted bond calculation, agent reputation, and challenge resolution.
   - `InvoicePool`, stores invoices, pays vendors, records the first paid claim per fingerprint, and proves duplicates on chain.
-- **Backend** (TypeScript): a Fastify API, an event listener that projects Casper Event Standard events into SQLite, the approver agent runner, the watchdog daemon, and a demo-arming service that keeps the product always ready to try.
+- **Backend** (TypeScript): a Fastify API, an event listener that projects Casper Event Standard events into SQLite, the approver agent runner, watchdog daemon, canonical replay service, Assurance Studio policy surface, paid x402 action submission, and operator-only demo controls.
 - **Frontend** (Next.js, TypeScript, Tailwind): the public site and the app, including the Challenge Arena, the action Docket, My Ledger, the Agents directory, and the Leaderboard.
-- **MCP server**: exposes Bondsman's core actions (get action, get reputation, get the required bond, challenge an action, read deployments) as tools any Casper agent can call directly, so bonded accountability is adoptable infrastructure, not just a demo.
+- **MCP server**: exposes read-only state, assurance design, canonical replay, quote probing, paid submit, receipt verification, verifier discovery, and deployment metadata so bonded accountability is adoptable infrastructure, not just a demo.
 
 ### Verifiers, proofs, and integrations
 
@@ -77,10 +77,16 @@ Integration and security references:
 - `docs/INTEGRATION.md`
 - `docs/FAULT_CLASSES.md`
 - `docs/BOND_ECONOMICS.md`
+- `docs/POLICY_ENGINE.md`
+- `docs/ASSURANCE_MANIFEST.md`
+- `docs/JUDGING_EVIDENCE.md`
 - `docs/RECEIPT_VERIFICATION.md`
 - `docs/INVARIANTS.md`
 - `docs/THREAT_MODEL.md`
 - `docs/X402_STATUS.md`
+- `docs/CASPER_IMPACT.md`
+- `docs/ECOSYSTEM_INTEGRATION_BLUEPRINTS.md`
+- `docs/DESIGN_PARTNER_BRIEF.md`
 
 ### The bond and reputation
 
@@ -109,11 +115,12 @@ The canonical, up-to-date set lives in `deployments/testnet.json`, since contrac
 
 ### Judge testing playbook
 
-1. Open the hosted app at [bondsman.vercel.app](https://bondsman.vercel.app).
-2. Confirm the backend is healthy at [the health endpoint](https://bondsman-backend-production.up.railway.app/api/health).
-3. Confirm there is a ready challenge case at [the ready endpoint](https://bondsman-backend-production.up.railway.app/api/demo/ready). A ready case must be `Executed`, duplicate-proven, and still inside its challenge window.
-4. Open [the Challenge Arena](https://bondsman.vercel.app/app/arena), use the backend-signed demo challenge, and follow the resulting challenge and resolve links to Casper Testnet.
-5. Inspect [Actions](https://bondsman.vercel.app/app/actions), [My Ledger](https://bondsman.vercel.app/app/ledger), [Agents](https://bondsman.vercel.app/rwa), and [Leaderboard](https://bondsman.vercel.app/app/leaderboard) for the projected state.
+1. Confirm the backend is healthy at [the health endpoint](https://bondsman-backend-production.up.railway.app/api/health).
+2. Confirm canonical Action 27 at [the canonical proof endpoint](https://bondsman-backend-production.up.railway.app/api/proofs/canonical).
+3. Replay the canonical evidence at [the replay endpoint](https://bondsman-backend-production.up.railway.app/api/replay/canonical).
+4. Verify the receipt at [the receipt verification endpoint](https://bondsman-backend-production.up.railway.app/api/receipt/27/verify).
+5. Probe `/v1/actions/quote` without payment and expect x402 HTTP 402 with no protocol mutation.
+6. Try Assurance Studio through `/api/assurance/templates` and `/api/assurance/analyze`.
 
 Recent real duplicate slash proof:
 
@@ -126,7 +133,7 @@ Recent real duplicate slash proof:
 | Challenge | `5ceee10ac13d83e3f0c7d24cc4db82f043959212b1d501fc09021a9035ca1164` |
 | Resolve slash | `084a544a003335df3b6e76c72dc66d265a340ae10946127791bef8b17f835183` |
 
-The wallet-signed challenge path is available for experimentation but is not the primary judge path. The backend-signed demo path is the reliable path for review; its reward goes to the funded demo challenger key, not to a visitor wallet.
+The historical transaction set above remains useful context, but canonical production judging should use Action 27 and the replay bundle instead of creating a fresh challenge.
 
 ---
 
@@ -141,7 +148,7 @@ npm install -g @vinaystwt/bondsman-mcp
 bondsman-mcp
 ```
 
-Tools exposed: `get_action`, `list_actions`, `get_reputation`, `get_bond_requirement`, `get_deployments`, `challenge_action`. See `mcp-package/` for source and a runnable example.
+Tools exposed include `get_action`, `list_actions`, `get_reputation`, `get_deployments`, `get_verifiers`, `verify_receipt`, `get_assurance_templates`, `design_assurance_policy`, `quote_bonded_action`, `submit_bonded_action`, `replay_canonical_proof`, `check_canonical_quote`, and `public_capabilities`. See `mcp-package/` for source and a runnable example.
 
 ---
 

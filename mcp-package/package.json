@@ -1,7 +1,7 @@
 {
   "name": "@vinaystwt/bondsman-mcp",
-  "version": "0.2.0",
-  "description": "MCP server for Bondsman on Casper. Tools for live actions, verifiers, receipts, reputation, deployments, and challenges.",
+  "version": "0.3.0",
+  "description": "MCP server for Bondsman on Casper. Tools for assurance design, canonical replay, quotes, receipts, reputation, deployments, and verifiers.",
   "keywords": [
     "mcp",
     "bondsman",
