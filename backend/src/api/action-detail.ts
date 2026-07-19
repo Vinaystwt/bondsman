@@ -10,8 +10,20 @@ export function actionDetail(
 ) {
   const action = repository.action(actionId);
   if (!action) return undefined;
+  const paidQuote = repository.paidQuoteForAction(actionId);
   return {
     ...action,
+    payment: paidQuote
+      ? {
+          quoteHash: paidQuote.quoteHash,
+          payer: paidQuote.payer,
+          settlementTransaction: paidQuote.settlementTx,
+          settlementExplorerUrl: explorer(paidQuote.settlementTx),
+          paymentAmount: paidQuote.paymentAmount,
+          asset: 'WCSPR',
+          status: paidQuote.status === 'consumed' ? 'settled' : paidQuote.status,
+        }
+      : null,
     proof:
       Object.values(action.transactions).some((hash) => hash.length === 64)
         ? { available: true }

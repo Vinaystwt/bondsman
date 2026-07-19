@@ -26,6 +26,7 @@ import {
   x402Config,
   x402SettlementFailure,
 } from '../verify/x402.js';
+import { verifySubmitAuthorization } from '../verify/submit-authorization.js';
 import { verifyClaimCollision } from '../verify/service.js';
 import {
   challengeIneligibilityCode,
@@ -37,7 +38,7 @@ import { demoReadyResponse } from './demo-ready.js';
 import type { DemoJobService } from './demo-jobs.js';
 import { deliveryAttestationSchema, verifyDeliveryAttestation } from '../verifiers/delivery-attestation.js';
 import { listVerifiers, verifier } from '../verifiers/registry.js';
-import { featuredProofs, proofFor } from '../proofs/service.js';
+import { canonicalProof, featuredProofs, proofFor } from '../proofs/service.js';
 import { issueReceipt, verifyReceipt, type PortableReceipt } from '../receipts/service.js';
 import { runIntegrator } from '../integrator/service.js';
 import { spendSnapshot } from '../ops/spend-guard.js';
@@ -241,7 +242,7 @@ export function registerRoutes(
     const controller = query.controller === 'v1'
       ? deployment.contracts.controllerV1?.contractHash ?? currentController
       : currentController;
-    const proof = proofFor(repository, actionId, controller);
+    const proof = proofFor(repository, actionId, controller, deployment);
     if (!proof) throw new ApiError(404, 'NOT_FOUND', 'completed proof not found');
     return proof;
   });
@@ -250,18 +251,36 @@ export function registerRoutes(
     const limit = Math.min(50, Math.max(1, Number(query.limit ?? 10) || 10));
     return repository.listActions().filter((action) => action.controllerHash === currentController && ['ResolvedSlash', 'ResolvedRefund'].includes(action.status))
       .sort((a, b) => b.actionId - a.actionId).slice(0, limit)
-      .map((action) => proofFor(repository, action.actionId, currentController));
+      .map((action) => proofFor(repository, action.actionId, currentController, deployment));
   });
-  server.get('/api/proofs/featured', async () => featuredProofs(repository, currentController));
+  server.get('/api/proofs/featured', async () =>
+    featuredProofs(repository, currentController, deployment));
+  server.get('/api/proofs/canonical', async () => {
+    const proof = canonicalProof(repository, currentController, deployment);
+    if (!proof) throw new ApiError(404, 'NOT_FOUND', 'canonical proof not found');
+    return proof;
+  });
   server.get('/api/receipt/:id', async (request) => {
     const actionId = Number((request.params as { id: string }).id);
-    const receipt = await issueReceipt({ repositoryPath, repository, actionId, controllerHash: currentController });
+    const receipt = await issueReceipt({
+      repositoryPath,
+      repository,
+      actionId,
+      controllerHash: currentController,
+      deployment,
+    });
     if (!receipt) throw new ApiError(404, 'NOT_FOUND', 'completed receipt not found');
     return receipt;
   });
   server.get('/api/receipt/:id/verify', async (request) => {
     const actionId = Number((request.params as { id: string }).id);
-    const receipt = await issueReceipt({ repositoryPath, repository, actionId, controllerHash: currentController });
+    const receipt = await issueReceipt({
+      repositoryPath,
+      repository,
+      actionId,
+      controllerHash: currentController,
+      deployment,
+    });
     if (!receipt) throw new ApiError(404, 'NOT_FOUND', 'completed receipt not found');
     return verifyReceipt(receipt);
   });
@@ -376,11 +395,46 @@ export function registerRoutes(
       ) {
         throw new ApiError(400, 'BUYER_PUBLIC_KEY_REQUIRED', 'delivery contradiction requires buyerPublicKey');
       }
+      if (!quote.payer) {
+        throw new ApiError(409, 'QUOTE_PAYER_MISSING', 'paid quote does not include payer identity');
+      }
+      let submitAuth: { payer: string; nonceHash: string };
+      try {
+        submitAuth = verifySubmitAuthorization({
+          authorization: input.submitAuthorization,
+          expectedPayer: quote.payer,
+          fields: {
+            quoteHash: input.quoteHash,
+            faultClass: input.faultClass,
+            eventType: input.eventType,
+            ...(input.buyerPublicKey
+              ? { buyerPublicKey: input.buyerPublicKey }
+              : {}),
+          },
+        });
+      } catch (error) {
+        throw new ApiError(
+          401,
+          'SUBMIT_AUTHORIZATION_INVALID',
+          error instanceof Error
+            ? error.message
+            : 'submit authorization is invalid',
+        );
+      }
+      if (!repository.useSubmitAuthorizationNonce({
+        nonceHash: submitAuth.nonceHash,
+        payer: submitAuth.payer,
+        quoteHash: input.quoteHash,
+      })) {
+        throw new ApiError(409, 'SUBMIT_AUTHORIZATION_REPLAY', 'submit authorization nonce has already been used');
+      }
       const payloadHash = submitPayloadHash({
         quoteHash: input.quoteHash,
         faultClass: input.faultClass,
         buyerPublicKey: input.buyerPublicKey ?? null,
         eventType: input.eventType,
+        submitAuthorizationPublicKey: input.submitAuthorization.publicKey,
+        submitAuthorizationNonce: input.submitAuthorization.nonce,
       });
       if (!repository.reservePaidQuote(input.quoteHash, payloadHash)) {
         throw new ApiError(409, 'QUOTE_ALREADY_CONSUMED', 'paid quote is not available');

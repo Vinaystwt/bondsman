@@ -29,4 +29,10 @@ export const paidActionSubmitSchema = z.object({
   buyerPublicKey: z.string().min(16).optional(),
   eventType: z.enum(['delivery_rejected', 'goods_not_received'])
     .default('goods_not_received'),
+  submitAuthorization: z.object({
+    publicKey: z.string().regex(/^(01|02|03)[0-9a-f]+$/i),
+    signature: z.string().min(16),
+    timestamp: z.number().int().positive(),
+    nonce: z.string().min(16).max(256),
+  }).strict(),
 }).strict();

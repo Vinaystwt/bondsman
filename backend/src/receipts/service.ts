@@ -2,16 +2,28 @@ import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ActionRecord, Repository } from '../db/repositories.js';
+import type { Deployment } from '../shared/deployment.js';
+import {
+  actionEconomics,
+  deliveryAttestationSection,
+  paidQuoteSection,
+  paymentSection,
+  reasoningCommitment,
+} from '../evidence/canonical.js';
+
+const RECEIPT_SCHEMA_ID = 'bondsman.portable-receipt.golden-path.v2';
 
 export interface PortableReceipt {
   protocol: 'bondsman';
-  version: '1';
+  version: '2';
+  schemaId: typeof RECEIPT_SCHEMA_ID;
   network: 'casper-test';
   actionId: string;
   controller: string;
   actor: string;
   actorRole: 'approver';
   actionType: 'invoice_payout';
+  verifier: string;
   faultClass: string;
   principal: string;
   bond: string;
@@ -19,13 +31,25 @@ export interface PortableReceipt {
   faultCode: string | null;
   challenger: string | null;
   challengerType: string | null;
-  challengerReward: string;
-  reserveCredit: string;
-  reputationDelta: number;
+  challengeSigning: string | null;
+  watchdogChallengeTransaction: string | null;
+  resolveTransaction: string | null;
+  economics: {
+    challengerReward: string;
+    challengerRewardSource: string;
+    reserveCredit: string;
+    reserveCreditSource: string;
+    currentReserveSnapshot: string;
+    reputationBefore: number | null;
+    reputationDelta: number;
+    reputationDeltaSource: string;
+    reputationAfter: number | null;
+  };
   deployHashes: Record<string, string>;
-  evidenceRoot: string | null;
-  modelReasoningHash: string;
-  modelReasoningText: string;
+  reasoningCommitment: ReturnType<typeof reasoningCommitment>;
+  deliveryEvidence: ReturnType<typeof deliveryAttestationSection>;
+  payment: ReturnType<typeof paymentSection>;
+  paidQuote: ReturnType<typeof paidQuoteSection>;
   issuedAt: string;
   signerPublicKey: string;
   signature: string;
@@ -50,32 +74,81 @@ function terminal(action: ActionRecord): boolean {
   return action.status === 'ResolvedSlash' || action.status === 'ResolvedRefund';
 }
 
+function isCurrentReceipt(value: unknown): value is PortableReceipt {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as Record<string, unknown>).protocol === 'bondsman' &&
+    (value as Record<string, unknown>).version === '2' &&
+    (value as Record<string, unknown>).schemaId === RECEIPT_SCHEMA_ID,
+  );
+}
+
+function verifierFor(action: ActionRecord): string {
+  return action.faultClass === 'delivery_contradiction'
+    ? 'delivery-contradiction-v2'
+    : 'duplicate-claim-v2';
+}
+
 export async function issueReceipt(input: {
   repositoryPath: string;
   repository: Repository;
   actionId: number;
   controllerHash: string;
+  deployment: Deployment;
 }): Promise<PortableReceipt | undefined> {
   const cached = input.repository.receipt(input.controllerHash, input.actionId);
-  if (cached) return cached as PortableReceipt;
+  if (isCurrentReceipt(cached)) return cached;
   const action = input.repository.action(input.actionId);
   if (!action || action.controllerHash !== input.controllerHash || !terminal(action)) return undefined;
   const { key, publicKey } = await signer(input.repositoryPath);
   const slashed = action.status === 'ResolvedSlash';
-  const reward = slashed ? BigInt(action.bondPosted) / 2n : 0n;
+  const paidQuote = input.repository.paidQuoteForAction(action.actionId);
+  const attestation = input.repository.deliveryAttestationForAction(action.actionId);
+  const economics = actionEconomics(input.repository, action);
   const receipt: PortableReceipt = {
-    protocol: 'bondsman', version: '1', network: 'casper-test', actionId: String(action.actionId),
-    controller: input.controllerHash, actor: action.agent, actorRole: 'approver', actionType: 'invoice_payout',
-    faultClass: action.faultClass ?? 'duplicate_claim', principal: action.amount, bond: action.bondPosted,
+    protocol: 'bondsman',
+    version: '2',
+    schemaId: RECEIPT_SCHEMA_ID,
+    network: 'casper-test',
+    actionId: String(action.actionId),
+    controller: input.controllerHash,
+    actor: action.agent,
+    actorRole: 'approver',
+    actionType: 'invoice_payout',
+    verifier: paidQuote?.verifier ?? verifierFor(action),
+    faultClass: action.faultClass ?? 'duplicate_claim',
+    principal: action.amount,
+    bond: action.bondPosted,
     outcome: slashed ? 'SLASHED' : 'REFUNDED',
     faultCode: slashed
       ? action.faultClass === 'delivery_contradiction' ? 'DELIVERY_CONTRADICTION_VERIFIED' : 'DUPLICATE_CLAIM_VERIFIED'
       : null,
     challenger: action.challenger, challengerType: action.challengerType ?? null,
-    challengerReward: reward.toString(), reserveCredit: (slashed ? BigInt(action.bondPosted) - reward : 0n).toString(),
-    reputationDelta: slashed ? -50 : 10, deployHashes: action.transactions,
-    evidenceRoot: action.evidenceRoot ?? null, modelReasoningHash: action.reasoningHash,
-    modelReasoningText: action.reasoning, issuedAt: new Date().toISOString(), signerPublicKey: publicKey, signature: '',
+    challengeSigning: action.challengeSigning ?? null,
+    watchdogChallengeTransaction: action.challengerType === 'watchdog'
+      ? action.transactions.challenge ?? null
+      : null,
+    resolveTransaction: action.transactions.resolve ?? null,
+    economics: {
+      challengerReward: economics.challengerReward,
+      challengerRewardSource: economics.challengerRewardSource,
+      reserveCredit: economics.reserveCredit,
+      reserveCreditSource: economics.reserveCreditSource,
+      currentReserveSnapshot: economics.currentReserveSnapshot,
+      reputationBefore: economics.reputationBefore,
+      reputationDelta: economics.reputationDelta,
+      reputationDeltaSource: economics.reputationDeltaSource,
+      reputationAfter: economics.reputationAfter,
+    },
+    deployHashes: action.transactions,
+    reasoningCommitment: reasoningCommitment(action),
+    deliveryEvidence: deliveryAttestationSection(attestation),
+    payment: paymentSection(input.deployment, paidQuote),
+    paidQuote: paidQuoteSection(paidQuote),
+    issuedAt: new Date().toISOString(),
+    signerPublicKey: publicKey,
+    signature: '',
   };
   receipt.signature = sign(null, Buffer.from(canonical(unsigned(receipt))), key).toString('base64');
   input.repository.cacheReceipt(input.controllerHash, input.actionId, receipt);

@@ -1,12 +1,15 @@
 import type { ActionRecord, DeliveryAttestationRecord, Repository } from '../db/repositories.js';
+import type { Deployment } from '../shared/deployment.js';
+import {
+  actionEconomics,
+  deliveryAttestationSection,
+  explorer,
+  paidQuoteSection,
+  paymentSection,
+  reasoningCommitment,
+} from '../evidence/canonical.js';
 
-const PROOF_SCHEMA_VERSION = 2;
-
-function explorer(hash: string | undefined): string | null {
-  return hash && /^[0-9a-f]{64}$/.test(hash)
-    ? `https://testnet.cspr.live/transaction/${hash}`
-    : null;
-}
+const PROOF_SCHEMA_VERSION = 3;
 
 function role(action: ActionRecord): string {
   return action.challengerType === 'watchdog' ? 'deterministic' : 'model-driven';
@@ -31,11 +34,12 @@ export function buildProof(
   repository: Repository,
   action: ActionRecord,
   controllerHash: string,
+  deployment: Deployment,
 ): Record<string, unknown> {
   const attestation = repository.deliveryAttestationForAction(action.actionId);
+  const paidQuote = repository.paidQuoteForAction(action.actionId);
   const slashed = action.status === 'ResolvedSlash';
-  const challengerReward = slashed ? (BigInt(action.bondPosted) / 2n).toString() : '0';
-  const reserveCredit = slashed ? (BigInt(action.bondPosted) - BigInt(challengerReward)).toString() : '0';
+  const economics = actionEconomics(repository, action);
   const timeline: Record<string, unknown>[] = [
     { stage: 'initiate', transaction: 'initiate', actor: 'approver' },
     { stage: 'bond_posted', transaction: 'postBond', actor: 'approver' },
@@ -79,10 +83,22 @@ export function buildProof(
       evidenceRoot: action.evidenceRoot ?? attestation?.evidenceRoot ?? null,
       verificationDetails: verificationDetails(action, attestation),
     },
-    modelReasoning: { text: action.reasoning, commitHash: action.reasoningHash, verifiedMatches: Boolean(action.reasoning) },
+    payment: paymentSection(deployment, paidQuote),
+    paidQuote: paidQuoteSection(paidQuote),
+    deliveryAttestation: deliveryAttestationSection(attestation),
+    modelReasoning: reasoningCommitment(action),
     economicImpact: {
-      challengerReward, reserveCredit, totalReserveAfter: repository.reserve(),
-      reputationAfter: reputation?.score ?? null,
+      challengerReward: economics.challengerReward,
+      challengerRewardSource: economics.challengerRewardSource,
+      reserveCredit: economics.reserveCredit,
+      reserveCreditSource: economics.reserveCreditSource,
+      currentReserveSnapshot: economics.currentReserveSnapshot,
+      reputationBefore: economics.reputationBefore,
+      reputationDelta: economics.reputationDelta,
+      reputationDeltaSource: economics.reputationDeltaSource,
+      reputationAfter: reputation?.score ?? economics.reputationAfter,
+      resolutionEventTransaction: economics.resolutionEventTransaction,
+      resolutionEventExplorerUrl: economics.resolutionEventExplorerUrl,
     },
     receiptUrl: `/api/receipt/${action.actionId}`,
     cachedAt: new Date().toISOString(),
@@ -90,7 +106,10 @@ export function buildProof(
 }
 
 export function proofFor(
-  repository: Repository, actionId: number, controllerHash: string,
+  repository: Repository,
+  actionId: number,
+  controllerHash: string,
+  deployment: Deployment,
 ): Record<string, unknown> | undefined {
   const action = repository.action(actionId);
   if (!action || action.controllerHash !== controllerHash || !completed(action)) return undefined;
@@ -102,20 +121,32 @@ export function proofFor(
   ) {
     return cached as Record<string, unknown>;
   }
-  const proof = buildProof(repository, action, controllerHash);
+  const proof = buildProof(repository, action, controllerHash, deployment);
   repository.cacheProof(controllerHash, actionId, proof);
   return proof;
 }
 
-export function cacheCompletedProofs(repository: Repository, controllerHash: string): void {
+export function cacheCompletedProofs(
+  repository: Repository,
+  controllerHash: string,
+  deployment: Deployment,
+): void {
   for (const action of repository.listActions()) {
     if (action.controllerHash === controllerHash && completed(action)) {
-      repository.cacheProof(controllerHash, action.actionId, buildProof(repository, action, controllerHash));
+      repository.cacheProof(
+        controllerHash,
+        action.actionId,
+        buildProof(repository, action, controllerHash, deployment),
+      );
     }
   }
 }
 
-export function featuredProofs(repository: Repository, controllerHash: string): Record<string, unknown>[] {
+export function featuredProofs(
+  repository: Repository,
+  controllerHash: string,
+  deployment: Deployment,
+): Record<string, unknown>[] {
   const actions = repository.listActions()
     .filter((action) => action.controllerHash === controllerHash && completed(action))
     .sort((a, b) => b.actionId - a.actionId);
@@ -124,10 +155,37 @@ export function featuredProofs(repository: Repository, controllerHash: string): 
     const value = actions.find((action) => !picks.includes(action) && predicate(action));
     if (value) picks.push(value);
   };
+  pick((a) =>
+    a.status === 'ResolvedSlash' &&
+    a.faultClass === 'delivery_contradiction' &&
+    a.challengerType === 'watchdog' &&
+    repository.paidQuoteForAction(a.actionId)?.status === 'consumed',
+  );
   pick((a) => a.status === 'ResolvedSlash' && a.faultClass === 'duplicate_claim');
   pick((a) => a.status === 'ResolvedSlash' && a.faultClass === 'delivery_contradiction');
   pick((a) => a.status === 'ResolvedRefund');
   pick((a) => a.challengerType === 'watchdog');
   pick((a) => a.challengeSigning === 'external-wallet');
-  return picks.map((action) => proofFor(repository, action.actionId, controllerHash)!).filter(Boolean);
+  return picks
+    .map((action) => proofFor(repository, action.actionId, controllerHash, deployment)!)
+    .filter(Boolean);
+}
+
+export function canonicalProof(
+  repository: Repository,
+  controllerHash: string,
+  deployment: Deployment,
+): Record<string, unknown> | undefined {
+  const action = repository.listActions()
+    .filter((candidate) =>
+      candidate.controllerHash === controllerHash &&
+      candidate.status === 'ResolvedSlash' &&
+      candidate.faultClass === 'delivery_contradiction' &&
+      candidate.challengerType === 'watchdog' &&
+      repository.paidQuoteForAction(candidate.actionId)?.status === 'consumed',
+    )
+    .sort((left, right) => right.actionId - left.actionId)[0];
+  return action
+    ? proofFor(repository, action.actionId, controllerHash, deployment)
+    : undefined;
 }

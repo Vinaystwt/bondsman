@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { generateKeyPairSync, createPrivateKey, randomBytes, sign } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { ExactCasperScheme } from '@make-software/casper-x402/exact/client';
 import { toClientCasperSigner } from '@make-software/casper-x402';
 import type { Deployment } from '../shared/deployment.js';
@@ -10,6 +11,7 @@ import {
   canonicalDeliveryPayload,
   type DeliveryAttestationInput,
 } from '../verifiers/delivery-attestation.js';
+import { canonicalSubmitAuthorizationPayload } from '../verify/submit-authorization.js';
 
 type Step = { name: string; status: number; detail: string };
 
@@ -52,6 +54,10 @@ function txsFromAction(action: Record<string, unknown>): string[] {
     );
 }
 
+function cryptoNonce(): string {
+  return randomBytes(32).toString('hex');
+}
+
 export async function runIntegrator(options: {
   baseUrl: string;
   deployment: Deployment;
@@ -59,6 +65,7 @@ export async function runIntegrator(options: {
   repositoryPath?: string;
 }): Promise<IntegratorRun> {
   const quoteEndpoint = new URL('/v1/actions/quote', options.baseUrl).toString();
+  const repositoryPath = options.repositoryPath ?? process.cwd();
   const steps: Step[] = [
     {
       name: 'discover_agent_card',
@@ -88,7 +95,7 @@ export async function runIntegrator(options: {
     firstBody,
   );
   const privateKey = await loadPrivateKey(
-    join(options.repositoryPath ?? process.cwd(), '.keys/integrator.pem'),
+    join(repositoryPath, '.keys/integrator.pem'),
   );
   const signer = toClientCasperSigner(privateKey);
   const scheme = new ExactCasperScheme(signer);
@@ -159,6 +166,25 @@ export async function runIntegrator(options: {
     quote.paymentReceipt && typeof quote.paymentReceipt === 'object'
       ? quote.paymentReceipt as Record<string, unknown>
       : null;
+  const submitAuthorization = {
+    publicKey: privateKey.publicKey.toHex(),
+    timestamp: Date.now(),
+    nonce: cryptoNonce(),
+    signature: '',
+  };
+  const submitPayload = canonicalSubmitAuthorizationPayload({
+    quoteHash: String(quote.quoteHash),
+    faultClass: 'delivery_contradiction',
+    buyerPublicKey: buyerPublicKeyRaw,
+    eventType: 'goods_not_received',
+    timestamp: submitAuthorization.timestamp,
+    nonce: submitAuthorization.nonce,
+  });
+  const submitSigner = createPrivateKey(
+    await readFile(join(repositoryPath, '.keys/integrator.pem'), 'utf8'),
+  );
+  submitAuthorization.signature =
+    sign(null, submitPayload, submitSigner).toString('base64');
   const submit = await fetch(new URL('/v1/actions/submit', options.baseUrl), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -167,6 +193,7 @@ export async function runIntegrator(options: {
       faultClass: 'delivery_contradiction',
       buyerPublicKey: buyerPublicKeyRaw,
       eventType: 'goods_not_received',
+      submitAuthorization,
     }),
   });
   const action = await submit.json() as Record<string, unknown>;

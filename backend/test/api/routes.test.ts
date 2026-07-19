@@ -1,9 +1,14 @@
+import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
 import { buildServer } from '../../src/api/server.js';
 import { createDemoJobService } from '../../src/api/demo-jobs.js';
 import type { Deployment } from '../../src/shared/deployment.js';
+import {
+  canonicalSubmitAuthorizationPayload,
+  payerFromCasperPublicKey,
+} from '../../src/verify/submit-authorization.js';
 import {
   assertSpendAllowed,
   recordSpend,
@@ -60,6 +65,47 @@ const deployment = {
     watchdog: watchdogAccount,
   },
 } as Deployment;
+
+function casperEd25519Key() {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  const rawPublicKey = Buffer.from(
+    publicKey.export({ format: 'der', type: 'spki' }),
+  ).subarray(-32).toString('hex');
+  const publicKeyHex = `01${rawPublicKey}`;
+  return {
+    privateKey,
+    publicKeyHex,
+    payer: payerFromCasperPublicKey(publicKeyHex),
+  };
+}
+
+function submitAuthorization(input: {
+  privateKey: KeyObject;
+  publicKeyHex: string;
+  quoteHash: string;
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  buyerPublicKey?: string;
+  eventType?: 'delivery_rejected' | 'goods_not_received';
+  timestamp?: number;
+  nonce?: string;
+}) {
+  const timestamp = input.timestamp ?? Date.now();
+  const nonce = input.nonce ?? 'nonce'.padEnd(32, '0');
+  const payload = canonicalSubmitAuthorizationPayload({
+    quoteHash: input.quoteHash,
+    faultClass: input.faultClass,
+    eventType: input.eventType ?? 'goods_not_received',
+    timestamp,
+    nonce,
+    ...(input.buyerPublicKey ? { buyerPublicKey: input.buyerPublicKey } : {}),
+  });
+  return {
+    publicKey: input.publicKeyHex,
+    timestamp,
+    nonce,
+    signature: sign(null, payload, input.privateKey).toString('base64'),
+  };
+}
 
 function fixture() {
   const database = openDatabase(':memory:');
@@ -990,10 +1036,172 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('rejects mismatched, tampered, expired, and replayed submit authorizations', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    const payerKey = casperEd25519Key();
+    const otherKey = casperEd25519Key();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(JSON.stringify({
+          success: true,
+          transaction: '7'.repeat(64),
+          network: 'casper:casper-test',
+          payer: payerKey.payer,
+        })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(JSON.stringify({
+          success: true,
+          transaction: '8'.repeat(64),
+          network: 'casper:casper-test',
+          payer: payerKey.payer,
+        })),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: { signature: '00' },
+    })).toString('base64');
+    const paid = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: {
+        amount: '50000000000000',
+        faultClass: 'delivery_contradiction',
+      },
+    });
+    const quoteHash = paid.json().quoteHash;
+    const buyerPublicKey = Buffer.alloc(32, 7).toString('base64');
+
+    const wrongPayer = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        submitAuthorization: submitAuthorization({
+          ...otherKey,
+          quoteHash,
+          faultClass: 'delivery_contradiction',
+          buyerPublicKey,
+        }),
+      },
+    });
+    expect(wrongPayer.statusCode).toBe(401);
+    expect(wrongPayer.json().code).toBe('SUBMIT_AUTHORIZATION_INVALID');
+
+    const tampered = submitAuthorization({
+      ...payerKey,
+      quoteHash,
+      faultClass: 'delivery_contradiction',
+      buyerPublicKey,
+      eventType: 'delivery_rejected',
+      nonce: 'tampered'.padEnd(32, '0'),
+    });
+    const tamperedResponse = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        eventType: 'goods_not_received',
+        submitAuthorization: tampered,
+      },
+    });
+    expect(tamperedResponse.statusCode).toBe(401);
+
+    const expired = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        submitAuthorization: submitAuthorization({
+          ...payerKey,
+          quoteHash,
+          faultClass: 'delivery_contradiction',
+          buyerPublicKey,
+          timestamp: Date.now() - 10 * 60_000,
+          nonce: 'expired'.padEnd(32, '0'),
+        }),
+      },
+    });
+    expect(expired.statusCode).toBe(401);
+
+    const nonce = 'replay'.padEnd(32, '0');
+    const accepted = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        submitAuthorization: submitAuthorization({
+          ...payerKey,
+          quoteHash,
+          faultClass: 'delivery_contradiction',
+          buyerPublicKey,
+          nonce,
+        }),
+      },
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const secondPaid = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: {
+        amount: '50000000000000',
+        faultClass: 'delivery_contradiction',
+      },
+    });
+    expect(secondPaid.statusCode).toBe(200);
+    const secondQuoteHash = secondPaid.json().quoteHash;
+    const replay = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash: secondQuoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+        submitAuthorization: submitAuthorization({
+          ...payerKey,
+          quoteHash: secondQuoteHash,
+          faultClass: 'delivery_contradiction',
+          buyerPublicKey,
+          nonce,
+        }),
+      },
+    });
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().code).toBe('SUBMIT_AUTHORIZATION_REPLAY');
+
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
+
   it('binds a paid quote to one submitted delivery action', async () => {
     const context = fixture();
     const originalKey = process.env.X402_FACILITATOR_API_KEY;
     process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    const payerKey = casperEd25519Key();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -1001,7 +1209,7 @@ describe('REST routes', () => {
         success: true,
         transaction: '7'.repeat(64),
         network: 'casper:casper-test',
-        payer: `00${'4'.repeat(64)}`,
+        payer: payerKey.payer,
       })),
     }));
     const payment = Buffer.from(JSON.stringify({
@@ -1019,6 +1227,12 @@ describe('REST routes', () => {
     });
     const quoteHash = paid.json().quoteHash;
     const buyerPublicKey = Buffer.alloc(32, 7).toString('base64');
+    const authorization = submitAuthorization({
+      ...payerKey,
+      quoteHash,
+      faultClass: 'delivery_contradiction',
+      buyerPublicKey,
+    });
     const submit = await context.server.inject({
       method: 'POST',
       url: '/v1/actions/submit',
@@ -1026,6 +1240,7 @@ describe('REST routes', () => {
         quoteHash,
         faultClass: 'delivery_contradiction',
         buyerPublicKey,
+        submitAuthorization: authorization,
       },
     });
     expect(submit.statusCode).toBe(200);
@@ -1062,6 +1277,7 @@ describe('REST routes', () => {
         quoteHash,
         faultClass: 'delivery_contradiction',
         buyerPublicKey,
+        submitAuthorization: authorization,
       },
     });
     expect(replay.statusCode).toBe(409);

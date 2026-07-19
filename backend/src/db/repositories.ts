@@ -392,6 +392,13 @@ export class Repository {
     return row ? paidQuoteFromRow(row) : undefined;
   }
 
+  paidQuoteForAction(actionId: number): PaidQuoteRecord | undefined {
+    const row = this.database.prepare(
+      'SELECT * FROM paid_quotes WHERE consumed_action_id = ?',
+    ).get(actionId) as Record<string, unknown> | undefined;
+    return row ? paidQuoteFromRow(row) : undefined;
+  }
+
   reservePaidQuote(quoteHash: string, submitPayloadHash: string): boolean {
     const result = this.database.prepare(
       `UPDATE paid_quotes
@@ -415,6 +422,31 @@ export class Repository {
        SET status = 'consumed', consumed_action_id = ?, consumed_at = ?
        WHERE quote_hash = ? AND status = 'consuming'`,
     ).run(actionId, Date.now(), quoteHash);
+  }
+
+  useSubmitAuthorizationNonce(input: {
+    nonceHash: string;
+    payer: string;
+    quoteHash: string;
+  }): boolean {
+    try {
+      this.database.prepare(
+        `INSERT INTO submit_authorization_nonces
+         (nonce_hash, payer, quote_hash, created_at)
+         VALUES (?, ?, ?, ?)`,
+      ).run(input.nonceHash, input.payer, input.quoteHash, Date.now());
+      return true;
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
+      ) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   useDeliveryEvidence(evidenceRoot: string, actionId: number): boolean {

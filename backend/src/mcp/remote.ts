@@ -24,7 +24,8 @@ function remoteServer(repository: Repository, deployment: Deployment): McpServer
   }, async () => output(repository.listActions().filter((action) => action.controllerHash === controller)));
   server.registerTool('get_proof', {
     description: 'Get a completed cached proof object.', inputSchema: { actionId: z.number().int().nonnegative() },
-  }, async ({ actionId }) => output(proofFor(repository, actionId, controller) ?? { error: 'completed proof not found' }));
+  }, async ({ actionId }) =>
+    output(proofFor(repository, actionId, controller, deployment) ?? { error: 'completed proof not found' }));
   server.registerTool('get_deployments', {
     description: 'Get testnet contract hashes and public accounts.', inputSchema: {},
   }, async () => output(deployment));
