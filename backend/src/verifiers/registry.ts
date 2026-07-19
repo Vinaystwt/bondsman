@@ -27,7 +27,9 @@ const verifiers: FaultVerifierSpec[] = [
     schema: {
       required: ['invoiceId', 'actionId', 'eventType', 'occurredAt', 'buyerPublicKey', 'signature'],
       eventTypes: ['delivery_rejected', 'goods_not_received'],
-      signedPayload: 'Canonical JSON: actionId, invoiceId, eventType, occurredAt, nonce.',
+      signedPayload: 'Binary verifier payload: actionId u64 LE, invoiceId u64 LE, occurredAt u64 LE, nonce bytes32.',
+      evidence: 'The on-chain verifier receives the 56-byte signed payload plus a 64-byte Ed25519 signature.',
+      buyerPublicKey: 'Base64 SPKI Ed25519 public key or base64 raw 32-byte Ed25519 public key.',
       replayProtection: 'Evidence root may bind to one action only.',
     },
     example: {
@@ -35,7 +37,7 @@ const verifiers: FaultVerifierSpec[] = [
       actionId: 42,
       eventType: 'goods_not_received',
       occurredAt: 1785000000000,
-      nonce: 'buyer-event-42',
+      nonce: '64 hex characters, or an arbitrary nonce hashed to bytes32',
     },
     limitation: 'The current controller suite cannot accept this fault class. A parallel controller suite is required before it may trigger a slash.',
   },
