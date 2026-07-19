@@ -90,7 +90,7 @@ The required bond scales with the size of the payout, and rises further if the a
 
 Bondsman is deployed as a live Casper Testnet prototype with real on-chain execution. The core accountability loop is active today: agents post bonds, payouts execute through the invoice pool, duplicate claims can be challenged, bonds can be slashed, reserves update, and agent reputation changes on chain.
 
-The invoice dataset uses controlled testnet fixtures so duplicate claim scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP 18 asset. The paid quote endpoint at `/v1/actions/quote` uses real Casper x402 settlement through WCSPR and the CSPR.cloud facilitator when the integrator account has WCSPR. The older `/api/labs/x402-sandbox` path remains only as a labeled reference and never fabricates a settlement receipt. See `docs/X402_STATUS.md` for the current payment status.
+The invoice dataset uses controlled testnet fixtures so duplicate and delivery-contradiction scenarios can be reproduced safely and consistently during demos. The stablecoin is a testnet CEP 18 asset. The paid quote flow uses real Casper x402 settlement through WCSPR and the CSPR.cloud facilitator: `/v1/actions/quote` settles the paid quote, then `/v1/actions/submit` binds that quote to exactly one bonded action. The older `/api/labs/x402-sandbox` path remains only as a labeled reference and never fabricates a settlement receipt. See `docs/X402_STATUS.md` for the current payment status.
 
 ---
 

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import type { Repository } from '../db/repositories.js';
 import type { Deployment } from '../shared/deployment.js';
 import type { ResolutionService } from './resolution.js';
@@ -6,6 +7,7 @@ import type { DemoArmService } from './arm.js';
 import { actionDetail } from './action-detail.js';
 import {
   actionBodySchema,
+  paidActionSubmitSchema,
   transactionHashSchema,
   verifyBodySchema,
   walletChallengeBodySchema,
@@ -20,7 +22,9 @@ import {
   quoteResponse,
   sendPaymentRequired,
   settleX402Payment,
+  x402Diagnostics,
   x402Config,
+  x402SettlementFailure,
 } from '../verify/x402.js';
 import { verifyClaimCollision } from '../verify/service.js';
 import {
@@ -76,6 +80,26 @@ function quoteAmount(body: unknown): string | undefined {
     throw new ApiError(400, 'INVALID_QUOTE_AMOUNT', 'amount must be a positive integer string');
   }
   return value;
+}
+
+function quoteFaultClass(body: unknown):
+  | 'duplicate_claim'
+  | 'delivery_contradiction'
+  | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const value = (body as Record<string, unknown>).faultClass;
+  if (value === undefined) return undefined;
+  if (value !== 'duplicate_claim' && value !== 'delivery_contradiction') {
+    throw new ApiError(400, 'INVALID_FAULT_CLASS', 'faultClass is invalid');
+  }
+  return value;
+}
+
+function submitPayloadHash(input: unknown): string {
+  return `0x${createHash('blake2b512')
+    .update(JSON.stringify(input))
+    .digest('hex')
+    .slice(0, 64)}`;
 }
 
 export function registerRoutes(
@@ -300,18 +324,18 @@ export function registerRoutes(
       paymentRequirements: requirements,
     });
     if (!settlement.success || !settlement.transaction) {
-      const reason = [
-        settlement.errorReason ?? 'settlement_failed',
-        settlement.errorMessage,
-      ].filter(Boolean).join(': ');
+      const failure = x402SettlementFailure(settlement);
       return sendPaymentRequired(
         reply,
         requirements,
-        reason || 'x402 settlement failed',
+        failure.reason,
+        failure.code,
+        x402Diagnostics(paymentPayload, requirements),
       );
     }
     const facilitator = new URL(x402Config(deployment).facilitatorUrl).host;
     const amount = quoteAmount(request.body);
+    const faultClass = quoteFaultClass(request.body);
     const quote = quoteResponse({
       repository,
       deployment,
@@ -322,6 +346,7 @@ export function registerRoutes(
         ...(settlement.payer ? { payer: settlement.payer } : {}),
       },
       ...(amount ? { amount } : {}),
+      ...(faultClass ? { faultClass } : {}),
     });
     reply.header(
       'PAYMENT-RESPONSE',
@@ -329,6 +354,73 @@ export function registerRoutes(
     );
     return quote;
   });
+  server.post('/v1/actions/submit', async (request) =>
+    idempotency.run(request, 'paid-action-submit', async () => {
+      const input = paidActionSubmitSchema.parse(request.body);
+      const quote = repository.paidQuote(input.quoteHash);
+      if (!quote) {
+        throw new ApiError(404, 'QUOTE_NOT_FOUND', 'paid quote not found');
+      }
+      if (quote.status !== 'paid') {
+        throw new ApiError(409, 'QUOTE_ALREADY_CONSUMED', 'paid quote is not available');
+      }
+      if (Date.parse(quote.quoteExpiry) <= Date.now()) {
+        throw new ApiError(409, 'QUOTE_EXPIRED', 'paid quote has expired');
+      }
+      if (quote.faultClass !== input.faultClass) {
+        throw new ApiError(409, 'QUOTE_FAULT_CLASS_MISMATCH', 'quote fault class does not match action');
+      }
+      if (
+        input.faultClass === 'delivery_contradiction' &&
+        !input.buyerPublicKey
+      ) {
+        throw new ApiError(400, 'BUYER_PUBLIC_KEY_REQUIRED', 'delivery contradiction requires buyerPublicKey');
+      }
+      const payloadHash = submitPayloadHash({
+        quoteHash: input.quoteHash,
+        faultClass: input.faultClass,
+        buyerPublicKey: input.buyerPublicKey ?? null,
+        eventType: input.eventType,
+      });
+      if (!repository.reservePaidQuote(input.quoteHash, payloadHash)) {
+        throw new ApiError(409, 'QUOTE_ALREADY_CONSUMED', 'paid quote is not available');
+      }
+      try {
+        const action = await arm.submitPaidAction({
+          quoteHash: input.quoteHash,
+          faultClass: input.faultClass,
+          amount: quote.amount,
+          ...(input.buyerPublicKey
+            ? { buyerPublicKey: input.buyerPublicKey }
+            : {}),
+          eventType: input.eventType,
+        });
+        repository.consumePaidQuote(input.quoteHash, action.actionId);
+        return {
+          success: true,
+          quoteHash: input.quoteHash,
+          quote: {
+            actionType: quote.actionType,
+            faultClass: quote.faultClass,
+            verifier: quote.verifier,
+            requiredBond: quote.requiredBond,
+            paymentReceipt: {
+              network: 'casper-test',
+              asset: 'WCSPR',
+              amount: quote.paymentAmount,
+              transaction: quote.settlementTx,
+              facilitator: quote.facilitator,
+              payer: quote.payer,
+              settled: true,
+            },
+          },
+          action,
+        };
+      } catch (error) {
+        repository.releasePaidQuote(input.quoteHash);
+        throw error;
+      }
+    }));
   server.post('/api/challenge', async (request) => idempotency.run(request, 'challenge', async () => {
     const { actionId } = actionBodySchema.parse(request.body);
     const action = repository.action(actionId);

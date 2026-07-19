@@ -46,6 +46,21 @@ interface SettleResponse {
   errorMessage?: string;
 }
 
+interface PaymentAuthorization {
+  from?: unknown;
+  to?: unknown;
+  value?: unknown;
+  validAfter?: unknown;
+  validBefore?: unknown;
+  nonce?: unknown;
+}
+
+function payloadObject(payload: unknown): Record<string, unknown> | undefined {
+  return payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : undefined;
+}
+
 export function x402Config(deployment: Deployment) {
   const payToHash =
     process.env.X402_PAY_TO_ACCOUNT_HASH?.trim() ||
@@ -138,10 +153,61 @@ export function parsePaymentHeader(
   };
 }
 
+export function x402Diagnostics(
+  paymentPayload: X402PaymentPayload | null,
+  requirements: X402PaymentRequirements,
+) {
+  const payload = payloadObject(paymentPayload?.payload);
+  const authorization =
+    payloadObject(payload?.authorization) as PaymentAuthorization | undefined;
+  return {
+    asset: requirements.asset,
+    requiredAmount: requirements.amount,
+    payer:
+      typeof authorization?.from === 'string'
+        ? authorization.from
+        : null,
+    authorizedAmount:
+      typeof authorization?.value === 'string'
+        ? authorization.value
+        : null,
+    payTo:
+      typeof authorization?.to === 'string'
+        ? authorization.to
+        : requirements.payTo,
+    validBefore:
+      typeof authorization?.validBefore === 'string'
+        ? authorization.validBefore
+        : null,
+  };
+}
+
+export function x402SettlementFailure(
+  settlement: SettleResponse,
+): { code: string; reason: string } {
+  const message = [
+    settlement.errorReason ?? 'settlement_failed',
+    settlement.errorMessage,
+  ].filter(Boolean).join(': ');
+  if (/User error:\s*60001|InsufficientBalance/i.test(message)) {
+    return {
+      code: 'X402_INSUFFICIENT_WCSPR',
+      reason: message ||
+        'payer has insufficient WCSPR for the x402 settlement',
+    };
+  }
+  return {
+    code: 'X402_SETTLEMENT_FAILED',
+    reason: message || 'x402 settlement failed',
+  };
+}
+
 export function sendPaymentRequired(
   reply: FastifyReply,
   requirements: X402PaymentRequirements,
   reason = 'WCSPR payment is required for this quote',
+  code = 'X402_PAYMENT_REQUIRED',
+  diagnostics?: Record<string, unknown>,
 ) {
   return reply
     .code(402)
@@ -149,8 +215,9 @@ export function sendPaymentRequired(
     .header('X-Payment-Required', encodePaymentRequirements(requirements))
     .send({
       success: false,
-      code: 'X402_PAYMENT_REQUIRED',
+      code,
       message: reason,
+      ...(diagnostics ? { diagnostics } : {}),
       payment: paymentRequiredBody(requirements),
     });
 }
@@ -213,6 +280,7 @@ export function quoteResponse(options: {
   repository: Repository;
   deployment: Deployment;
   amount?: string;
+  faultClass?: 'duplicate_claim' | 'delivery_contradiction';
   receipt: {
     amount: string;
     transaction: string;
@@ -221,6 +289,7 @@ export function quoteResponse(options: {
   };
 }) {
   const amount = BigInt(options.amount ?? `${50_000n * TOKEN_UNIT}`);
+  const faultClass = options.faultClass ?? 'delivery_contradiction';
   const agent = `account-hash-${options.deployment.accounts.agent.accountHash}`;
   const reputationRow = options.repository.reputation(agent);
   const reputation =
@@ -241,18 +310,27 @@ export function quoteResponse(options: {
         amount: amount.toString(),
         agent,
         requiredBond: requiredBond.toString(),
-        quoteExpiry,
         receipt: options.receipt.transaction,
+        faultClass,
       }))
       .digest('hex')
       .slice(0, 64)}`;
-  return {
+  const verifier =
+    faultClass === 'delivery_contradiction'
+      ? 'delivery-contradiction-v2'
+      : 'duplicate-claim-v2';
+  const quote = {
     actionType: 'invoice_payout',
+    faultClass,
+    verifier,
     riskTier: amount >= 50_000n * TOKEN_UNIT ? 'HIGH' : 'STANDARD',
     requiredBond: requiredBond.toString(),
     challengeWindow: 1800,
     agentReputation: reputation,
-    policyModule: 'duplicate-claim-v1',
+    policyModule:
+      faultClass === 'delivery_contradiction'
+        ? 'delivery-contradiction-v2'
+        : 'duplicate-claim-v2',
     quoteExpiry,
     quoteHash,
     paymentReceipt: {
@@ -265,4 +343,24 @@ export function quoteResponse(options: {
       settled: true,
     },
   };
+  options.repository.upsertPaidQuote({
+    quoteHash,
+    actionType: 'invoice_payout',
+    faultClass,
+    verifier,
+    amount: amount.toString(),
+    requiredBond: requiredBond.toString(),
+    challengeWindow: 1800,
+    quoteExpiry,
+    payer: options.receipt.payer ?? null,
+    settlementTx: options.receipt.transaction,
+    paymentAmount: options.receipt.amount,
+    facilitator: options.receipt.facilitator,
+    status: 'paid',
+    submitPayloadHash: null,
+    consumedActionId: null,
+    createdAt: Date.now(),
+    consumedAt: null,
+  });
+  return quote;
 }

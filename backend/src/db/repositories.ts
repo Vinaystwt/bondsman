@@ -91,6 +91,26 @@ export interface DeliveryAttestationRecord {
   usedActionId: number | null;
 }
 
+export interface PaidQuoteRecord {
+  quoteHash: string;
+  actionType: 'invoice_payout';
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  verifier: string;
+  amount: string;
+  requiredBond: string;
+  challengeWindow: number;
+  quoteExpiry: string;
+  payer: string | null;
+  settlementTx: string;
+  paymentAmount: string;
+  facilitator: string;
+  status: 'paid' | 'consuming' | 'consumed' | 'failed';
+  submitPayloadHash: string | null;
+  consumedActionId: number | null;
+  createdAt: number;
+  consumedAt: number | null;
+}
+
 function invoiceFromRow(row: Record<string, unknown>): InvoiceRecord {
   return {
     id: Number(row.id),
@@ -333,6 +353,68 @@ export class Repository {
       'SELECT * FROM delivery_attestations WHERE action_id = ? ORDER BY occurred_at DESC LIMIT 1',
     ).get(actionId) as Record<string, unknown> | undefined;
     return row ? deliveryAttestationFromRow(row) : undefined;
+  }
+
+  upsertPaidQuote(quote: PaidQuoteRecord): void {
+    this.database.prepare(
+      `INSERT INTO paid_quotes
+       (quote_hash, action_type, fault_class, verifier, amount, required_bond,
+        challenge_window, quote_expiry, payer, settlement_tx, payment_amount,
+        facilitator, status, submit_payload_hash, consumed_action_id,
+        created_at, consumed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(quote_hash) DO UPDATE SET
+        action_type=excluded.action_type, fault_class=excluded.fault_class,
+        verifier=excluded.verifier, amount=excluded.amount,
+        required_bond=excluded.required_bond,
+        challenge_window=excluded.challenge_window,
+        quote_expiry=excluded.quote_expiry, payer=excluded.payer,
+        settlement_tx=excluded.settlement_tx,
+        payment_amount=excluded.payment_amount,
+        facilitator=excluded.facilitator,
+        status=paid_quotes.status,
+        submit_payload_hash=paid_quotes.submit_payload_hash,
+        consumed_action_id=paid_quotes.consumed_action_id,
+        consumed_at=paid_quotes.consumed_at`,
+    ).run(
+      quote.quoteHash, quote.actionType, quote.faultClass, quote.verifier,
+      quote.amount, quote.requiredBond, quote.challengeWindow,
+      quote.quoteExpiry, quote.payer, quote.settlementTx, quote.paymentAmount,
+      quote.facilitator, quote.status, quote.submitPayloadHash,
+      quote.consumedActionId, quote.createdAt, quote.consumedAt,
+    );
+  }
+
+  paidQuote(quoteHash: string): PaidQuoteRecord | undefined {
+    const row = this.database.prepare(
+      'SELECT * FROM paid_quotes WHERE quote_hash = ?',
+    ).get(quoteHash) as Record<string, unknown> | undefined;
+    return row ? paidQuoteFromRow(row) : undefined;
+  }
+
+  reservePaidQuote(quoteHash: string, submitPayloadHash: string): boolean {
+    const result = this.database.prepare(
+      `UPDATE paid_quotes
+       SET status = 'consuming', submit_payload_hash = ?
+       WHERE quote_hash = ? AND status = 'paid' AND consumed_action_id IS NULL`,
+    ).run(submitPayloadHash, quoteHash);
+    return result.changes === 1;
+  }
+
+  releasePaidQuote(quoteHash: string): void {
+    this.database.prepare(
+      `UPDATE paid_quotes
+       SET status = 'paid', submit_payload_hash = NULL
+       WHERE quote_hash = ? AND status = 'consuming'`,
+    ).run(quoteHash);
+  }
+
+  consumePaidQuote(quoteHash: string, actionId: number): void {
+    this.database.prepare(
+      `UPDATE paid_quotes
+       SET status = 'consumed', consumed_action_id = ?, consumed_at = ?
+       WHERE quote_hash = ? AND status = 'consuming'`,
+    ).run(actionId, Date.now(), quoteHash);
   }
 
   useDeliveryEvidence(evidenceRoot: string, actionId: number): boolean {
@@ -665,5 +747,29 @@ function deliveryAttestationFromRow(
     payload: JSON.parse(String(row.payload_json)) as Record<string, unknown>,
     receivedAt: Number(row.received_at),
     usedActionId: row.used_action_id === null ? null : Number(row.used_action_id),
+  };
+}
+
+function paidQuoteFromRow(row: Record<string, unknown>): PaidQuoteRecord {
+  return {
+    quoteHash: String(row.quote_hash),
+    actionType: String(row.action_type) as PaidQuoteRecord['actionType'],
+    faultClass: String(row.fault_class) as PaidQuoteRecord['faultClass'],
+    verifier: String(row.verifier),
+    amount: String(row.amount),
+    requiredBond: String(row.required_bond),
+    challengeWindow: Number(row.challenge_window),
+    quoteExpiry: String(row.quote_expiry),
+    payer: row.payer === null ? null : String(row.payer),
+    settlementTx: String(row.settlement_tx),
+    paymentAmount: String(row.payment_amount),
+    facilitator: String(row.facilitator),
+    status: String(row.status) as PaidQuoteRecord['status'],
+    submitPayloadHash:
+      row.submit_payload_hash === null ? null : String(row.submit_payload_hash),
+    consumedActionId:
+      row.consumed_action_id === null ? null : Number(row.consumed_action_id),
+    createdAt: Number(row.created_at),
+    consumedAt: row.consumed_at === null ? null : Number(row.consumed_at),
   };
 }

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import type { AgentDecision } from '../agent/decision.js';
 import { blake2b256 } from '../agent/hashing.js';
@@ -126,6 +127,22 @@ export interface DemoArmService {
   arm(options: {
     reservedForManual: boolean;
   }): Promise<NonNullable<ReturnType<typeof actionDetail>>>;
+  submitPaidAction(options: {
+    quoteHash: string;
+    faultClass: 'duplicate_claim' | 'delivery_contradiction';
+    amount: string;
+    buyerPublicKey?: string;
+    eventType?: 'delivery_rejected' | 'goods_not_received';
+  }): Promise<NonNullable<ReturnType<typeof actionDetail>> & {
+    attestation?: {
+      actionId: number;
+      invoiceId: number;
+      eventType: 'delivery_rejected' | 'goods_not_received';
+      occurredAt: number;
+      nonce: string;
+      buyerPublicKey: string;
+    };
+  }>;
 }
 
 export function createInvoiceIdGenerator(
@@ -181,6 +198,37 @@ export async function pollArmReadiness(
   }
   throw new Error(
     'armed action did not become challengeable before readiness timeout',
+  );
+}
+
+async function pollExecutedReadiness(
+  getAction: () => Promise<RawAction>,
+  options: {
+    now?: () => number;
+    sleep?: (milliseconds: number) => Promise<void>;
+    attempts?: number;
+  } = {},
+): Promise<RawAction> {
+  const now = options.now ?? Date.now;
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0; attempt < (options.attempts ?? 15); attempt += 1) {
+    const action = await getAction();
+    if (
+      action.status === 'Executed' &&
+      action.challenger === 'None' &&
+      Number(action.window_end) - now() >= FIFTEEN_MINUTES_MS
+    ) {
+      return action;
+    }
+    if (attempt + 1 < (options.attempts ?? 15)) {
+      await sleep(2_000);
+    }
+  }
+  throw new Error(
+    'paid action did not become executable before readiness timeout',
   );
 }
 
@@ -418,10 +466,18 @@ export function createDemoArmService(
     }
   };
 
-  const armOnce = async (
-    reservedForManual: boolean,
-    requestedInvoiceId: number,
-  ) => {
+  const armOnce = async (options: {
+    reservedForManual: boolean;
+    requestedInvoiceId: number;
+    faultClass: 'duplicate_claim' | 'delivery_contradiction';
+    amount?: string;
+    buyerPublicKey?: string;
+    eventType?: 'delivery_rejected' | 'goods_not_received';
+  }) => {
+    const { reservedForManual, requestedInvoiceId, faultClass } = options;
+    if (faultClass === 'delivery_contradiction' && !v2Enabled(deployment)) {
+      throw new Error('delivery contradiction actions require controller V2');
+    }
     const deployerPath = resolve(config.deployerSecretKeyPath);
     const agentPath = join(repositoryPath, '.keys/agent.pem');
     const contracts = activeContracts(deployment);
@@ -489,35 +545,58 @@ export function createDemoArmService(
       readRawAction,
     );
     const collision = demoInvoices[0]!;
-    const pending = await selectResumablePending(
-      cursor.actions,
-      async (candidateInvoiceId) => {
-        const serialized = await readContract<string>({
-          repository: repositoryPath,
-          config,
-          signerPath: deployerPath,
-          contract: contracts.pool,
-          entrypoint: 'get_invoice',
-          arguments: [
-            '--invoice_id',
-            String(candidateInvoiceId),
-          ],
-        });
-        const candidate = JSON.parse(serialized) as RawInvoice;
-        return candidate.paid === true || candidate.paid === 'true';
-      },
-      async (candidateAction) => {
-        const candidate = await readRawAction(candidateAction.actionId);
-        return bytesHex(candidate.claim_hash) === collision.claimHash;
-      },
-    );
+    const pending = faultClass === 'duplicate_claim'
+      ? await selectResumablePending(
+          cursor.actions,
+          async (candidateInvoiceId) => {
+            const serialized = await readContract<string>({
+              repository: repositoryPath,
+              config,
+              signerPath: deployerPath,
+              contract: contracts.pool,
+              entrypoint: 'get_invoice',
+              arguments: [
+                '--invoice_id',
+                String(candidateInvoiceId),
+              ],
+            });
+            const candidate = JSON.parse(serialized) as RawInvoice;
+            return candidate.paid === true || candidate.paid === 'true';
+          },
+          async (candidateAction) => {
+            const candidate = await readRawAction(candidateAction.actionId);
+            return bytesHex(candidate.claim_hash) === collision.claimHash;
+          },
+        )
+      : undefined;
     const invoiceId = pending?.invoiceId ?? requestedInvoiceId;
-    const invoice: SeedInvoice = {
-      ...collision,
-      id: invoiceId,
-      vendor:
-        `account-hash-${deployment.accounts.challenger.accountHash}`,
-    };
+    const deliveryBuyerPublicKey = options.buyerPublicKey
+      ? Buffer.from(options.buyerPublicKey, 'base64')
+      : undefined;
+    if (
+      faultClass === 'delivery_contradiction' &&
+      deliveryBuyerPublicKey?.length !== 32
+    ) {
+      throw new Error('delivery contradiction requires a 32-byte buyer public key');
+    }
+    const invoice: SeedInvoice = faultClass === 'duplicate_claim'
+      ? {
+          ...collision,
+          id: invoiceId,
+          vendor:
+            `account-hash-${deployment.accounts.challenger.accountHash}`,
+        }
+      : {
+          id: invoiceId,
+          invoiceNumber: `DLV-${invoiceId}`,
+          debtor: 'Globex Manufacturing',
+          amount: options.amount ?? collision.amount,
+          vendor:
+            `account-hash-${deployment.accounts.challenger.accountHash}`,
+          dueDate: '2020-01-01',
+          delivered: true,
+          claimHash: randomBytes(32).toString('hex'),
+        };
     if (!pending) {
       let invoiceExists = true;
       try {
@@ -552,11 +631,17 @@ export function createDemoArmService(
               ...(v2Enabled(deployment)
                 ? [
                     '--purchase_order_hash',
-                    bytesArgument(Buffer.alloc(32)),
+                    bytesArgument(
+                      faultClass === 'delivery_contradiction'
+                        ? randomBytes(32)
+                        : Buffer.alloc(32),
+                    ),
                     '--expected_delivery_deadline',
                     '0',
                     '--buyer_signature_pubkey',
-                    bytesArgument(Buffer.alloc(32)),
+                    bytesArgument(
+                      deliveryBuyerPublicKey ?? Buffer.alloc(32),
+                    ),
                   ]
                 : []),
             ],
@@ -575,12 +660,21 @@ export function createDemoArmService(
       }
     }
 
-    const decisions = JSON.parse(
-      await readFile(
-        join(repositoryPath, '.data/demo-decisions.json'),
-        'utf8',
-      ),
-    ) as { baseline: AgentDecision };
+    const decisions = faultClass === 'duplicate_claim'
+      ? JSON.parse(
+          await readFile(
+            join(repositoryPath, '.data/demo-decisions.json'),
+            'utf8',
+          ),
+        ) as { baseline: AgentDecision }
+      : {
+          baseline: {
+            decision: 'approve',
+            reasoning:
+              'Delivery attested by the agent; buyer delivery evidence remains challengeable during the watchdog window.',
+            confidence: 0.91,
+          },
+        };
     if (decisions.baseline.decision !== 'approve') {
       throw new Error('cached demo decision is not approval');
     }
@@ -726,7 +820,9 @@ export function createDemoArmService(
       entrypoint: 'is_action_duplicate',
       arguments: ['--action_id', String(actionId)],
     });
-    raw = await pollArmReadiness(getAction, getDuplicate);
+    raw = faultClass === 'duplicate_claim'
+      ? await pollArmReadiness(getAction, getDuplicate)
+      : await pollExecutedReadiness(getAction);
     const windowEnd = Number(raw.window_end);
     assertChallengeWindow(startedAt, windowEnd);
     if (raw.status !== 'Executed') {
@@ -760,7 +856,9 @@ export function createDemoArmService(
       challengeSigning: null,
       controllerHash:
         deployment.contracts.controller.contractHash,
-      duplicateProven: true,
+      duplicateProven: faultClass === 'duplicate_claim',
+      faultClass,
+      evidenceRoot: null,
       reservedForManual,
       transactions,
     });
@@ -777,10 +875,28 @@ export function createDemoArmService(
         transactions,
       },
     );
-    raw = await pollArmReadiness(getAction, getDuplicate, {
-      attempts: 1,
-    });
-    return actionDetail(repository, actionId)!;
+    if (faultClass === 'duplicate_claim') {
+      raw = await pollArmReadiness(getAction, getDuplicate, {
+        attempts: 1,
+      });
+    } else {
+      raw = await pollExecutedReadiness(getAction, {
+        attempts: 1,
+      });
+    }
+    const detail = actionDetail(repository, actionId)!;
+    if (faultClass !== 'delivery_contradiction') return detail;
+    return {
+      ...detail,
+      attestation: {
+        actionId,
+        invoiceId: invoice.id,
+        eventType: options.eventType ?? 'goods_not_received',
+        occurredAt: Date.now() - 5_000,
+        nonce: randomBytes(32).toString('hex'),
+        buyerPublicKey: options.buyerPublicKey!,
+      },
+    };
   };
 
   return {
@@ -789,7 +905,36 @@ export function createDemoArmService(
       const result = queue.then(() =>
         runFundedDemoAction(
           ensureDemoFunding,
-          () => armOnce(reservedForManual, requestedInvoiceId),
+          () => armOnce({
+            reservedForManual,
+            requestedInvoiceId,
+            faultClass: 'duplicate_claim',
+          }),
+        ),
+      );
+      queue = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
+    },
+    submitPaidAction(options) {
+      const requestedInvoiceId = nextInvoiceId();
+      const result = queue.then(() =>
+        runFundedDemoAction(
+          ensureDemoFunding,
+          () => armOnce({
+            reservedForManual: false,
+            requestedInvoiceId,
+            faultClass: options.faultClass,
+            amount: options.amount,
+            ...(options.buyerPublicKey
+              ? { buyerPublicKey: options.buyerPublicKey }
+              : {}),
+            ...(options.eventType
+              ? { eventType: options.eventType }
+              : {}),
+          }),
         ),
       );
       queue = result.then(

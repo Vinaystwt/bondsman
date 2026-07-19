@@ -1,10 +1,15 @@
 import { join } from 'node:path';
+import { generateKeyPairSync, sign } from 'node:crypto';
 import { ExactCasperScheme } from '@make-software/casper-x402/exact/client';
 import { toClientCasperSigner } from '@make-software/casper-x402';
 import type { Deployment } from '../shared/deployment.js';
 import type { Repository } from '../db/repositories.js';
 import { loadPrivateKey } from '../casper/keys.js';
 import type { X402PaymentRequirements } from '../verify/x402.js';
+import {
+  canonicalDeliveryPayload,
+  type DeliveryAttestationInput,
+} from '../verifiers/delivery-attestation.js';
 
 type Step = { name: string; status: number; detail: string };
 
@@ -64,7 +69,10 @@ export async function runIntegrator(options: {
   const first = await fetch(quoteEndpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ amount: '50000000000000' }),
+    body: JSON.stringify({
+      amount: '50000000000000',
+      faultClass: 'delivery_contradiction',
+    }),
   });
   const firstBody = await first.json() as Record<string, unknown>;
   steps.push({
@@ -100,6 +108,11 @@ export async function runIntegrator(options: {
       description: 'Bondsman bond quote',
     },
   };
+  const { publicKey: buyerPublicKey, privateKey: buyerPrivateKey } =
+    generateKeyPairSync('ed25519');
+  const buyerPublicKeyRaw = Buffer.from(
+    buyerPublicKey.export({ format: 'der', type: 'spki' }),
+  ).subarray(-32).toString('base64');
   const paymentSignature = Buffer.from(
     JSON.stringify(paymentPayload),
   ).toString('base64');
@@ -109,7 +122,10 @@ export async function runIntegrator(options: {
       'content-type': 'application/json',
       'payment-signature': paymentSignature,
     },
-    body: JSON.stringify({ amount: '50000000000000' }),
+    body: JSON.stringify({
+      amount: '50000000000000',
+      faultClass: 'delivery_contradiction',
+    }),
   });
   const quote = await paid.json() as Record<string, unknown>;
   steps.push({
@@ -143,16 +159,72 @@ export async function runIntegrator(options: {
     quote.paymentReceipt && typeof quote.paymentReceipt === 'object'
       ? quote.paymentReceipt as Record<string, unknown>
       : null;
-  const arm = await fetch(new URL('/api/demo/arm', options.baseUrl), {
+  const submit = await fetch(new URL('/v1/actions/submit', options.baseUrl), {
     method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      quoteHash: quote.quoteHash,
+      faultClass: 'delivery_contradiction',
+      buyerPublicKey: buyerPublicKeyRaw,
+      eventType: 'goods_not_received',
+    }),
   });
-  const action = await arm.json() as Record<string, unknown>;
+  const action = await submit.json() as Record<string, unknown>;
   steps.push({
     name: 'submit_bonded_action',
-    status: arm.status,
-    detail: arm.ok
-      ? 'Quote accepted and bonded action submitted.'
+    status: submit.status,
+    detail: submit.ok
+      ? 'Paid quote consumed and delivery contradiction action submitted.'
       : String(action.message ?? 'Bonded action submission failed.'),
+  });
+  if (!submit.ok) {
+    const result: IntegratorRun = {
+      mode: 'real',
+      steps,
+      quote,
+      transactionHashes:
+        typeof receipt?.transaction === 'string' ? [receipt.transaction] : [],
+      receipt,
+      limitation: String(action.message ?? 'paid action submission failed'),
+    };
+    options.repository.setSystemState('integrator', {
+      running: false,
+      lastRun: new Date().toISOString(),
+      mode: result.mode,
+      limitation: result.limitation,
+    });
+    return result;
+  }
+  const actionBody = action.action && typeof action.action === 'object'
+    ? action.action as Record<string, unknown>
+    : action;
+  const attestationDraft =
+    actionBody.attestation && typeof actionBody.attestation === 'object'
+      ? actionBody.attestation as Omit<DeliveryAttestationInput, 'signature'>
+      : null;
+  if (!attestationDraft) {
+    throw new Error('paid action response did not include delivery attestation draft');
+  }
+  const attestationPayload = canonicalDeliveryPayload({
+    ...attestationDraft,
+    signature: 'placeholder',
+  });
+  const attestation: DeliveryAttestationInput = {
+    ...attestationDraft,
+    signature: sign(null, attestationPayload, buyerPrivateKey).toString('base64'),
+  };
+  const attested = await fetch(new URL('/api/delivery-attestation', options.baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(attestation),
+  });
+  const attestedBody = await attested.json() as Record<string, unknown>;
+  steps.push({
+    name: 'post_delivery_attestation',
+    status: attested.status,
+    detail: attested.ok
+      ? 'Buyer-signed delivery contradiction evidence posted for watchdog challenge.'
+      : String(attestedBody.message ?? 'delivery attestation failed'),
   });
   const settlementTx =
     typeof receipt?.transaction === 'string' ? [receipt.transaction] : [];
@@ -160,9 +232,11 @@ export async function runIntegrator(options: {
     mode: 'real',
     steps,
     quote,
-    transactionHashes: [...settlementTx, ...txsFromAction(action)],
+    transactionHashes: [...settlementTx, ...txsFromAction(actionBody)],
     receipt,
-    limitation: arm.ok ? null : String(action.message ?? 'arm failed'),
+    limitation: attested.ok
+      ? null
+      : String(attestedBody.message ?? 'delivery attestation failed'),
   };
   options.repository.setSystemState('integrator', {
     running: false,

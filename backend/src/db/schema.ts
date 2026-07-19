@@ -108,6 +108,26 @@ CREATE TABLE IF NOT EXISTS delivery_attestations (
   used_action_id INTEGER UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS paid_quotes (
+  quote_hash TEXT PRIMARY KEY,
+  action_type TEXT NOT NULL,
+  fault_class TEXT NOT NULL,
+  verifier TEXT NOT NULL,
+  amount TEXT NOT NULL,
+  required_bond TEXT NOT NULL,
+  challenge_window INTEGER NOT NULL,
+  quote_expiry TEXT NOT NULL,
+  payer TEXT,
+  settlement_tx TEXT NOT NULL,
+  payment_amount TEXT NOT NULL,
+  facilitator TEXT NOT NULL,
+  status TEXT NOT NULL,
+  submit_payload_hash TEXT,
+  consumed_action_id INTEGER,
+  created_at INTEGER NOT NULL,
+  consumed_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS proof_cache (
   controller_hash TEXT NOT NULL,
   action_id INTEGER NOT NULL,

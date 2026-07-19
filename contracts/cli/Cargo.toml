@@ -15,6 +15,7 @@ duplicate_claim_verifier_v2 = { path = "../duplicate_claim_verifier_v2" }
 delivery_contradiction_verifier_v2 = { path = "../delivery_contradiction_verifier_v2" }
 odra = { workspace = true }
 odra-cli = { workspace = true }
+odra-modules = { workspace = true }
 casper-client = { workspace = true }
 
 [[bin]]

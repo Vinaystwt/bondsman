@@ -197,6 +197,29 @@ function fixture() {
           },
         }),
       ),
+    submitPaidAction: vi.fn().mockResolvedValue({
+      actionId: 9,
+      invoiceId: 3009,
+      status: 'Executed',
+      faultClass: 'delivery_contradiction',
+      challengerType: null,
+      reservedForManual: false,
+      transactions: {
+        execute: '9'.repeat(64),
+      },
+      events: [],
+      explorerLinks: {
+        execute: `https://testnet.cspr.live/transaction/${'9'.repeat(64)}`,
+      },
+      attestation: {
+        actionId: 9,
+        invoiceId: 3009,
+        eventType: 'goods_not_received',
+        occurredAt: Date.now() - 5_000,
+        nonce: 'a'.repeat(64),
+        buyerPublicKey: Buffer.alloc(32, 7).toString('base64'),
+      },
+    }),
   };
   const walletChallenge = {
     transactionStatus: vi.fn().mockResolvedValue({
@@ -866,6 +889,55 @@ describe('REST routes', () => {
     context.database.close();
   });
 
+  it('classifies CEP-18 insufficient balance failures from real x402 settlement', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        success: false,
+        errorReason: 'invalid_exact_casper_wait_deploy_failed',
+        errorMessage: 'transaction execution failed: User error: 60001',
+      })),
+    }));
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: {
+        authorization: {
+          from: `00${'4'.repeat(64)}`,
+          to: `00${'3'.repeat(64)}`,
+          value: '100000000',
+          validBefore: '123',
+        },
+        signature: '00',
+      },
+    })).toString('base64');
+    const response = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: { amount: '50000000000000' },
+    });
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      code: 'X402_INSUFFICIENT_WCSPR',
+      diagnostics: {
+        payer: `00${'4'.repeat(64)}`,
+        authorizedAmount: '100000000',
+      },
+    });
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
+
   it('returns a paid quote after x402 settlement succeeds', async () => {
     const context = fixture();
     const originalKey = process.env.X402_FACILITATOR_API_KEY;
@@ -894,10 +966,11 @@ describe('REST routes', () => {
     expect(response.headers['payment-response']).toBeTruthy();
     expect(response.json()).toMatchObject({
       actionType: 'invoice_payout',
+      faultClass: 'delivery_contradiction',
       riskTier: 'HIGH',
       requiredBond: '2500000000000',
       challengeWindow: 1800,
-      policyModule: 'duplicate-claim-v1',
+      policyModule: 'delivery-contradiction-v2',
       paymentReceipt: {
         network: 'casper-test',
         asset: 'WCSPR',
@@ -907,6 +980,91 @@ describe('REST routes', () => {
         settled: true,
       },
     });
+    vi.unstubAllGlobals();
+    if (originalKey === undefined) {
+      delete process.env.X402_FACILITATOR_API_KEY;
+    } else {
+      process.env.X402_FACILITATOR_API_KEY = originalKey;
+    }
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('binds a paid quote to one submitted delivery action', async () => {
+    const context = fixture();
+    const originalKey = process.env.X402_FACILITATOR_API_KEY;
+    process.env.X402_FACILITATOR_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        success: true,
+        transaction: '7'.repeat(64),
+        network: 'casper:casper-test',
+        payer: `00${'4'.repeat(64)}`,
+      })),
+    }));
+    const payment = Buffer.from(JSON.stringify({
+      x402Version: 2,
+      payload: { signature: '00' },
+    })).toString('base64');
+    const paid = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: {
+        amount: '50000000000000',
+        faultClass: 'delivery_contradiction',
+      },
+    });
+    const quoteHash = paid.json().quoteHash;
+    const buyerPublicKey = Buffer.alloc(32, 7).toString('base64');
+    const submit = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+      },
+    });
+    expect(submit.statusCode).toBe(200);
+    expect(context.arm.submitPaidAction).toHaveBeenCalledWith({
+      quoteHash,
+      faultClass: 'delivery_contradiction',
+      amount: '50000000000000',
+      buyerPublicKey,
+      eventType: 'goods_not_received',
+    });
+    expect(context.repository.paidQuote(quoteHash)).toMatchObject({
+      status: 'consumed',
+      consumedActionId: 9,
+    });
+    const paidRetry = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/quote',
+      headers: { 'payment-signature': payment },
+      payload: {
+        amount: '50000000000000',
+        faultClass: 'delivery_contradiction',
+      },
+    });
+    expect(paidRetry.statusCode).toBe(200);
+    expect(paidRetry.json().quoteHash).toBe(quoteHash);
+    expect(context.repository.paidQuote(quoteHash)).toMatchObject({
+      status: 'consumed',
+      consumedActionId: 9,
+    });
+    const replay = await context.server.inject({
+      method: 'POST',
+      url: '/v1/actions/submit',
+      payload: {
+        quoteHash,
+        faultClass: 'delivery_contradiction',
+        buyerPublicKey,
+      },
+    });
+    expect(replay.statusCode).toBe(409);
     vi.unstubAllGlobals();
     if (originalKey === undefined) {
       delete process.env.X402_FACILITATOR_API_KEY;

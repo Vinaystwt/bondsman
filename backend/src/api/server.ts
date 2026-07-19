@@ -56,7 +56,8 @@ export function buildServer(
       path.startsWith('/api/delivery-attestation') ||
       path.startsWith('/api/receipt/') ||
       path.startsWith('/api/verify') ||
-      path.startsWith('/api/labs/')
+      path.startsWith('/api/labs/') ||
+      path.startsWith('/v1/actions/')
     );
   server.addHook('onRequest', (request, reply, done) => {
     requestStarted.set(request, Date.now());

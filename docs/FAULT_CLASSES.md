@@ -12,6 +12,6 @@ Evidence schema: `actionId` and the action claim hash. The paid-claim registry i
 
 This class models evidence that arrives after a payout: a buyer or logistics signer issues `delivery_rejected` or `goods_not_received`. The canonical signed JSON contains `actionId`, `invoiceId`, `eventType`, `occurredAt`, and a unique `nonce`. `POST /api/delivery-attestation` verifies an Ed25519 SPKI signature, computes a BLAKE2b-256 evidence root, and stores one action binding for replay prevention.
 
-The current controller suite only accepts duplicate-claim challenges. Its vault controller reference is immutable, so it cannot truthfully slash delivery evidence. A parallel controller, vault, and pool suite must be deployed before `delivery_contradiction` can be marked on-chain. The registry exposes the class now to keep the evidence contract and API stable without overstating enforcement.
+The current V2 controller suite accepts this class on chain. The paid action flow creates a delivery-aware invoice with the buyer public key, returns an attestation draft, and the watchdog can challenge and resolve it once a matching signed attestation is posted.
 
 To add a verifier, define its canonical evidence schema, replay binding, confirmation rule, and whether the active controller can settle its result on-chain.

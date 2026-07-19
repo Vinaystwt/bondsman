@@ -54,5 +54,15 @@ export function openDatabase(path: string): Database.Database {
   if (!actionColumns.has('evidence_root')) {
     database.exec('ALTER TABLE actions ADD COLUMN evidence_root TEXT');
   }
+  const quoteColumns = new Set(
+    (
+      database.pragma('table_info(paid_quotes)') as {
+        name: string;
+      }[]
+    ).map((column) => column.name),
+  );
+  if (!quoteColumns.has('submit_payload_hash')) {
+    database.exec('ALTER TABLE paid_quotes ADD COLUMN submit_payload_hash TEXT');
+  }
   return database;
 }

@@ -19,9 +19,13 @@ Checked on 2026-07-19. Bondsman now has a real Casper x402 quote path wired to t
 
 The client signs the Casper `TransferWithAuthorization` payload with the official `@make-software/casper-x402` package, retries with `PAYMENT-SIGNATURE`, and the backend forwards the payload to CSPR.cloud `/settle`. The quote response is returned only when the facilitator reports `success: true` and includes the settlement transaction hash.
 
+The paid response is persisted in `paid_quotes`. `POST /v1/actions/submit` accepts a `quoteHash` and the intended `faultClass`, reserves the quote while the action is created, then marks it consumed with the resulting `actionId`. A consumed quote cannot be replayed for a second action. The default fault class is `delivery_contradiction`, which creates a V2 bonded delivery action and returns an attestation draft for buyer signature.
+
 ## Current funding note
 
-The integrator account currently has no indexed WCSPR balance. Until WCSPR is swapped or transferred into the integrator account, live settlement will fail honestly with the facilitator reason instead of returning a fabricated receipt.
+The integrator account is funded with WCSPR on Casper Testnet. Direct dictionary lookup of the WCSPR balances dictionary shows `1000000000` base units for account hash `3b3362ea7af5776a37530df663afa7bc7c673ebcdd167f8934e2ac68d7eb9c77`. The funding mint is CSPR.cloud FT action transaction `0ac6541335c6a6055060cdb6fb9cadde46be324a8b7535203d29a4e7a67c4ff0`, timestamped `2026-07-19T10:29:02Z`.
+
+If a payer lacks WCSPR, failed settlement is classified as `X402_INSUFFICIENT_WCSPR` when the facilitator or chain reports CEP 18 insufficient balance, including `User error: 60001`. The response includes diagnostics for the payer, required amount, authorized amount, asset, recipient, and authorization expiry when those fields are present.
 
 ## Reference sandbox
 

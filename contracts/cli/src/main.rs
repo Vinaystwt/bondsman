@@ -9,6 +9,7 @@ use duplicate_claim_verifier_v2::duplicate_claim_verifier_v2::DuplicateClaimVeri
 use invoice_pool::invoice_pool::{InvoicePool, InvoicePoolInitArgs};
 use invoice_pool_v2::invoice_pool_v2::InvoicePoolV2;
 use mock_cspr_usd::mock_cspr_usd::MockCsprUSD;
+use odra_modules::wrapped_native::WrappedNativeToken;
 use odra::{
     casper_types::U256,
     host::{HostEnv, NoArgs},
@@ -95,6 +96,7 @@ fn main() {
         .contract::<InvoicePoolV2>()
         .contract::<DuplicateClaimVerifierV2>()
         .contract::<DeliveryContradictionVerifierV2>()
+        .named_contract::<WrappedNativeToken>("wcspr".to_string())
         .build()
         .run();
 }
