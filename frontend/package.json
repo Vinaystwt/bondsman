@@ -14,9 +14,11 @@
     "test:canonical": "node scripts/check-canonical.mjs"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "blakejs": "^1.2.1",
     "casper-js-sdk": "^5.0.12",
     "framer-motion": "^11.15.0",
+    "gsap": "^3.15.0",
     "next": "^15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0"

@@ -1,15 +1,13 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
-import { truncateHash } from '@/lib/format';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { MotionPathPlugin } from 'gsap/MotionPathPlugin';
+import { useGSAP } from '@gsap/react';
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(MotionPathPlugin, useGSAP);
+}
 
 interface CanonicalAnimationData {
   actionId: string;
@@ -31,14 +29,14 @@ interface Props {
   degradedReason?: string | null;
 }
 
-/** 9-decimal base-unit → short display. Local to keep the file self-contained. */
+const SCALE = 10n ** 9n;
+
 function toShort(atomic: string | null, unit: string, digits = 0): string {
   if (!atomic) return `— ${unit}`;
   try {
     const v = BigInt(atomic);
-    const scale = 10n ** 9n;
-    const whole = v / scale;
-    const frac = Number(v % scale) / Number(scale);
+    const whole = v / SCALE;
+    const frac = Number(v % SCALE) / Number(SCALE);
     const n = Number(whole) + frac;
     return `${n.toLocaleString('en-US', {
       minimumFractionDigits: 0,
@@ -49,125 +47,58 @@ function toShort(atomic: string | null, unit: string, digits = 0): string {
   }
 }
 
-const TIMINGS = [
-  650, // 1 request received
-  700, // 2 402 payment required
-  800, // 3 WCSPR settled
-  850, // 4 quote issued
-  850, // 5 bond locked
-  700, // 6 action executed
-  850, // 7 evidence arrived
-  800, // 8 watchdog challenge
-  750, // 9 controller resolved
-  850, // 10 bond slashed
-  900, // 11 split allocated
-  850, // 12 receipt verified
-];
-const FINAL = TIMINGS.length;
-
-const STAGE_LABELS = [
-  'Idle',
-  'Request received',
-  '402 payment required',
-  'WCSPR settled',
-  'Quote issued',
-  'Bond locked',
-  'Action executed',
-  'Evidence arrived',
-  'Watchdog challenge',
-  'Resolved',
-  'Bond slashed',
-  'Split allocated',
-  'Receipt verified',
-];
-
 const ACCENT = '#35C281';
 const ACCENT_DEEP = '#1C7A52';
 const SLASH = '#E5484D';
-const MUTED = '#4c5b56';
 const RULE = '#232A27';
 const RAISED = '#18211D';
 const BONE = '#E8EDEA';
 const BONE_DIM = '#a4b0aa';
 
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+/**
+ * Continuous bonded execution animation.
+ *
+ * One GSAP master timeline drives the entire narrative: request, payment
+ * requirement, WCSPR settlement, paid quote, bond lock, execution, delayed
+ * contradiction, watchdog challenge, controller resolution, slash and receipt.
+ * The timeline repeats indefinitely with a final hold on the receipt state and
+ * a short soft reset back to idle.
+ *
+ * The whole scene lives in one SVG viewBox so packets travel along real path
+ * geometry. The red contradiction packet follows the evidence connector via
+ * MotionPathPlugin. Every packet, path stroke and label is animated with
+ * transform and opacity only, so the layout never reflows.
+ *
+ * Lifecycle:
+ *   - IntersectionObserver + visibilitychange pause and resume the timeline
+ *     so the browser does no work when the hero is offscreen or the tab is
+ *     hidden.
+ *   - prefers-reduced-motion snaps to the final verified state and disables
+ *     the loop.
+ *   - healthMode degraded or unreachable renders a static historical state
+ *     and never enters the loop.
+ */
 export default function BondedExecutionAnimation({
   data,
   healthMode,
   degradedReason,
 }: Props) {
-  const reduce = useReducedMotion();
-  const [phase, setPhase] = useState(0);
-  const startedRef = useRef(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const timeoutsRef = useRef<number[]>([]);
-  const gradId = useId();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const timelineRef = useRef<gsap.core.Timeline | null>(null);
+  const gradId = useId().replace(/:/g, '');
 
-  const play = useCallback(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    if (reduce || healthMode !== 'healthy') {
-      setPhase(FINAL);
-      return;
-    }
-    let acc = 0;
-    TIMINGS.forEach((dt, i) => {
-      acc += dt;
-      const id = window.setTimeout(() => setPhase(i + 1), acc);
-      timeoutsRef.current.push(id);
-    });
-  }, [reduce, healthMode]);
-
-  const replay = useCallback(() => {
-    if (reduce || healthMode !== 'healthy') return;
-    timeoutsRef.current.forEach((id) => window.clearTimeout(id));
-    timeoutsRef.current = [];
-    setPhase(0);
-    startedRef.current = false;
-    window.setTimeout(() => play(), 60);
-  }, [play, reduce, healthMode]);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    if (reduce || healthMode !== 'healthy') {
-      setPhase(FINAL);
-      startedRef.current = true;
-      return;
-    }
-
-    // The hero animation is always in the initial viewport, so we start the
-    // sequence directly after hydration rather than routing it through an
-    // IntersectionObserver that sometimes never fires on already-visible
-    // elements.
-    const kickoff = window.setTimeout(() => play(), 250);
-    return () => {
-      window.clearTimeout(kickoff);
-      timeoutsRef.current.forEach((id) => window.clearTimeout(id));
-      timeoutsRef.current = [];
-    };
-  }, [play, reduce, healthMode]);
-
-  // Visibility flags derived from phase.
-  const on = (n: number) => phase >= n;
-  const done = phase >= FINAL;
-
-  const paymentActive = on(2);
-  const settled = on(3);
-  const quoteActive = on(4);
-  const bondActive = on(5);
-  const executeActive = on(6);
-  const evidenceActive = on(7);
-  const watchdogActive = on(8);
-  const resolvedActive = on(9);
-  const slashActive = on(10);
-  const splitActive = on(11);
-  const receiptVerified = on(12);
-
-  const summary = useMemo(
-    () =>
-      `Bondsman execution sequence: ${STAGE_LABELS.slice(1).join(', ')}. Ends in receipt verified.`,
-    [],
-  );
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(REDUCED_MOTION_QUERY);
+    const update = () => setReducedMotion(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
 
   const paymentAmountLabel = toShort(
     data?.paymentAmountBase ?? null,
@@ -178,18 +109,202 @@ export default function BondedExecutionAnimation({
   const rewardLabel = toShort(data?.challengerRewardBase ?? null, 'csprUSD', 0);
   const reserveLabel = toShort(data?.reserveCreditBase ?? null, 'csprUSD', 0);
 
+  const shouldAnimate = healthMode === 'healthy' && !reducedMotion;
+
+  useGSAP(
+    () => {
+      const scope = containerRef.current;
+      if (!scope) return;
+      const q = gsap.utils.selector(scope);
+
+      // Reset every animated element to the idle state before we build. This
+      // is what runs when React remounts and when the loop restarts.
+      gsap.set(
+        q('[data-anim="stage"], [data-anim="packet"], [data-anim="label"], [data-anim="line"]'),
+        { autoAlpha: 0 },
+      );
+      gsap.set(q('[data-anim="line"]'), { drawSVGDuration: 0 });
+
+      if (!shouldAnimate) {
+        // Snap to the completed state: everything visible, packets at rest.
+        gsap.set(
+          q('[data-anim="stage"], [data-anim="label"], [data-anim="line"]'),
+          { autoAlpha: 1 },
+        );
+        gsap.set(q('[data-role="verified-mark"]'), { autoAlpha: 1 });
+        gsap.set(q('[data-role="live-pulse"]'), { autoAlpha: 0 });
+        return;
+      }
+
+      const tl = gsap.timeline({
+        repeat: -1,
+        repeatDelay: 2.4,
+        defaults: { ease: 'power2.out', duration: 0.55 },
+      });
+
+      timelineRef.current = tl;
+
+      // 1. Agent request appears.
+      tl.addLabel('request', 0);
+      tl.to(q('[data-stage="agent"]'), { autoAlpha: 1 }, 'request');
+      tl.to(q('[data-line="agent-to-gate"]'), { autoAlpha: 1, duration: 0.35 }, 'request+=0.15');
+
+      // 2. Payment requirement + settlement.
+      tl.addLabel('payment', '+=0.15');
+      tl.to(q('[data-stage="payment"]'), { autoAlpha: 1 }, 'payment');
+      tl.fromTo(
+        q('[data-packet="payment"]'),
+        { autoAlpha: 0, motionPath: { path: '#path-payment', start: 0, end: 0 } },
+        {
+          autoAlpha: 1,
+          duration: 0.9,
+          ease: 'power1.inOut',
+          motionPath: { path: '#path-payment', start: 0, end: 1 },
+        },
+        'payment+=0.05',
+      );
+      tl.to(q('[data-packet="payment"]'), { autoAlpha: 0, duration: 0.2 }, '>-0.05');
+      tl.to(q('[data-stage="payment"] [data-role="stage-value"]'), {
+        color: ACCENT,
+        duration: 0.2,
+      });
+
+      // 3. Paid quote.
+      tl.addLabel('quote', '+=0.15');
+      tl.to(q('[data-stage="quote"]'), { autoAlpha: 1 }, 'quote');
+      tl.to(q('[data-line="payment-to-quote"]'), { autoAlpha: 1, duration: 0.25 }, 'quote');
+
+      // 4. Bond lock.
+      tl.addLabel('bond', '+=0.3');
+      tl.to(q('[data-stage="bond"]'), { autoAlpha: 1 }, 'bond');
+      tl.to(q('[data-line="quote-to-bond"]'), { autoAlpha: 1, duration: 0.25 }, 'bond');
+      tl.fromTo(
+        q('[data-role="bond-vault"]'),
+        { scale: 0.7 },
+        { scale: 1, duration: 0.4, transformOrigin: '50% 50%' },
+        'bond+=0.05',
+      );
+
+      // 5. Execution.
+      tl.addLabel('execute', '+=0.25');
+      tl.to(q('[data-stage="execute"]'), { autoAlpha: 1 }, 'execute');
+      tl.to(q('[data-line="bond-to-execute"]'), { autoAlpha: 1, duration: 0.25 }, 'execute');
+
+      // 6. Delayed evidence packet enters along the evidence connector.
+      tl.addLabel('evidence', '+=0.6');
+      tl.to(q('[data-stage="evidence"]'), { autoAlpha: 1 }, 'evidence');
+      tl.fromTo(
+        q('[data-packet="evidence"]'),
+        {
+          autoAlpha: 0,
+          motionPath: { path: '#path-evidence', start: 0, end: 0 },
+        },
+        {
+          autoAlpha: 1,
+          duration: 1.4,
+          ease: 'power1.inOut',
+          motionPath: { path: '#path-evidence', start: 0, end: 1 },
+        },
+        'evidence+=0.1',
+      );
+      tl.to(q('[data-packet="evidence"]'), { autoAlpha: 0, duration: 0.25 }, '>');
+
+      // 7. Watchdog challenge.
+      tl.addLabel('challenge', '+=0.05');
+      tl.to(q('[data-stage="watchdog"]'), { autoAlpha: 1 }, 'challenge');
+      tl.to(q('[data-line="watchdog-to-controller"]'), { autoAlpha: 1, duration: 0.35 }, 'challenge');
+
+      // 8. Controller resolution.
+      tl.addLabel('resolve', '+=0.25');
+      tl.to(q('[data-stage="controller"]'), { autoAlpha: 1 }, 'resolve');
+      tl.to(
+        q('[data-stage="controller"] [data-role="stage-value"]'),
+        { color: SLASH, duration: 0.25 },
+        'resolve+=0.05',
+      );
+
+      // 9. Slash split.
+      tl.addLabel('slash', '+=0.4');
+      tl.to(q('[data-stage="split"]'), { autoAlpha: 1 }, 'slash');
+      tl.to(q('[data-line="controller-to-split"]'), { autoAlpha: 1, duration: 0.3 }, 'slash');
+
+      // 10. Receipt sealed and verified.
+      tl.addLabel('receipt', '+=0.35');
+      tl.to(q('[data-stage="receipt"]'), { autoAlpha: 1 }, 'receipt');
+      tl.to(q('[data-line="controller-to-receipt"]'), { autoAlpha: 1, duration: 0.25 }, 'receipt');
+      tl.to(q('[data-role="verified-mark"]'), { autoAlpha: 1, duration: 0.35 }, 'receipt+=0.2');
+
+      // Final readable hold before the repeatDelay + soft reset.
+      tl.addLabel('final', '+=1.2');
+      tl.to(
+        q('[data-anim="stage"], [data-anim="line"], [data-role="verified-mark"], [data-anim="label"]'),
+        { autoAlpha: 0, duration: 0.6, ease: 'power1.in' },
+        'final+=1.4',
+      );
+
+      return () => {
+        tl.kill();
+      };
+    },
+    { scope: containerRef, dependencies: [shouldAnimate] },
+  );
+
+  // Pause on offscreen or hidden.
+  useEffect(() => {
+    const el = containerRef.current;
+    const tl = timelineRef.current;
+    if (!el || !tl) return;
+
+    let onScreen = false;
+    let visible = document.visibilityState === 'visible';
+
+    const evaluate = () => {
+      if (onScreen && visible) {
+        if (tl.paused()) tl.resume();
+      } else {
+        if (!tl.paused()) tl.pause();
+      }
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        onScreen = entries[0]?.isIntersecting ?? false;
+        evaluate();
+      },
+      { threshold: 0.15 },
+    );
+    io.observe(el);
+
+    const onVisibility = () => {
+      visible = document.visibilityState === 'visible';
+      evaluate();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [shouldAnimate]);
+
+  const summary = useMemo(
+    () =>
+      'Bondsman execution animation: request, payment settlement, paid quote, bond lock, action execution, delayed evidence, watchdog challenge, controller resolution, slash, split allocation and signed receipt.',
+    [],
+  );
+
   const disabledCause =
     healthMode === 'unreachable'
-      ? 'Backend unreachable · showing cached historical proof'
+      ? 'Backend unavailable. Showing historical proof state.'
       : healthMode === 'degraded'
-      ? degradedReason
-        ? `Execution paused · ${degradedReason}`
-        : 'Execution paused · historical proof preserved'
-      : null;
+        ? degradedReason
+          ? `Live execution paused. ${degradedReason}`
+          : 'Live execution paused. Historical proof preserved.'
+        : null;
 
   return (
     <div
-      ref={rootRef}
+      ref={containerRef}
       className="relative overflow-hidden rounded-lg border border-rule bg-surface"
     >
       <div
@@ -209,65 +324,36 @@ export default function BondedExecutionAnimation({
               <stop offset="50%" stopColor={ACCENT} stopOpacity="0.8" />
               <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
             </linearGradient>
-            <marker
-              id={`${gradId}-arrow`}
-              markerWidth="8"
-              markerHeight="8"
-              refX="6"
-              refY="4"
-              orient="auto"
-              markerUnits="userSpaceOnUse"
-            >
-              <path d="M0,0 L6,4 L0,8 z" fill={ACCENT} />
-            </marker>
-            <marker
-              id={`${gradId}-arrow-slash`}
-              markerWidth="8"
-              markerHeight="8"
-              refX="6"
-              refY="4"
-              orient="auto"
-              markerUnits="userSpaceOnUse"
-            >
-              <path d="M0,0 L6,4 L0,8 z" fill={SLASH} />
-            </marker>
-            <marker
-              id={`${gradId}-arrow-muted`}
-              markerWidth="8"
-              markerHeight="8"
-              refX="6"
-              refY="4"
-              orient="auto"
-              markerUnits="userSpaceOnUse"
-            >
-              <path d="M0,0 L6,4 L0,8 z" fill={MUTED} />
-            </marker>
+
+            {/* Payment path: from external agent down into the payment stage. */}
+            <path
+              id="path-payment"
+              d="M 140 84 C 140 130 220 150 220 190"
+              fill="none"
+            />
+            {/* Evidence path: from the buyer signer channel at the bottom into
+                the watchdog, following a real curve inside the SVG. */}
+            <path
+              id="path-evidence"
+              d="M 360 508 C 500 500 580 450 590 340"
+              fill="none"
+            />
           </defs>
 
-          {/* External agent */}
-          <Node
-            x={40}
-            y={24}
-            w={200}
-            h={54}
-            title="EXTERNAL AGENT"
-            subtitle="a2a request"
-            active={on(1)}
-          />
-
-          {/* Bondsman Execution Gate outer */}
+          {/* Backdrop rectangle for the execution gate. */}
           <rect
             x={40}
-            y={110}
+            y={130}
             width={640}
             height={230}
-            rx={10}
+            rx={12}
             fill={RAISED}
             stroke={RULE}
           />
           <text
+            data-anim="label"
             x={56}
-            y={132}
+            y={152}
             fill={BONE_DIM}
             fontFamily="ui-monospace, Menlo, monospace"
             fontSize={11}
@@ -276,111 +362,105 @@ export default function BondedExecutionAnimation({
             BONDSMAN EXECUTION GATE
           </text>
 
-          {/* Downstream connector: agent -> gate */}
-          <motion.path
-            d="M 140 78 L 140 108"
-            stroke={ACCENT}
-            strokeWidth={2}
-            fill="none"
-            markerEnd={`url(#${gradId}-arrow)`}
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={
-              on(1)
-                ? { pathLength: 1, opacity: 1 }
-                : { pathLength: 0, opacity: 0 }
-            }
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          />
+          {/* External agent node */}
+          <g data-anim="stage" data-stage="agent">
+            <Node
+              x={40}
+              y={30}
+              w={200}
+              h={54}
+              title="EXTERNAL AGENT"
+              subtitle="a2a request"
+            />
+          </g>
 
-          {/* Four stage pills inside gate */}
-          <StagePill
-            x={64}
-            y={158}
-            w={130}
-            h={62}
-            title="PAYMENT"
-            status={
-              settled
-                ? 'settled'
-                : paymentActive
-                ? 'active'
-                : 'idle'
-            }
-            valueLine={settled ? paymentAmountLabel : '402 required'}
-            hashLine={settled ? shortHash(data?.settlementTx ?? null) : null}
-          />
-          <StagePill
-            x={210}
-            y={158}
-            w={130}
-            h={62}
-            title="QUOTE"
-            status={quoteActive ? 'settled' : 'idle'}
-            valueLine={quoteActive ? 'paid quote' : 'awaiting settlement'}
-            hashLine={quoteActive ? shortHash(data?.quoteHash ?? null) : null}
-          />
-          <StagePill
-            x={356}
-            y={158}
-            w={130}
-            h={62}
-            title="BOND"
-            status={bondActive ? 'settled' : 'idle'}
-            valueLine={bondActive ? bondLabel : 'awaiting quote'}
-            hashLine={bondActive ? 'vault locked' : null}
-          />
-          <StagePill
-            x={502}
-            y={158}
-            w={130}
-            h={62}
-            title="EXECUTE"
-            status={executeActive ? 'settled' : 'idle'}
-            valueLine={executeActive ? 'payout cleared' : 'awaiting bond'}
-            hashLine={
-              executeActive ? `Action ${data?.actionId ?? '27'}` : null
-            }
-          />
+          {/* Payment step */}
+          <g data-anim="stage" data-stage="payment">
+            <StageBox
+              x={70}
+              y={180}
+              w={140}
+              h={80}
+              title="PAYMENT"
+              label={paymentAmountLabel}
+              hash={data?.settlementTx}
+            />
+          </g>
 
-          {/* Flow connectors between pills */}
-          <FlowLine
-            x1={194}
-            x2={210}
-            y={189}
-            active={settled}
-            gradId={`${gradId}-arrow`}
-          />
-          <FlowLine
-            x1={340}
-            x2={356}
-            y={189}
-            active={quoteActive}
-            gradId={`${gradId}-arrow`}
-          />
-          <FlowLine
-            x1={486}
-            x2={502}
-            y={189}
-            active={bondActive}
-            gradId={`${gradId}-arrow`}
-          />
+          {/* Quote step */}
+          <g data-anim="stage" data-stage="quote">
+            <StageBox
+              x={230}
+              y={180}
+              w={140}
+              h={80}
+              title="QUOTE"
+              label="paid quote"
+              hash={data?.quoteHash}
+            />
+          </g>
+
+          {/* Bond step */}
+          <g data-anim="stage" data-stage="bond">
+            <StageBox
+              x={390}
+              y={180}
+              w={140}
+              h={80}
+              title="BOND"
+              label={bondLabel}
+              subtitle="vault locked"
+              accent
+            />
+            <g data-role="bond-vault">
+              <rect
+                x={470}
+                y={196}
+                width={44}
+                height={48}
+                rx={4}
+                fill="none"
+                stroke={ACCENT}
+                strokeWidth={1.4}
+              />
+              <path
+                d={`M478 218 L484 224 L508 200`}
+                stroke={ACCENT}
+                strokeWidth={2}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </g>
+          </g>
+
+          {/* Execute step */}
+          <g data-anim="stage" data-stage="execute">
+            <StageBox
+              x={550}
+              y={180}
+              w={130}
+              h={80}
+              title="EXECUTE"
+              label="payout cleared"
+              subtitle={data?.actionId ? `Action ${data.actionId}` : null}
+            />
+          </g>
 
           {/* Delayed evidence channel */}
-          <g>
+          <g data-anim="stage" data-stage="evidence">
             <rect
               x={40}
-              y={252}
+              y={480}
               width={640}
-              height={70}
-              rx={8}
-              fill="transparent"
+              height={60}
+              rx={10}
+              fill={RAISED}
               stroke={RULE}
-              strokeDasharray="4 4"
-              opacity={0.6}
             />
             <text
               x={56}
-              y={273}
+              y={504}
               fill={BONE_DIM}
               fontFamily="ui-monospace, Menlo, monospace"
               fontSize={11}
@@ -390,289 +470,192 @@ export default function BondedExecutionAnimation({
             </text>
             <text
               x={56}
-              y={296}
+              y={526}
               fill={BONE}
               fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={11}
+              fontSize={13}
             >
               buyer signer · goods_not_received
             </text>
-            <text
-              x={56}
-              y={312}
-              fill={BONE_DIM}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={10}
-            >
-              evidence root binds to one action
-            </text>
+          </g>
 
-            {/* moving packet along the channel */}
-            <motion.rect
-              x={0}
-              y={280}
-              width={40}
-              height={20}
-              rx={4}
-              fill={SLASH}
-              opacity={0.9}
-              initial={{ x: 680, opacity: 0 }}
-              animate={
-                evidenceActive
-                  ? { x: 420, opacity: 1 }
-                  : done
-                  ? { x: 420, opacity: 0.35 }
-                  : { x: 680, opacity: 0 }
-              }
-              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+          {/* Watchdog node */}
+          <g data-anim="stage" data-stage="watchdog">
+            <Node
+              x={480}
+              y={380}
+              w={200}
+              h={54}
+              title="WATCHDOG"
+              subtitle="independent · deterministic"
+              slash
             />
           </g>
 
-          {/* Watchdog node right */}
-          <Node
-            x={480}
-            y={352}
-            w={200}
-            h={62}
-            title="WATCHDOG"
-            subtitle={
-              watchdogActive
-                ? shortHash(data?.watchdogChallengeTx ?? null) ?? 'challenge submitted'
-                : 'deterministic · independent'
-            }
-            active={watchdogActive}
-            tone={watchdogActive ? 'slash' : 'idle'}
-          />
-
-          {/* Challenge line: watchdog -> controller (into gate right edge). */}
-          <motion.path
-            d="M 580 352 C 580 340, 580 250, 640 245"
-            stroke={SLASH}
-            strokeWidth={2}
-            fill="none"
-            markerEnd={`url(#${gradId}-arrow-slash)`}
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={
-              on(8)
-                ? { pathLength: 1, opacity: 0.95 }
-                : { pathLength: 0, opacity: 0 }
-            }
-            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-          />
-
-          {/* Controller resolution + slash allocation */}
-          <rect
-            x={40}
-            y={352}
-            width={420}
-            height={62}
-            rx={8}
-            fill={RAISED}
-            stroke={slashActive ? SLASH : RULE}
-          />
-          <text
-            x={56}
-            y={374}
-            fill={BONE_DIM}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={11}
-            letterSpacing="3"
-          >
-            CONTROLLER RESOLUTION
-          </text>
-          <text
-            x={56}
-            y={396}
-            fill={slashActive ? SLASH : BONE_DIM}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={12}
-          >
-            {slashActive
-              ? `bond slashed · ${bondLabel}`
-              : resolvedActive
-              ? 'resolving'
-              : 'awaiting challenge'}
-          </text>
-
-          {/* Slash split boxes appear only from phase 11 */}
-          <motion.g
-            initial={{ opacity: 0, y: 10 }}
-            animate={
-              splitActive ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }
-            }
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <SplitBox
+          {/* Controller resolution node */}
+          <g data-anim="stage" data-stage="controller">
+            <StageBox
               x={40}
-              y={430}
-              w={200}
-              h={44}
-              title="WATCHDOG REWARD"
-              value={rewardLabel}
-              tone="accent"
+              y={380}
+              w={210}
+              h={54}
+              title="CONTROLLER"
+              label="slash resolved"
+              slash
             />
-            <SplitBox
+          </g>
+
+          {/* Split allocation */}
+          <g data-anim="stage" data-stage="split">
+            <StageBox
+              x={40}
+              y={445}
+              w={210}
+              h={30}
+              title="REWARD"
+              label={rewardLabel}
+              compact
+            />
+            <StageBox
               x={260}
-              y={430}
+              y={445}
+              w={210}
+              h={30}
+              title="RESERVE"
+              label={reserveLabel}
+              compact
+            />
+          </g>
+
+          {/* Portable receipt */}
+          <g data-anim="stage" data-stage="receipt">
+            <Node
+              x={480}
+              y={445}
               w={200}
-              h={44}
-              title="PROTECTION RESERVE"
-              value={reserveLabel}
-              tone="accent"
+              h={30}
+              title="PORTABLE RECEIPT"
+              subtitle="signed · verified"
+              small
             />
-            {/* pipe lines from resolution to split */}
-            <motion.path
-              d="M 140 414 L 140 430"
-              stroke={ACCENT}
-              strokeWidth={2}
-              fill="none"
-              initial={{ pathLength: 0 }}
-              animate={splitActive ? { pathLength: 1 } : { pathLength: 0 }}
-              transition={{ duration: 0.4, delay: 0.05 }}
-            />
-            <motion.path
-              d="M 360 414 L 360 430"
-              stroke={ACCENT}
-              strokeWidth={2}
-              fill="none"
-              initial={{ pathLength: 0 }}
-              animate={splitActive ? { pathLength: 1 } : { pathLength: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            />
-          </motion.g>
+            <g data-role="verified-mark">
+              <circle cx={666} cy={460} r={9} fill={ACCENT} />
+              <path
+                d="M661 460 l4 4 l7 -8"
+                stroke="#0B0F0D"
+                strokeWidth={2}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </g>
+          </g>
 
-          {/* Portable receipt panel */}
-          <rect
-            x={480}
-            y={430}
-            width={200}
-            height={104}
-            rx={8}
-            fill={RAISED}
-            stroke={receiptVerified ? ACCENT : RULE}
-          />
-          <text
-            x={496}
-            y={452}
-            fill={BONE_DIM}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={11}
-            letterSpacing="3"
-          >
-            PORTABLE RECEIPT
-          </text>
-          <text
-            x={496}
-            y={474}
-            fill={BONE}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={11}
-          >
-            bondsman.golden-path.v2
-          </text>
-          <text
-            x={496}
-            y={492}
-            fill={BONE_DIM}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={10}
-          >
-            Action {data?.actionId ?? '27'}
-          </text>
-
-          {/* Verification seal */}
-          <motion.g
-            initial={{ scale: 0.4, opacity: 0 }}
-            animate={
-              receiptVerified
-                ? { scale: 1, opacity: 1 }
-                : { scale: 0.4, opacity: 0 }
-            }
-            transition={{ type: 'spring', stiffness: 200, damping: 22 }}
-          >
-            <circle cx={640} cy={504} r={14} fill={ACCENT} />
-            <motion.path
-              d="M 632 504 L 638 510 L 648 500"
-              stroke={RAISED}
-              strokeWidth={2.5}
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              initial={{ pathLength: 0 }}
-              animate={receiptVerified ? { pathLength: 1 } : { pathLength: 0 }}
-              transition={{ duration: 0.35, delay: 0.15 }}
-            />
-          </motion.g>
-
-          {/* Post-completion ambient pulse on receipt seal */}
-          {done && !reduce && healthMode === 'healthy' && (
-            <motion.circle
-              cx={640}
-              cy={504}
-              r={14}
-              fill="none"
+          {/* Connectors */}
+          <g data-anim="line" data-line="agent-to-gate">
+            <path
+              d="M 140 84 L 140 180"
               stroke={ACCENT}
               strokeWidth={1.5}
-              initial={{ opacity: 0, r: 14 }}
-              animate={{ opacity: [0.4, 0, 0.4], r: [14, 22, 14] }}
-              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              fill="none"
+              strokeDasharray="4 4"
+              opacity={0.6}
             />
-          )}
+          </g>
+          <g data-anim="line" data-line="payment-to-quote">
+            <path
+              d="M 210 220 L 230 220"
+              stroke={ACCENT}
+              strokeWidth={1.5}
+              fill="none"
+            />
+          </g>
+          <g data-anim="line" data-line="quote-to-bond">
+            <path
+              d="M 370 220 L 390 220"
+              stroke={ACCENT}
+              strokeWidth={1.5}
+              fill="none"
+            />
+          </g>
+          <g data-anim="line" data-line="bond-to-execute">
+            <path
+              d="M 530 220 L 550 220"
+              stroke={ACCENT}
+              strokeWidth={1.5}
+              fill="none"
+            />
+          </g>
+          <g data-anim="line" data-line="watchdog-to-controller">
+            <path
+              d="M 480 405 L 250 405"
+              stroke={SLASH}
+              strokeWidth={1.5}
+              fill="none"
+            />
+          </g>
+          <g data-anim="line" data-line="controller-to-split">
+            <path
+              d="M 145 435 L 145 445"
+              stroke={SLASH}
+              strokeWidth={1.5}
+              fill="none"
+            />
+          </g>
+          <g data-anim="line" data-line="controller-to-receipt">
+            <path
+              d="M 250 460 L 480 460"
+              stroke={ACCENT_DEEP}
+              strokeWidth={1.2}
+              fill="none"
+              strokeDasharray="3 3"
+              opacity={0.7}
+            />
+          </g>
+
+          {/* Green settlement packet along payment path */}
+          <circle
+            data-anim="packet"
+            data-packet="payment"
+            r={5}
+            fill={ACCENT}
+          />
+          {/* Red contradiction packet along evidence path */}
+          <circle
+            data-anim="packet"
+            data-packet="evidence"
+            r={5.5}
+            fill={SLASH}
+          />
+
+          {/* Live pulse indicator inside the gate */}
+          <g data-role="live-pulse">
+            <circle cx={676} cy={148} r={4} fill={ACCENT}>
+              {shouldAnimate && (
+                <animate
+                  attributeName="opacity"
+                  values="0.2;1;0.2"
+                  dur="2.4s"
+                  repeatCount="indefinite"
+                />
+              )}
+            </circle>
+          </g>
         </svg>
       </div>
 
-      {/* Overlay chip: current stage / cause */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-rule px-4 py-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className={`h-1.5 w-1.5 rounded-full ${
-              healthMode === 'healthy'
-                ? done
-                  ? 'bg-accent'
-                  : 'bg-accent animate-pulse'
-                : healthMode === 'degraded'
-                ? 'bg-amber-400'
-                : 'bg-muted'
-            }`}
-          />
-          <span
-            className={`serial text-[0.6rem] ${
-              healthMode === 'healthy'
-                ? 'text-accent'
-                : healthMode === 'degraded'
-                ? 'text-amber-300'
-                : 'text-muted'
-            }`}
-          >
-            {disabledCause ?? STAGE_LABELS[Math.min(phase, FINAL)]}
-          </span>
+      {disabledCause && (
+        <div className="border-t border-rule bg-ink px-4 py-2 text-xs text-muted">
+          {disabledCause}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="serial text-[0.58rem] text-muted">
-            Action {data?.actionId ?? '27'} · canonical proof
-          </span>
-          {!reduce && healthMode === 'healthy' && (
-            <button
-              type="button"
-              onClick={replay}
-              className="rounded border border-rule bg-ink px-2 py-1 text-[0.6rem] text-muted transition-colors hover:text-bone focus-visible:text-bone"
-              aria-label="Replay the bonded execution animation"
-            >
-              Replay flow
-            </button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function shortHash(v: string | null): string | null {
-  if (!v) return null;
-  return truncateHash(v);
-}
-
+/**
+ * Rectangular node used for external actors: agent, watchdog, receipt.
+ */
 function Node({
   x,
   y,
@@ -680,60 +663,48 @@ function Node({
   h,
   title,
   subtitle,
-  active,
-  tone = 'idle',
+  slash = false,
+  small = false,
 }: {
   x: number;
   y: number;
   w: number;
   h: number;
   title: string;
-  subtitle?: string;
-  active: boolean;
-  tone?: 'idle' | 'slash';
+  subtitle?: string | null;
+  slash?: boolean;
+  small?: boolean;
 }) {
-  const stroke = active
-    ? tone === 'slash'
-      ? SLASH
-      : ACCENT
-    : RULE;
-  const titleColor = active
-    ? tone === 'slash'
-      ? SLASH
-      : ACCENT
-    : BONE_DIM;
+  const border = slash ? SLASH : ACCENT;
   return (
     <g>
-      <motion.rect
+      <rect
         x={x}
         y={y}
         width={w}
         height={h}
-        rx={8}
+        rx={6}
         fill={RAISED}
-        stroke={stroke}
-        strokeWidth={1.5}
-        initial={false}
-        animate={{ stroke }}
-        transition={{ duration: 0.3 }}
+        stroke={border}
+        strokeOpacity={0.35}
       />
       <text
-        x={x + 16}
-        y={y + 22}
-        fill={titleColor}
+        x={x + 12}
+        y={y + (small ? 14 : 20)}
+        fill={BONE_DIM}
         fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={11}
+        fontSize={small ? 9 : 10}
         letterSpacing="3"
       >
         {title}
       </text>
       {subtitle && (
         <text
-          x={x + 16}
-          y={y + 42}
-          fill={BONE_DIM}
+          x={x + 12}
+          y={y + (small ? 26 : 40)}
+          fill={BONE}
           fontFamily="ui-monospace, Menlo, monospace"
-          fontSize={10}
+          fontSize={small ? 11 : 13}
         >
           {subtitle}
         </text>
@@ -742,146 +713,96 @@ function Node({
   );
 }
 
-function StagePill({
+/**
+ * Sub-stage inside the execution gate.
+ */
+function StageBox({
   x,
   y,
   w,
   h,
   title,
-  status,
-  valueLine,
-  hashLine,
+  label,
+  hash,
+  subtitle,
+  accent = false,
+  slash = false,
+  compact = false,
 }: {
   x: number;
   y: number;
   w: number;
   h: number;
   title: string;
-  status: 'idle' | 'active' | 'settled';
-  valueLine: string;
-  hashLine: string | null;
+  label: string;
+  hash?: string | null;
+  subtitle?: string | null;
+  accent?: boolean;
+  slash?: boolean;
+  compact?: boolean;
 }) {
-  const stroke =
-    status === 'settled' ? ACCENT : status === 'active' ? ACCENT_DEEP : RULE;
-  const titleColor =
-    status === 'settled' ? ACCENT : status === 'active' ? ACCENT_DEEP : BONE_DIM;
+  const border = slash ? SLASH : accent ? ACCENT : RULE;
+  const labelColor = slash ? SLASH : accent ? ACCENT : BONE;
   return (
     <g>
-      <motion.rect
+      <rect
         x={x}
         y={y}
         width={w}
         height={h}
         rx={6}
-        fill={RAISED}
-        stroke={stroke}
-        strokeWidth={1.5}
-        animate={{ stroke }}
-        transition={{ duration: 0.3 }}
+        fill="#0f1613"
+        stroke={border}
+        strokeOpacity={accent || slash ? 0.55 : 0.4}
       />
       <text
         x={x + 12}
-        y={y + 20}
-        fill={titleColor}
+        y={y + (compact ? 12 : 18)}
+        fill={BONE_DIM}
         fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={11}
+        fontSize={9}
         letterSpacing="3"
       >
         {title}
       </text>
       <text
+        data-role="stage-value"
         x={x + 12}
-        y={y + 40}
-        fill={BONE}
+        y={y + (compact ? 24 : 40)}
+        fill={labelColor}
         fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={11}
+        fontSize={compact ? 11 : 13}
       >
-        {valueLine}
+        {label}
       </text>
-      {hashLine && (
+      {subtitle && (
         <text
           x={x + 12}
-          y={y + 55}
+          y={y + 58}
           fill={BONE_DIM}
           fontFamily="ui-monospace, Menlo, monospace"
-          fontSize={9.5}
+          fontSize={10}
         >
-          {hashLine}
+          {subtitle}
+        </text>
+      )}
+      {hash && (
+        <text
+          x={x + 12}
+          y={y + h - 8}
+          fill={BONE_DIM}
+          fontFamily="ui-monospace, Menlo, monospace"
+          fontSize={9}
+        >
+          {shortHash(hash)}
         </text>
       )}
     </g>
   );
 }
 
-function SplitBox({
-  x,
-  y,
-  w,
-  h,
-  title,
-  value,
-  tone,
-}: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  title: string;
-  value: string;
-  tone: 'accent';
-}) {
-  const color = tone === 'accent' ? ACCENT : BONE_DIM;
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={6} fill={RAISED} stroke={color} />
-      <text
-        x={x + 12}
-        y={y + 18}
-        fill={color}
-        fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={10}
-        letterSpacing="3"
-      >
-        {title}
-      </text>
-      <text
-        x={x + 12}
-        y={y + 35}
-        fill={BONE}
-        fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={11}
-      >
-        {value}
-      </text>
-    </g>
-  );
-}
-
-function FlowLine({
-  x1,
-  x2,
-  y,
-  active,
-  gradId,
-}: {
-  x1: number;
-  x2: number;
-  y: number;
-  active: boolean;
-  gradId: string;
-}) {
-  return (
-    <motion.line
-      x1={x1}
-      x2={x2}
-      y1={y}
-      y2={y}
-      stroke={active ? ACCENT : RULE}
-      strokeWidth={1.5}
-      markerEnd={active ? `url(#${gradId})` : undefined}
-      initial={false}
-      animate={{ stroke: active ? ACCENT : RULE }}
-      transition={{ duration: 0.3 }}
-    />
-  );
+function shortHash(h: string): string {
+  const clean = h.replace(/^hash-/, '').replace(/^account-hash-/, '');
+  if (clean.length <= 14) return clean;
+  return `${clean.slice(0, 6)}…${clean.slice(-4)}`;
 }
