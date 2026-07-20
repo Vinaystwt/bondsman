@@ -99,6 +99,47 @@ export interface PaidQuoteResponse {
   };
 }
 
+export interface SubmitAuthorization {
+  publicKey: string;
+  signature: string;
+  timestamp: number;
+  nonce: string;
+}
+
+export interface PaidActionSubmitResponse {
+  success: boolean;
+  quoteHash: string;
+  quote: {
+    actionType: string;
+    faultClass: 'duplicate_claim' | 'delivery_contradiction';
+    verifier: string;
+    requiredBond: string;
+    quotedMinimumBond: string;
+    expectedActualBond?: string;
+    policySource?: string;
+    bondEconomics?: Record<string, unknown>;
+    paymentReceipt: {
+      network: string;
+      asset: string;
+      amount: string;
+      transaction: string;
+      facilitator: string;
+      payer: string | null;
+      settled: boolean;
+    };
+  };
+  action: ActionDetail & {
+    attestation?: {
+      actionId: number;
+      invoiceId: number;
+      eventType: 'delivery_rejected' | 'goods_not_received';
+      occurredAt: number;
+      nonce: string;
+      buyerPublicKey: string;
+    };
+  };
+}
+
 export type CanonicalOutcome = 'SLASHED' | 'REFUNDED';
 
 export interface CanonicalTimelineStage {

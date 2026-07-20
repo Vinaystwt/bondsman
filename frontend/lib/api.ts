@@ -9,7 +9,9 @@ import type {
   Health,
   ActionDetail,
   PaidQuoteResponse,
+  PaidActionSubmitResponse,
   PortableReceipt,
+  SubmitAuthorization,
   PublicCapabilities,
   QuoteCheckResponse,
   ReceiptVerification,
@@ -260,5 +262,29 @@ export const clientApi = {
       throw new Error(`request failed: ${res.status}`);
     }
     return (await res.json()) as PaidQuoteResponse;
+  },
+  async submitPaidAction(body: {
+    quoteHash: string;
+    faultClass: 'duplicate_claim' | 'delivery_contradiction';
+    buyerPublicKey?: string;
+    eventType?: 'delivery_rejected' | 'goods_not_received';
+    submitAuthorization: SubmitAuthorization;
+  }): Promise<PaidActionSubmitResponse> {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout('/v1/actions/submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }, 120_000);
+    } catch {
+      throw new BackendUnreachable();
+    }
+    if (!res.ok) {
+      const err = await parseErrorBody(res);
+      if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
+      throw new Error(`request failed: ${res.status}`);
+    }
+    return (await res.json()) as PaidActionSubmitResponse;
   },
 };

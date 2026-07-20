@@ -148,6 +148,16 @@ export function payerAccountAddress(publicKeyHex: string): string {
   return `00${PublicKey.fromHex(publicKeyHex).accountHash().toHex()}`;
 }
 
+export function buyerPublicKeyBase64(publicKeyHex: string): string {
+  if (!/^01[0-9a-f]{64}$/i.test(publicKeyHex)) {
+    throw new Error('Only Ed25519 Casper public keys can be used as evidence signer keys.');
+  }
+  const bytes = Uint8Array.from(
+    publicKeyHex.slice(2).match(/../g)!.map((part) => Number.parseInt(part, 16)),
+  );
+  return bytesToBase64(bytes);
+}
+
 function randomNonceHex(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');

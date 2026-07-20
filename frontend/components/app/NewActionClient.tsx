@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AnalysisResult from '@/components/assurance/AnalysisResult';
 import ScenarioForm from '@/components/assurance/ScenarioForm';
+import { rememberActionId } from '@/components/app/RecentActions';
 import CopyHash from '@/components/ui/CopyHash';
 import { Label, StatusPill } from '@/components/ui/Primitives';
 import { EmptyState } from '@/components/ui/States';
@@ -39,6 +40,13 @@ type PaymentState =
   | { kind: 'settled'; quote: PaidQuoteResponse }
   | { kind: 'failed'; message: string };
 
+type SubmitState =
+  | { kind: 'idle' }
+  | { kind: 'signing' }
+  | { kind: 'submitting' }
+  | { kind: 'created'; actionId: number }
+  | { kind: 'failed'; message: string };
+
 interface Props {
   templates: AssuranceTemplate[];
   liveModelAvailable: boolean;
@@ -70,6 +78,7 @@ export default function NewActionClient({
   liveModelAvailable,
   liveQuoteProbeAvailable,
 }: Props) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTemplate = searchParams.get('template');
   const defaultTemplate =
@@ -88,6 +97,7 @@ export default function NewActionClient({
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const [payment, setPayment] = useState<PaymentState>({ kind: 'idle' });
+  const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const stepRefs = useRef<Record<number, HTMLElement | null>>({});
 
   const executable = useMemo(
@@ -121,6 +131,7 @@ export default function NewActionClient({
     setAnalysis(null);
     setProbe({ kind: 'idle' });
     setPayment({ kind: 'idle' });
+    setSubmit({ kind: 'idle' });
     setError(null);
     setStep(2);
   }
@@ -130,6 +141,7 @@ export default function NewActionClient({
     setError(null);
     setProbe({ kind: 'idle' });
     setPayment({ kind: 'idle' });
+    setSubmit({ kind: 'idle' });
     try {
       const result = await clientApi.assuranceAnalyze(body);
       setAnalysis(result);
@@ -189,11 +201,55 @@ export default function NewActionClient({
         paymentSignature.header,
       );
       setPayment({ kind: 'settled', quote });
+      setSubmit({ kind: 'idle' });
       setStep(7);
     } catch (err) {
       setPayment({
         kind: 'failed',
         message: err instanceof Error ? err.message : 'Payment settlement failed.',
+      });
+    }
+  }
+
+  async function createAction() {
+    if (!paidQuote || !wallet.publicKey) return;
+    setSubmit({ kind: 'signing' });
+    try {
+      const {
+        assertUsableWallet,
+        buyerPublicKeyBase64,
+        signSubmitAuthorization,
+      } = await import('@/lib/casper-wallet');
+      assertUsableWallet(wallet);
+      const eventType = 'goods_not_received' as const;
+      const buyerPublicKey = buyerPublicKeyBase64(wallet.publicKey);
+      const authorization = await signSubmitAuthorization({
+        publicKey: wallet.publicKey,
+        quoteHash: paidQuote.quoteHash,
+        faultClass: paidQuote.faultClass,
+        buyerPublicKey,
+        eventType,
+      });
+      setSubmit({ kind: 'submitting' });
+      const response = await clientApi.submitPaidAction({
+        quoteHash: paidQuote.quoteHash,
+        faultClass: paidQuote.faultClass,
+        buyerPublicKey,
+        eventType,
+        submitAuthorization: {
+          publicKey: authorization.publicKey,
+          timestamp: authorization.timestamp,
+          nonce: authorization.nonce,
+          signature: authorization.signature,
+        },
+      });
+      rememberActionId(response.action.actionId);
+      setSubmit({ kind: 'created', actionId: response.action.actionId });
+      router.push(`/app/actions/${response.action.actionId}`);
+    } catch (err) {
+      setSubmit({
+        kind: 'failed',
+        message: err instanceof Error ? err.message : 'Action creation failed.',
       });
     }
   }
@@ -335,7 +391,12 @@ export default function NewActionClient({
           title="Review paid quote"
           body="The paid quote is bound to the payer and can be submitted once after authorization."
         />
-        <PaidQuotePanel quote={paidQuote} />
+        <PaidQuotePanel
+          quote={paidQuote}
+          submit={submit}
+          wallet={wallet}
+          onCreate={createAction}
+        />
       </section>
     </div>
   );
@@ -725,7 +786,17 @@ function PaymentStatus({ payment }: { payment: PaymentState }) {
   return <StatusPill tone="ok">Payment settled</StatusPill>;
 }
 
-function PaidQuotePanel({ quote }: { quote: PaidQuoteResponse | null }) {
+function PaidQuotePanel({
+  quote,
+  submit,
+  wallet,
+  onCreate,
+}: {
+  quote: PaidQuoteResponse | null;
+  submit: SubmitState;
+  wallet: CasperWalletState;
+  onCreate: () => void;
+}) {
   if (!quote) {
     return (
       <EmptyState
@@ -770,9 +841,61 @@ function PaidQuotePanel({ quote }: { quote: PaidQuoteResponse | null }) {
         </MiniField>
       </dl>
       <div className="mt-5 rounded border border-rule bg-ink px-4 py-3 text-sm text-muted">
-        Sign authorization and action submission are the next gated step. This paid quote has not been submitted yet.
+        The submit authorization will bind this quote hash, fault class, evidence signer, event type, timestamp and nonce.
+      </div>
+      <div className="mt-5 border-t border-rule pt-5">
+        <SubmitStatus submit={submit} />
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={
+            !wallet.connected ||
+            !wallet.publicKey ||
+            submit.kind === 'signing' ||
+            submit.kind === 'submitting' ||
+            submit.kind === 'created'
+          }
+          className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
+        >
+          {submit.kind === 'signing'
+            ? 'Waiting for signature'
+            : submit.kind === 'submitting'
+              ? 'Creating action'
+              : submit.kind === 'created'
+                ? 'Action created'
+                : 'Sign authorization and create action'}
+        </button>
+        {!wallet.connected && (
+          <p className="mt-3 text-xs text-muted">
+            Reconnect the payer wallet before submitting the paid quote.
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+function SubmitStatus({ submit }: { submit: SubmitState }) {
+  if (submit.kind === 'idle') {
+    return (
+      <p className="text-sm text-muted">
+        No action has been submitted. One click asks the payer to sign authorization, then submits the paid quote once.
+      </p>
+    );
+  }
+  if (submit.kind === 'signing') {
+    return <StatusPill tone="info">Awaiting submit signature</StatusPill>;
+  }
+  if (submit.kind === 'submitting') {
+    return <StatusPill tone="info">Submitting paid quote</StatusPill>;
+  }
+  if (submit.kind === 'created') {
+    return <StatusPill tone="ok">Action {submit.actionId} created</StatusPill>;
+  }
+  return (
+    <p className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
+      {submit.message}
+    </p>
   );
 }
 
