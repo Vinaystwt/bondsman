@@ -1,4 +1,4 @@
-// The six documentation sections, in order. Shared by the page and the sidebar.
+// Documentation sections in order. Shared by the page and the sidebar.
 export interface DocSection {
   id: string;
   title: string;
@@ -6,11 +6,13 @@ export interface DocSection {
 }
 
 export const DOCS_SECTIONS: DocSection[] = [
-  { id: 'quickstart', title: 'Read the proof in three minutes', keywords: 'quickstart judge test proof arena challenge mcp canonical receipt' },
-  { id: 'thesis', title: 'Problem and thesis', keywords: 'problem agent risk nothing bond no action layer issuance' },
-  { id: 'how-it-works', title: 'How it works', keywords: 'lifecycle clean slash path two agent economy watchdog' },
-  { id: 'contracts', title: 'Contracts', keywords: 'controller bond vault invoice pool csprusd hashes architecture table' },
-  { id: 'lifecycle', title: 'Lifecycle and transactions', keywords: 'steps on-chain transaction slash split duplicate proof' },
-  { id: 'faq', title: 'Economics and security', keywords: 'faq optimistic verification sybil grief custodial wallet x402 window reputation' },
-  { id: 'surfaces', title: 'Product surfaces', keywords: 'arena docket ledger agents two agents invoice pool mcp build' },
+  { id: 'understand', title: 'Understand Bondsman', keywords: 'overview thesis problem accountability bond' },
+  { id: 'verify', title: 'Verify the proof', keywords: 'proof console casper testnet action 27 x402' },
+  { id: 'design', title: 'Design a policy', keywords: 'assurance studio template scenario manifest' },
+  { id: 'integrate', title: 'Integrate the API', keywords: 'x402 quote submit payer authorization http' },
+  { id: 'mcp', title: 'Use MCP', keywords: 'mcp model context protocol tools bondsman package' },
+  { id: 'a2a', title: 'Use A2A', keywords: 'a2a agent card discovery well known skills' },
+  { id: 'casper', title: 'Casper impact', keywords: 'casper agent activity x402 mcp adapters reserve' },
+  { id: 'launch', title: 'Launch plan', keywords: 'roadmap thirty sixty ninety day design partner security' },
+  { id: 'security', title: 'Threat model and security', keywords: 'security review threat model authority bounds' },
 ];
