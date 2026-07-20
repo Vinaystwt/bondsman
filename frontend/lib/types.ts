@@ -9,6 +9,7 @@ export interface Health {
   watchdog: { running: boolean };
   uptimeSec: number;
   deploymentsPath: string;
+  publicExperience: HealthPublicExperience;
 }
 
 export interface Deployment {
