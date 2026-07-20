@@ -2,84 +2,128 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import Seal from './Seal';
-import WalletButton from './WalletButton';
+import { useEffect, useState } from 'react';
+import BondsmanLogo from './brand/BondsmanLogo';
 
-const PUBLIC_LINKS = [
-  { href: '/proof', label: 'Proof' },
-  { href: '/how-it-works', label: 'How it works' },
-  { href: '/two-agents', label: 'Two agents' },
-  { href: '/rwa', label: 'Invoice adapter' },
-  { href: '/build', label: 'Integrate' },
-  { href: '/roadmap', label: 'Roadmap' },
-  { href: '/docs', label: 'Docs' },
+const PRIMARY = [
+  { href: '/', label: 'Product' },
+  { href: '/proof', label: 'Verify' },
+  { href: '/assurance', label: 'Design' },
+  { href: '/build', label: 'Build' },
 ];
 
-const APP_LINKS = [
-  { href: '/app', label: 'Overview' },
-  { href: '/app/arena', label: 'Arena' },
-  { href: '/proof', label: 'Proof' },
-  { href: '/app/actions', label: 'Docket' },
-  { href: '/app/ledger', label: 'My Ledger' },
-  { href: '/app/agents', label: 'Agents' },
-  { href: '/app/leaderboard', label: 'Leaderboard' },
+const BUILD_LINKS = [
+  { href: '/build', label: 'Integration guide' },
+  { href: '/docs', label: 'Documentation' },
+  { href: '/docs#mcp', label: 'MCP tools' },
+  { href: '/docs#a2a', label: 'A2A agent card' },
+  { href: '/docs#casper', label: 'Casper impact' },
+  { href: '/docs#security', label: 'Security' },
 ];
 
-function isActive(pathname: string, href: string) {
-  if (href === '/app') return pathname === '/app';
+function isActive(pathname: string, href: string): boolean {
+  if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function Nav() {
   const pathname = usePathname();
-  const inApp = pathname.startsWith('/app');
   const [open, setOpen] = useState(false);
+  const [buildOpen, setBuildOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+    setBuildOpen(false);
+  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-ink/85 backdrop-blur supports-[backdrop-filter]:bg-ink/70">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:px-8 lg:px-14">
         <Link
           href="/"
           className="flex items-center gap-2.5"
           aria-label="Bondsman home"
         >
-          <Seal state="idle" size={30} withText={false} title="Bondsman" />
+          <BondsmanLogo size={30} variant="mark" />
           <span className="font-display text-lg font-semibold tracking-tight text-bone">
             Bondsman
           </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
-          {(inApp ? APP_LINKS : PUBLIC_LINKS).map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              aria-current={isActive(pathname, link.href) ? 'page' : undefined}
-              className={`rounded px-3 py-2 text-sm transition-colors ${
-                isActive(pathname, link.href)
-                  ? 'text-accent'
-                  : 'text-muted hover:text-bone'
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {PRIMARY.map((link) => {
+            if (link.label === 'Build') {
+              return (
+                <div
+                  key={link.href}
+                  className="relative"
+                  onMouseEnter={() => setBuildOpen(true)}
+                  onMouseLeave={() => setBuildOpen(false)}
+                >
+                  <Link
+                    href={link.href}
+                    aria-current={isActive(pathname, link.href) ? 'page' : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={buildOpen}
+                    className={`rounded px-3 py-2 text-sm transition-colors ${
+                      isActive(pathname, link.href)
+                        ? 'text-accent'
+                        : 'text-muted hover:text-bone'
+                    }`}
+                    onFocus={() => setBuildOpen(true)}
+                  >
+                    {link.label}
+                  </Link>
+                  {buildOpen && (
+                    <div
+                      role="menu"
+                      className="absolute left-0 top-full min-w-[220px] rounded-md border border-rule bg-surface p-2 shadow-xl"
+                    >
+                      {BUILD_LINKS.map((sub) => (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          role="menuitem"
+                          className="block rounded px-3 py-2 text-sm text-bone/85 hover:bg-ink hover:text-accent"
+                        >
+                          {sub.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isActive(pathname, link.href) ? 'page' : undefined}
+                className={`rounded px-3 py-2 text-sm transition-colors ${
+                  isActive(pathname, link.href)
+                    ? 'text-accent'
+                    : 'text-muted hover:text-bone'
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-2">
-          <WalletButton />
           <Link
-            href={inApp ? '/' : '/app'}
-            className="hidden rounded border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
+            href="/proof"
+            className="hidden rounded-md border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
           >
-            {inApp ? 'Public site' : 'Launch app'}
+            Open Proof Console
           </Link>
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded text-muted hover:text-bone md:hidden"
-            aria-label="Toggle menu"
+            aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
+            aria-controls="mobile-primary-nav"
             onClick={() => setOpen((v) => !v)}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -95,11 +139,12 @@ export default function Nav() {
 
       {open && (
         <nav
-          className="border-t border-rule bg-ink px-4 py-3 md:hidden"
+          id="mobile-primary-nav"
+          className="border-t border-rule bg-ink px-5 py-3 md:hidden"
           aria-label="Primary mobile"
         >
           <div className="flex flex-col gap-1">
-            {[...PUBLIC_LINKS, ...APP_LINKS].map((link) => (
+            {PRIMARY.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -113,6 +158,26 @@ export default function Nav() {
                 {link.label}
               </Link>
             ))}
+            <Link
+              href="/proof"
+              onClick={() => setOpen(false)}
+              className="mt-2 rounded-md border border-accent/50 bg-accent/10 px-3 py-2.5 text-sm font-medium text-accent"
+            >
+              Open Proof Console
+            </Link>
+            <div className="mt-3 border-t border-rule pt-3">
+              <p className="px-3 pb-2 serial text-[0.62rem] text-muted">Documentation</p>
+              {BUILD_LINKS.map((sub) => (
+                <Link
+                  key={sub.href}
+                  href={sub.href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded px-3 py-2 text-sm text-bone/80 hover:text-accent"
+                >
+                  {sub.label}
+                </Link>
+              ))}
+            </div>
           </div>
         </nav>
       )}

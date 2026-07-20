@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import Seal from '@/components/Seal';
-import ExecRail from '@/components/proof/ExecRail';
+import BondsmanLogo from '@/components/brand/BondsmanLogo';
 import BondedExecutionAnimation, {
   type HealthMode,
 } from '@/components/landing/BondedExecutionAnimation';
+import { Container, StatusPill } from '@/components/ui/Primitives';
 import type { CanonicalProof } from '@/lib/types';
 
 interface HeroProps {
@@ -34,51 +34,46 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
     healthMode === 'healthy'
       ? 'Live on Casper testnet'
       : healthMode === 'degraded'
-      ? 'Execution temporarily paused'
-      : 'Backend unreachable · showing cached evidence';
+        ? 'Live execution temporarily paused'
+        : 'Backend unavailable. Showing cached evidence.';
 
-  const liveTone =
+  const pillTone =
     healthMode === 'healthy'
-      ? 'text-accent'
+      ? 'ok'
       : healthMode === 'degraded'
-      ? 'text-amber-300'
-      : 'text-muted';
+        ? 'warn'
+        : 'neutral';
 
   return (
-    <section className="border-b border-rule">
-      <div className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+    <section className="relative overflow-hidden border-b border-rule">
+      <Container className="py-14 lg:py-24">
         <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          {/* LEFT: positioning + copy */}
           <div>
             <div className="flex items-center gap-2.5">
-              <Seal state="idle" size={26} withText={false} title="Bondsman" />
-              <span
-                className={`serial inline-flex items-center gap-2 text-[0.66rem] ${liveTone}`}
-              >
+              <BondsmanLogo size={26} variant="mark" />
+              <StatusPill tone={pillTone as 'ok' | 'warn' | 'neutral'}>
                 <span
                   aria-hidden="true"
                   className={`h-1.5 w-1.5 rounded-full ${
                     healthMode === 'healthy'
                       ? 'bg-accent'
                       : healthMode === 'degraded'
-                      ? 'bg-amber-400'
-                      : 'bg-muted'
+                        ? 'bg-yellow-400'
+                        : 'bg-muted'
                   }`}
                 />
                 {liveLabel}
-              </span>
+              </StatusPill>
             </div>
 
             <p className="serial mt-8 text-[0.66rem] text-muted">
-              Bonded execution for autonomous finance
+              Bonded execution assurance
             </p>
             <h1 className="mt-3 max-w-3xl text-5xl font-semibold leading-[1.03] tracking-tight text-bone sm:text-6xl">
               Make the agent answerable before it acts.
             </h1>
             <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-muted">
-              Bondsman requires autonomous financial agents to post a
-              risk-priced bond before moving capital. Verified faults slash the
-              bond, reward the watchdog and create a portable proof.
+              Bondsman requires economic collateral before an autonomous financial action, then settles objective failure on Casper. Live x402 settlement, deterministic bond policy and portable signed receipts.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -86,24 +81,42 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
                 href="/proof"
                 className="rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
               >
-                Inspect the live proof
+                Verify the live proof
               </Link>
               <Link
-                href="/build"
+                href="/assurance"
                 className="rounded-md border border-rule px-6 py-3 text-bone transition-colors hover:border-accent/50"
               >
-                See how agents integrate
+                Design an assurance policy
               </Link>
             </div>
 
+            <ul className="mt-8 grid gap-2 text-xs text-muted sm:grid-cols-2">
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
+                Live AI risk interpretation
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
+                Deterministic bond policy
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
+                Casper testnet contracts
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
+                Portable signed receipts
+              </li>
+            </ul>
+
             {healthMode === 'degraded' && degradedReason && (
-              <p className="mt-6 max-w-prose rounded-md border border-amber-400/30 bg-amber-500/5 px-4 py-3 text-xs leading-relaxed text-amber-200">
+              <p className="mt-6 max-w-prose rounded-md border border-yellow-400/30 bg-yellow-500/5 px-4 py-3 text-xs leading-relaxed text-yellow-200">
                 {degradedReason}
               </p>
             )}
           </div>
 
-          {/* RIGHT: animated execution instrument */}
           <div className="lg:pl-2">
             <BondedExecutionAnimation
               data={toAnimationData(canonical)}
@@ -112,12 +125,7 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
             />
           </div>
         </div>
-
-        <div className="mt-10 border-t border-rule pt-6">
-          <p className="serial text-[0.6rem] text-muted">Execution rail</p>
-          <ExecRail className="mt-3" />
-        </div>
-      </div>
+      </Container>
     </section>
   );
 }

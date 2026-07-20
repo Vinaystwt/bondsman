@@ -10,7 +10,7 @@ const COLUMNS: { title: string; tone: 'accent' | 'muted' | 'slash'; items: Item 
     title: 'Live on Casper testnet',
     tone: 'accent',
     items: {
-      head: 'These are on-chain facts you can reopen on testnet.cspr.live.',
+      head: 'These are on chain facts you can reopen on testnet.cspr.live.',
       points: [
         'x402 WCSPR settlement transaction',
         'Paid quote hash and consumption',
@@ -30,7 +30,7 @@ const COLUMNS: { title: string; tone: 'accent' | 'muted' | 'slash'; items: Item 
       points: [
         'The invoice record itself',
         'The purchase premise behind the payout',
-        'The buyer-signed delivery rejection attestation',
+        'The buyer signed delivery rejection attestation',
       ],
     },
   },
@@ -64,7 +64,7 @@ export default function WhatIsReal({ className }: { className?: string }) {
       <Label>What is real</Label>
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
         Bondsman runs on Casper testnet. This split is what a judge should trust
-        as an on-chain fact, what comes from a controlled testnet fixture, and
+        as an on chain fact, what comes from a controlled testnet fixture, and
         what is still ahead of a mainnet product.
       </p>
       <div className="mt-6 grid gap-6 md:grid-cols-3">
