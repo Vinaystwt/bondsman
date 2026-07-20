@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description:
     'Bondsman requires economic collateral before an autonomous financial action, then settles objective failure on Casper. Live x402 settlement, deterministic policy and portable signed receipts.',
   applicationName: 'Bondsman',
+  manifest: '/manifest.webmanifest',
   openGraph: {
     type: 'website',
     siteName: 'Bondsman',
@@ -20,12 +21,21 @@ export const metadata: Metadata = {
     description:
       'Make the agent answerable before it acts. Live x402 settlement, deterministic bond policy, Casper testnet contracts and portable signed receipts.',
     url: 'https://bondsman.vercel.app',
+    images: [
+      {
+        url: '/brand/og.svg',
+        width: 1200,
+        height: 630,
+        alt: 'Bondsman · Bonded execution assurance',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Bondsman · Bonded execution assurance',
     description:
       'Post the bond before the action. Prove the outcome after it. Autonomous finance under economic accountability.',
+    images: ['/brand/og.svg'],
   },
 };
 

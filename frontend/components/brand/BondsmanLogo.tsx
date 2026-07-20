@@ -13,16 +13,14 @@ interface BondsmanLogoProps {
 /**
  * Bondsman brand mark. Original vector identity, no bitmap dependency.
  *
- * Symbol concept:
- *   A vertical execution channel bisected by an assurance gate. Two anchored
- *   posts hold a horizontal bond bar across the channel; the bar cannot pass
- *   without the posts. Above the bar, a small tick marks the settled seal;
- *   below the bar, a divided base represents the reserve and reward split
- *   that pays out when objective evidence resolves the action.
+ * Concept: an enclosed bond seal. Two brackets frame a central horizontal
+ * bond bar carrying a small sealed dot at its centre. The brackets are the
+ * accountability boundary; the bar is the collateral held across the gate;
+ * the dot is the receipt seal that closes an action.
  *
- * The mark is drawn on a 64 unit grid, single stroke weight, single color.
- * It reads at 16px in a browser tab and stays balanced at 512px in an OG
- * card. currentColor renders it in whatever text color surrounds it.
+ * Drawn on a 64 unit grid. Single stroke weight for legibility down to 16.
+ * currentColor render so the mark takes on the surrounding text colour when
+ * monochrome is enabled; otherwise it locks to the brand green.
  */
 export function BondsmanMark({
   size = 32,
@@ -49,63 +47,20 @@ export function BondsmanMark({
       style={style}
     >
       <title>{title}</title>
-      {/* Assurance perimeter — subtle document ring. */}
-      <rect
-        x="6"
-        y="6"
-        width="52"
-        height="52"
-        rx="10"
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        strokeWidth="1.5"
-      />
-      {/* Vertical execution channel. */}
-      <path
-        d="M32 12 V52"
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        strokeWidth="1.5"
-        strokeDasharray="2 3"
-      />
-      {/* Left post. */}
-      <path
-        d="M18 22 V44"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      {/* Right post. */}
-      <path
-        d="M46 22 V44"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      {/* Bond bar — the collateral held across the gate. */}
-      <path
-        d="M14 33 H50"
-        stroke="currentColor"
-        strokeWidth="3.4"
-        strokeLinecap="round"
-      />
-      {/* Settled tick above — seal of approval before execution. */}
-      <path
-        d="M27 22 L31 26 L38 19"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Slash / reward base below — the two payout halves. */}
-      <path
-        d="M22 46 L32 40 L42 46"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeOpacity="0.7"
-      />
+      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14"
+          fill="none"
+          strokeWidth="3.6"
+        />
+        <path
+          d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50"
+          fill="none"
+          strokeWidth="3.6"
+        />
+        <path d="M8 32 H56" strokeWidth="4.6" />
+      </g>
+      <circle cx="32" cy="32" r="4.2" fill="currentColor" />
     </svg>
   );
 }

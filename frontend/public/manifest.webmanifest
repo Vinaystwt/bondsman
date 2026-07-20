@@ -1,0 +1,17 @@
+{
+  "name": "Bondsman",
+  "short_name": "Bondsman",
+  "description": "Bonded execution assurance for autonomous finance.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F0D",
+  "theme_color": "#0B0F0D",
+  "icons": [
+    {
+      "src": "/brand/bondsman-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
