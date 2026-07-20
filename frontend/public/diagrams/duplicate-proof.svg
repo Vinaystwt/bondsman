@@ -1,48 +1,48 @@
 <svg viewBox="0 0 1120 470" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
   <defs>
     <marker id="dp-muted" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L9,4.5 L0,9 Z" fill="#8B948F"/>
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#8C8473"/>
     </marker>
     <marker id="dp-red" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L9,4.5 L0,9 Z" fill="#E5484D"/>
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#E0231C"/>
     </marker>
   </defs>
 
   <!-- invoice 1045 -->
-  <rect x="40" y="70" width="210" height="84" rx="7" fill="#121815" stroke="#3A423E" stroke-width="1.4"/>
+  <rect x="40" y="70" width="210" height="84" rx="7" fill="#16140F" stroke="#3A423E" stroke-width="1.4"/>
   <text x="64" y="104" fill="#E8EDEA" font-size="16" font-weight="600">Invoice 1045</text>
-  <text x="64" y="128" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">GBX-7781, paid first</text>
+  <text x="64" y="128" fill="#8C8473" font-size="12.5" font-family="ui-monospace, Menlo, monospace">GBX-7781, paid first</text>
 
   <!-- invoice 1046 -->
-  <rect x="40" y="300" width="210" height="84" rx="7" fill="#121815" stroke="#3A423E" stroke-width="1.4"/>
+  <rect x="40" y="300" width="210" height="84" rx="7" fill="#16140F" stroke="#3A423E" stroke-width="1.4"/>
   <text x="64" y="334" fill="#E8EDEA" font-size="16" font-weight="600">Invoice 1046</text>
-  <text x="64" y="358" fill="#8B948F" font-size="12.5" font-family="ui-monospace, Menlo, monospace">same debtor and number</text>
+  <text x="64" y="358" fill="#8C8473" font-size="12.5" font-family="ui-monospace, Menlo, monospace">same debtor and number</text>
 
   <!-- claim hash node -->
   <rect x="360" y="170" width="240" height="112" rx="8" fill="#0F1512" stroke="#3A423E" stroke-width="1.5"/>
-  <text x="480" y="200" text-anchor="middle" fill="#8B948F" font-size="11.5" letter-spacing="1.5" font-family="ui-monospace, Menlo, monospace">SAME CLAIM HASH</text>
+  <text x="480" y="200" text-anchor="middle" fill="#8C8473" font-size="11.5" letter-spacing="1.5" font-family="ui-monospace, Menlo, monospace">SAME CLAIM HASH</text>
   <text x="480" y="230" text-anchor="middle" fill="#E8EDEA" font-size="14" font-family="ui-monospace, Menlo, monospace">blake2b(debtor + no.)</text>
   <text x="480" y="256" text-anchor="middle" fill="#D9B36b" font-size="13.5" font-family="ui-monospace, Menlo, monospace">d9ccc11b...e050fc</text>
 
   <!-- invoices -> hash -->
-  <path d="M250 112 H300 V216 H354" fill="none" stroke="#8B948F" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#dp-muted)"/>
-  <path d="M250 342 H300 V236 H354" fill="none" stroke="#8B948F" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#dp-muted)"/>
+  <path d="M250 112 H300 V216 H354" fill="none" stroke="#8C8473" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#dp-muted)"/>
+  <path d="M250 342 H300 V236 H354" fill="none" stroke="#8C8473" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#dp-muted)"/>
 
   <!-- hash -> pool -->
-  <line x1="600" y1="226" x2="694" y2="226" stroke="#8B948F" stroke-width="1.8" marker-end="url(#dp-muted)"/>
+  <line x1="600" y1="226" x2="694" y2="226" stroke="#8C8473" stroke-width="1.8" marker-end="url(#dp-muted)"/>
 
   <!-- invoicepool detects -->
-  <rect x="700" y="184" width="200" height="84" rx="7" fill="#10211A" stroke="#35C281" stroke-width="1.5"/>
+  <rect x="700" y="184" width="200" height="84" rx="7" fill="#1C1913" stroke="#B7791F" stroke-width="1.5"/>
   <text x="800" y="216" text-anchor="middle" fill="#E8EDEA" font-size="15" font-weight="600">InvoicePool</text>
   <text x="800" y="240" text-anchor="middle" fill="#9FB7AC" font-size="12.5" font-family="ui-monospace, Menlo, monospace">collision proven</text>
 
   <!-- pool -> slash -->
-  <line x1="900" y1="226" x2="980" y2="226" stroke="#E5484D" stroke-width="2" marker-end="url(#dp-red)"/>
+  <line x1="900" y1="226" x2="980" y2="226" stroke="#E0231C" stroke-width="2" marker-end="url(#dp-red)"/>
 
   <!-- slash -->
-  <rect x="986" y="184" width="110" height="84" rx="7" fill="#231112" stroke="#E5484D" stroke-width="1.6"/>
+  <rect x="986" y="184" width="110" height="84" rx="7" fill="#231112" stroke="#E0231C" stroke-width="1.6"/>
   <text x="1041" y="222" text-anchor="middle" fill="#E8EDEA" font-size="16" font-weight="600">Slash</text>
   <text x="1041" y="244" text-anchor="middle" fill="#E1A0A2" font-size="12" font-family="ui-monospace, Menlo, monospace">automatic</text>
 
-  <text x="560" y="436" text-anchor="middle" fill="#6E7D77" font-size="13" font-family="ui-monospace, Menlo, monospace">No human decides the slash. The contract checks the claim against what it already paid and acts on the proof.</text>
+  <text x="560" y="436" text-anchor="middle" fill="#8C8473" font-size="13" font-family="ui-monospace, Menlo, monospace">No human decides the slash. The contract checks the claim against what it already paid and acts on the proof.</text>
 </svg>

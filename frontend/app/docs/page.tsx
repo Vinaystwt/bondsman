@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/Primitives';
 export const metadata: Metadata = {
   title: 'Documentation',
   description:
-    'How Bondsman works. Verify the proof, design a policy, integrate the paid HTTP surface, use MCP and A2A, read the Casper impact and the ninety day launch plan.',
+    'How Bondsman works. Verify the proof, create a bonded action, integrate the paid HTTP surface, use MCP and A2A, read the Casper impact and the ninety day launch plan.',
 };
 
 export const revalidate = 60;
@@ -32,13 +32,13 @@ export default async function DocsPage() {
 
       <DocSection id="understand" title="Understand Bondsman">
         <p>
-          Bondsman is a bonded execution assurance gateway for autonomous finance. It requires economic collateral before an autonomous financial action, then settles objective failure on Casper. The rule is simple: no bond, no action.
+          Bondsman is a bonded execution gateway for autonomous finance. It requires economic collateral before an autonomous financial action, then settles objective failure on Casper. The rule is simple: no bond, no action.
         </p>
         <p>
           x402 pays for the action. Bondsman makes the acting agent economically accountable for it. The AI interprets the risk. The deterministic policy prices the minimum bond. The autonomous watchdog challenges objective faults. The Casper contracts hold the collateral and settle the outcome. A signed portable receipt closes every action.
         </p>
         <p>
-          Invoices are the first working adapter. Delivery contradiction is the flagship delayed evidence fault class. Duplicate invoice is an advanced deterministic test vector. Everything else in scope is either an executable adapter or a labelled integration blueprint.
+          Delivery contradiction is the flagship delayed evidence fault class. Duplicate invoice is an advanced deterministic test vector. Treasury, DEX and paid service delivery are adapter blueprints, not deployed customer flows.
         </p>
       </DocSection>
 
@@ -62,15 +62,15 @@ export default async function DocsPage() {
         </ol>
       </DocSection>
 
-      <DocSection id="design" title="Design a policy">
+      <DocSection id="create" title="Create a bonded action">
         <p>
-          Open the <Link href="/assurance">Assurance Studio</Link>. Choose one of the five templates. Describe your action. Receive an assurance policy manifest.
+          Open <Link href="/app/new">Create bonded action</Link>. Choose a policy template. Describe your action. Review the deterministic bond and connect Casper Wallet only when you execute.
         </p>
         <p>
-          The analysis returns four layers: the live AI interpretation, the deterministic policy that prices the minimum bond, the deployed verifier and evidence rules (or the proposed values for a blueprint), and a signed integration manifest with scenario, model and policy hashes.
+          The analysis returns four layers: the live AI interpretation, the deterministic policy that prices the minimum bond, the verifier and evidence rules, and a signed integration manifest with scenario, model and policy hashes.
         </p>
         <p>
-          The manifest is portable. Copy it or download it. Executable templates also carry an exact quote request shape you can paste into an HTTP client.
+          The browser flow can test payment terms without a wallet. Wallet connection begins only when you request live settlement and submit a real action.
         </p>
       </DocSection>
 
@@ -79,8 +79,8 @@ export default async function DocsPage() {
           The full integration story lives on the <Link href="/build">Build</Link> page. In summary:
         </p>
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Read <code>/api/assurance/templates</code> to pick a fault class.</li>
-          <li>POST <code>/api/assurance/analyze</code> for the manifest.</li>
+          <li>Read <code>/api/assurance/templates</code> to pick a policy template.</li>
+          <li>POST <code>/api/assurance/analyze</code> for the policy manifest.</li>
           <li>POST <code>/v1/actions/quote</code> unpaid to receive an x402 v2 payment requirement.</li>
           <li>Settle the WCSPR payment through the CSPR.cloud facilitator.</li>
           <li>Retry with the <code>PAYMENT-SIGNATURE</code> header and receive the paid quote hash.</li>
@@ -107,7 +107,7 @@ BONDSMAN_API_BASE=https://bondsman-backend-production.up.railway.app \\
   npx @vinaystwt/bondsman-mcp`}
         />
         <p>
-          Read only tools cover actions, verifiers, deployments, capabilities, canonical replay and single use quote check. Design only tools cover the assurance policy analysis. Verification covers portable receipt verification. Paid HTTP tools carry quote and submit; they need a real funded WCSPR payer.
+          Read only tools cover actions, verifiers, deployments, capabilities, canonical replay and single use quote check. Design only tools cover policy analysis. Verification covers portable receipt verification. Paid HTTP tools carry quote and submit; they need a real funded WCSPR payer.
         </p>
       </DocSection>
 
@@ -126,8 +126,8 @@ BONDSMAN_API_BASE=https://bondsman-backend-production.up.railway.app \\
           <li>Real x402 settlement on casper:casper-test drives WCSPR transaction volume.</li>
           <li>The paid HTTP surface produces agent originated Casper transactions.</li>
           <li>The MCP package and A2A agent card make Bondsman discoverable by other Casper agents.</li>
-          <li>The verifier registry and assurance manifest are reusable by any team that wants to bond a Casper action.</li>
-          <li>RWA adapter is executable today. Treasury, DEX and paid service delivery are labelled blueprints ready for a design partner.</li>
+          <li>The verifier registry and policy manifest are reusable by any team that wants to bond a Casper action.</li>
+          <li>Delivery adapters are supported by the current proof path. Treasury, DEX and paid service delivery are labelled adapter blueprints.</li>
         </ul>
       </DocSection>
 

@@ -54,7 +54,7 @@ export function CopyHash({ value, href, label, className }: CopyHashProps) {
       >
         {copied ? (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" stroke="#35C281" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M20 6 9 17l-5-5" stroke="#B7791F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         ) : (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">

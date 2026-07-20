@@ -8,7 +8,7 @@ export interface DocSection {
 export const DOCS_SECTIONS: DocSection[] = [
   { id: 'understand', title: 'Understand Bondsman', keywords: 'overview thesis problem accountability bond' },
   { id: 'verify', title: 'Verify the proof', keywords: 'proof console casper testnet action 27 x402' },
-  { id: 'design', title: 'Design a policy', keywords: 'assurance studio template scenario manifest' },
+  { id: 'create', title: 'Create action', keywords: 'bonded action template policy scenario manifest wallet' },
   { id: 'integrate', title: 'Integrate the API', keywords: 'x402 quote submit payer authorization http' },
   { id: 'mcp', title: 'Use MCP', keywords: 'mcp model context protocol tools bondsman package' },
   { id: 'a2a', title: 'Use A2A', keywords: 'a2a agent card discovery well known skills' },

@@ -7,11 +7,11 @@ import Footer from '@/components/Footer';
 export const metadata: Metadata = {
   metadataBase: new URL('https://bondsman.vercel.app'),
   title: {
-    default: 'Bondsman · Bonded execution assurance for autonomous finance',
+    default: 'Bondsman · Bonded execution on Casper',
     template: '%s · Bondsman',
   },
   description:
-    'Bondsman requires economic collateral before an autonomous financial action, then settles objective failure on Casper. Live x402 settlement, deterministic policy and portable signed receipts.',
+    'Before an agent moves money, Bondsman prices the action, binds the paid quote to its payer and locks collateral on Casper.',
   applicationName: 'Bondsman',
   manifest: '/manifest.webmanifest',
   icons: {
@@ -27,22 +27,22 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'Bondsman',
-    title: 'Bondsman · Bonded execution assurance',
+    title: 'Bondsman · Bonded execution on Casper',
     description:
-      'Make the agent answerable before it acts. Live x402 settlement, deterministic bond policy, Casper testnet contracts and portable signed receipts.',
+      'Before an agent moves money, make it post the bond. Create bonded actions and replay a real slash.',
     url: 'https://bondsman.vercel.app',
     images: [
       {
         url: '/brand/og.png',
         width: 1200,
         height: 630,
-        alt: 'Bondsman · Bonded execution assurance',
+        alt: 'Bondsman · Bonded execution on Casper',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Bondsman · Bonded execution assurance',
+    title: 'Bondsman · Bonded execution on Casper',
     description:
       'Post the bond before the action. Prove the outcome after it. Autonomous finance under economic accountability.',
     images: ['/brand/twitter.png'],
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0B0F0D',
+  themeColor: '#0E0D0B',
   colorScheme: 'dark',
 };
 

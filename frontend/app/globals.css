@@ -4,16 +4,16 @@
 
 @layer base {
   :root {
-    --ink: #0b0f0d;
-    --surface: #121815;
-    --surface-2: #18211d;
-    --bone: #e8edea;
-    --muted: #828d88;
-    --accent: #35c281;
-    --accent-strong: #46d08e;
-    --accent-deep: #1c7a52;
-    --slash: #e5484d;
-    --rule: #232a27;
+    --ink: #0e0d0b;
+    --surface: #16140f;
+    --surface-2: #1c1913;
+    --bone: #ece6d8;
+    --muted: #8c8473;
+    --accent: #b7791f;
+    --accent-strong: #d0922a;
+    --accent-deep: #6e4814;
+    --slash: #e0231c;
+    --rule: #2a2620;
   }
 
   html {
@@ -62,7 +62,7 @@
 
 /* Documentation and long-form prose. Left aligned, calm, readable. */
 .prose-docs {
-  color: #c4ccc7;
+  color: #c9c0ad;
   line-height: 1.7;
   font-size: 0.975rem;
   text-align: left;
@@ -114,7 +114,7 @@
   font-family: var(--font-mono), monospace;
   font-size: 0.85em;
   color: var(--accent);
-  background: rgba(53, 194, 129, 0.1);
+  background: rgba(183, 121, 31, 0.1);
   padding: 0.1em 0.35em;
   border-radius: 3px;
 }

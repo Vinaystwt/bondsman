@@ -16,7 +16,7 @@ import { contractExplorer, truncateHash } from '@/lib/format';
 export const metadata: Metadata = {
   title: 'Build',
   description:
-    'Adopt bonded accountability from any autonomous agent. Assurance manifest, x402 paid quote, payer signed submit, canonical proof and portable receipt on Casper.',
+    'Adopt bonded execution from any autonomous agent with policy design, x402 paid quote, payer signed submit, canonical proof and portable receipt on Casper.',
 };
 
 export const revalidate = 60;
@@ -32,14 +32,14 @@ interface FlowStep {
 const FLOW: FlowStep[] = [
   {
     step: 1,
-    label: 'Choose an assurance template',
-    body: 'Read the templates once. Invoice or procurement delivery and duplicate invoice are executable today. Treasury, DEX and paid service delivery are integration blueprints.',
+    label: 'Choose a policy template',
+    body: 'Read the templates once. Delivery contradiction and duplicate invoice are supported paths. Treasury, DEX and paid service delivery are adapter blueprints, not deployed customer flows.',
     endpoint: 'GET /api/assurance/templates',
     tone: 'read',
   },
   {
     step: 2,
-    label: 'Design an assurance policy',
+    label: 'Analyze the action policy',
     body: 'Send a scenario. Bondsman returns the AI interpretation, deterministic bond policy and a signed integration manifest. No transaction is created.',
     endpoint: 'POST /api/assurance/analyze',
     tone: 'design',
@@ -163,8 +163,8 @@ const MCP_TOOLS: McpTool[] = [
   { name: 'replay_canonical_proof', body: 'Read the canonical Action 27 replay with every hash and evidence label.', tone: 'READ ONLY' },
   { name: 'check_canonical_quote', body: 'Read only quote consumption check for canonical single use protection.', tone: 'READ ONLY' },
   { name: 'public_capabilities', body: 'Read the current public capability roster and mode flags.', tone: 'READ ONLY' },
-  { name: 'get_assurance_templates', body: 'Read every assurance template with executable and blueprint status.', tone: 'READ ONLY' },
-  { name: 'design_assurance_policy', body: 'Send a scenario and receive an assurance policy manifest. No transaction created.', tone: 'DESIGN ONLY' },
+  { name: 'get_assurance_templates', body: 'Read every policy template with supported and blueprint status.', tone: 'READ ONLY' },
+  { name: 'design_assurance_policy', body: 'Send a scenario and receive a policy manifest. No transaction created.', tone: 'DESIGN ONLY' },
   { name: 'verify_receipt', body: 'Reverify a Bondsman portable receipt against the public verifier.', tone: 'VERIFICATION' },
   { name: 'quote_bonded_action', body: 'Ask for a paid quote. Real x402 settlement is required through an HTTP client with a funded WCSPR payer.', tone: 'PAID HTTP' },
   { name: 'submit_bonded_action', body: 'Submit a bonded action with a settled paid quote and a Casper submit authorization. Requires a funded payer.', tone: 'PAID HTTP' },
@@ -181,10 +181,27 @@ export default async function BuildPage() {
       <SectionHeader
         eyebrow="Build"
         title="Adopt bonded accountability from any autonomous agent"
-        lede="Bondsman ships as an assurance surface, an x402 paid HTTP endpoint, an A2A agent card and an MCP server. Design first, pay for a quote, submit under payer authorization, then verify the portable receipt."
+        lede="Bondsman ships as a browser test surface, an x402 paid HTTP endpoint, an A2A agent card and an MCP server. Test the payment requirement first, then integrate an agent through quote, submit and receipt verification."
       />
 
-      <section aria-label="Test the payment requirement" className="space-y-4">
+      <PanelGrid cols={2} gap="lg">
+        <ModeCard
+          label="Mode 1"
+          title="Test in browser"
+          body="Send an unpaid quote request from this page. A healthy backend returns the real HTTP 402 payment requirement without creating a payment, quote or action."
+          href="#test-in-browser"
+          cta="Open browser test"
+        />
+        <ModeCard
+          label="Mode 2"
+          title="Integrate an agent"
+          body="Use the API, A2A card or MCP tools to design a policy, settle x402, submit with payer authorization and verify the receipt."
+          href="#integrate-agent"
+          cta="Read integration flow"
+        />
+      </PanelGrid>
+
+      <section id="test-in-browser" aria-label="Test the payment requirement" className="space-y-4 scroll-mt-24">
         <Label>Test in browser</Label>
         <h2 className="text-2xl font-semibold text-bone">
           Test the payment requirement
@@ -195,8 +212,8 @@ export default async function BuildPage() {
         <LiveQuoteProbe />
       </section>
 
-      <section aria-label="End to end integration flow">
-        <Label>End to end integration</Label>
+      <section id="integrate-agent" aria-label="Integrate an agent" className="scroll-mt-24">
+        <Label>Integrate an agent</Label>
         <h2 className="mt-2 text-2xl font-semibold text-bone">
           Eight steps from a scenario to a signed portable receipt
         </h2>
@@ -265,7 +282,7 @@ export default async function BuildPage() {
         <p className="max-w-prose text-sm leading-relaxed text-muted">
           The published package{' '}
           <code className="rounded bg-surface px-1 py-0.5 text-bone">@vinaystwt/bondsman-mcp@0.3.0</code>{' '}
-          exposes read, design, verification and paid HTTP tools. The paid HTTP tools require a real funded WCSPR payer; they do not silently sponsor quote settlement.
+          exposes read, policy design, verification and paid HTTP tools. The paid HTTP tools require a real funded WCSPR payer; they do not silently sponsor quote settlement.
         </p>
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {MCP_TOOLS.map((t) => (
@@ -346,10 +363,10 @@ BONDSMAN_API_BASE=https://bondsman-backend-production.up.railway.app \\
             Read the canonical proof
           </Link>
           <Link
-            href="/assurance"
+            href="/app/new"
             className="text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
           >
-            Design an assurance policy
+            Create bonded action
           </Link>
           <Link
             href="/docs"
@@ -360,6 +377,32 @@ BONDSMAN_API_BASE=https://bondsman-backend-production.up.railway.app \\
         </div>
       </section>
     </Container>
+  );
+}
+
+function ModeCard({
+  label,
+  title,
+  body,
+  href,
+  cta,
+}: {
+  label: string;
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex h-full flex-col rounded-md border border-rule bg-surface p-6 transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+    >
+      <Label>{label}</Label>
+      <h2 className="mt-3 text-2xl font-semibold text-bone">{title}</h2>
+      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted">{body}</p>
+      <span className="mt-6 text-sm font-medium text-accent">{cta}</span>
+    </Link>
   );
 }
 

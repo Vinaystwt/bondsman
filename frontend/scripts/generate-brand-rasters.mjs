@@ -12,28 +12,20 @@ import { Resvg } from '@resvg/resvg-js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'public', 'brand');
+const MARK_PATH =
+  'M400 195H492V300H430L359 364V677H263V317L400 195ZM532 195H623L760 317V677H665V364L592 300H532V195ZM425 468H599V677H425V468ZM263 710H484V737L437 828H263V710ZM539 710H760V828H586L539 737V710Z';
 
 function markSvg({ padded = false }) {
   // Chip variant: dark rounded background used for touch icon, manifest and
   // any raster context that lacks a container.
   if (padded) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#0B0F0D" rx="12" />
-  <g stroke="#35C281" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14" stroke-width="3.6" />
-    <path d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50" stroke-width="3.6" />
-    <path d="M8 32 H56" stroke-width="4.6" />
-  </g>
-  <circle cx="32" cy="32" r="4.2" fill="#35C281" />
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#0E0D0B" rx="160" />
+  <path fill="#ECE6D8" fill-rule="evenodd" d="${MARK_PATH}" />
 </svg>`;
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <g stroke="#35C281" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14" stroke-width="3.6" />
-    <path d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50" stroke-width="3.6" />
-    <path d="M8 32 H56" stroke-width="4.6" />
-  </g>
-  <circle cx="32" cy="32" r="4.2" fill="#35C281" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <path fill="#0E0D0B" fill-rule="evenodd" d="${MARK_PATH}" />
 </svg>`;
 }
 
@@ -63,7 +55,7 @@ function renderPng({ svg, width, height, out, background }) {
     width: size,
     height: size,
     out: join(OUT, name),
-    background: '#0B0F0D',
+    background: '#0E0D0B',
   });
 });
 
@@ -74,12 +66,12 @@ renderPng({
   width: 1200,
   height: 630,
   out: join(OUT, 'og.png'),
-  background: '#0B0F0D',
+  background: '#0E0D0B',
 });
 renderPng({
   svg: ogSvg,
   width: 1200,
   height: 630,
   out: join(OUT, 'twitter.png'),
-  background: '#0B0F0D',
+  background: '#0E0D0B',
 });

@@ -9,17 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Green is the brand and the healthy state. Red only on a slash.
-        ink: '#0B0F0D',
-        surface: '#121815',
-        raised: '#18211D',
-        bone: '#E8EDEA',
-        muted: '#828D88',
-        accent: '#35C281',
-        'accent-strong': '#46D08E',
-        'accent-deep': '#1C7A52',
-        slash: '#E5484D',
-        rule: '#232A27',
+        // Copper is the bonded state. Red appears only on a slash.
+        ink: '#0E0D0B',
+        surface: '#16140F',
+        raised: '#1C1913',
+        bone: '#ECE6D8',
+        muted: '#8C8473',
+        accent: '#B7791F',
+        'accent-strong': '#D0922A',
+        'accent-deep': '#6E4814',
+        slash: '#E0231C',
+        rule: '#2A2620',
       },
       fontFamily: {
         display: ['var(--font-sans)', 'system-ui', 'sans-serif'],

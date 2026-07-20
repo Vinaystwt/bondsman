@@ -13,7 +13,7 @@ export default function Footer() {
             </span>
           </div>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
-            Bonded execution assurance for autonomous finance. Post collateral before an action, prove the outcome after it.
+            Bonded execution on Casper for autonomous finance. Price the action, lock the bond and prove the outcome after it.
           </p>
         </div>
 

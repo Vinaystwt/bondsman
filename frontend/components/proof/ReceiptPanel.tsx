@@ -70,10 +70,10 @@ export default function ReceiptPanel({ receipt, verification, actionId }: Props)
               viewport={{ once: true, amount: 0.6 }}
               transition={{ type: 'spring', stiffness: 200, damping: 22 }}
             >
-              <circle cx="12" cy="12" r="10" fill="#35C281" />
+              <circle cx="12" cy="12" r="10" fill="#B7791F" />
               <motion.path
                 d="M8 12 L11 15 L16 9"
-                stroke="#0B0F0D"
+                stroke="#0E0D0B"
                 strokeWidth="2.4"
                 strokeLinecap="round"
                 strokeLinejoin="round"

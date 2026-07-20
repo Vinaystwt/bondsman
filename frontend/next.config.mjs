@@ -34,9 +34,9 @@ const nextConfig = {
         permanent: true,
       },
       { source: '/assurance', destination: '/app/new', permanent: true },
-      { source: '/how-it-works', destination: '/#how-it-works', permanent: true },
+      { source: '/how-it-works', destination: '/#product-loop', permanent: true },
       { source: '/roadmap', destination: '/docs#launch', permanent: true },
-      { source: '/two-agents', destination: '/#how-it-works', permanent: true },
+      { source: '/two-agents', destination: '/#developer-integration', permanent: true },
       { source: '/leaderboard', destination: '/proof', permanent: true },
       { source: '/demo', destination: '/proof/27', permanent: true },
     ];
