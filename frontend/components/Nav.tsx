@@ -7,18 +7,9 @@ import BondsmanLogo from './brand/BondsmanLogo';
 
 const PRIMARY = [
   { href: '/', label: 'Product' },
-  { href: '/proof', label: 'Verify' },
-  { href: '/assurance', label: 'Design' },
+  { href: '/app', label: 'App' },
+  { href: '/proof', label: 'Proof' },
   { href: '/build', label: 'Build' },
-];
-
-const BUILD_LINKS = [
-  { href: '/build', label: 'Integration guide' },
-  { href: '/docs', label: 'Documentation' },
-  { href: '/docs#mcp', label: 'MCP tools' },
-  { href: '/docs#a2a', label: 'A2A agent card' },
-  { href: '/docs#casper', label: 'Casper impact' },
-  { href: '/docs#security', label: 'Security' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -29,11 +20,9 @@ function isActive(pathname: string, href: string): boolean {
 export default function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [buildOpen, setBuildOpen] = useState(false);
 
   useEffect(() => {
     setOpen(false);
-    setBuildOpen(false);
   }, [pathname]);
 
   return (
@@ -51,72 +40,28 @@ export default function Nav() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
-          {PRIMARY.map((link) => {
-            if (link.label === 'Build') {
-              return (
-                <div
-                  key={link.href}
-                  className="relative"
-                  onMouseEnter={() => setBuildOpen(true)}
-                  onMouseLeave={() => setBuildOpen(false)}
-                >
-                  <Link
-                    href={link.href}
-                    aria-current={isActive(pathname, link.href) ? 'page' : undefined}
-                    aria-haspopup="true"
-                    aria-expanded={buildOpen}
-                    className={`rounded px-3 py-2 text-sm transition-colors ${
-                      isActive(pathname, link.href)
-                        ? 'text-accent'
-                        : 'text-muted hover:text-bone'
-                    }`}
-                    onFocus={() => setBuildOpen(true)}
-                  >
-                    {link.label}
-                  </Link>
-                  {buildOpen && (
-                    <div
-                      role="menu"
-                      className="absolute left-0 top-full min-w-[220px] rounded-md border border-rule bg-surface p-2 shadow-xl"
-                    >
-                      {BUILD_LINKS.map((sub) => (
-                        <Link
-                          key={sub.href}
-                          href={sub.href}
-                          role="menuitem"
-                          className="block rounded px-3 py-2 text-sm text-bone/85 hover:bg-ink hover:text-accent"
-                        >
-                          {sub.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={isActive(pathname, link.href) ? 'page' : undefined}
-                className={`rounded px-3 py-2 text-sm transition-colors ${
-                  isActive(pathname, link.href)
-                    ? 'text-accent'
-                    : 'text-muted hover:text-bone'
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+          {PRIMARY.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={isActive(pathname, link.href) ? 'page' : undefined}
+              className={`rounded px-3 py-2 text-sm transition-colors ${
+                isActive(pathname, link.href)
+                  ? 'text-accent'
+                  : 'text-muted hover:text-bone'
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="flex items-center gap-2">
           <Link
-            href="/proof"
+            href="/app/new"
             className="hidden rounded-md border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
           >
-            Open Proof Console
+            Create bonded action
           </Link>
           <button
             type="button"
@@ -159,25 +104,12 @@ export default function Nav() {
               </Link>
             ))}
             <Link
-              href="/proof"
+              href="/app/new"
               onClick={() => setOpen(false)}
               className="mt-2 rounded-md border border-accent/50 bg-accent/10 px-3 py-2.5 text-sm font-medium text-accent"
             >
-              Open Proof Console
+              Create bonded action
             </Link>
-            <div className="mt-3 border-t border-rule pt-3">
-              <p className="px-3 pb-2 serial text-[0.62rem] text-muted">Documentation</p>
-              {BUILD_LINKS.map((sub) => (
-                <Link
-                  key={sub.href}
-                  href={sub.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded px-3 py-2 text-sm text-bone/80 hover:text-accent"
-                >
-                  {sub.label}
-                </Link>
-              ))}
-            </div>
           </div>
         </nav>
       )}

@@ -24,23 +24,21 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      { source: '/app', destination: '/proof', permanent: true },
-      { source: '/app/arena', destination: '/proof', permanent: true },
-      { source: '/app/ledger', destination: '/proof', permanent: true },
+      { source: '/app/arena', destination: '/proof/27', permanent: true },
+      { source: '/app/ledger', destination: '/app', permanent: true },
       { source: '/app/leaderboard', destination: '/proof', permanent: true },
-      { source: '/app/actions', destination: '/proof', permanent: true },
-      { source: '/app/agents', destination: '/proof', permanent: true },
-      { source: '/app/:path*', destination: '/proof', permanent: true },
+      { source: '/app/agents', destination: '/app', permanent: true },
       {
         source: '/rwa',
-        destination: '/assurance?template=invoice_delivery',
+        destination: '/app/new?template=invoice_delivery',
         permanent: true,
       },
+      { source: '/assurance', destination: '/app/new', permanent: true },
       { source: '/how-it-works', destination: '/#how-it-works', permanent: true },
       { source: '/roadmap', destination: '/docs#launch', permanent: true },
       { source: '/two-agents', destination: '/#how-it-works', permanent: true },
       { source: '/leaderboard', destination: '/proof', permanent: true },
-      { source: '/demo', destination: '/proof', permanent: true },
+      { source: '/demo', destination: '/proof/27', permanent: true },
     ];
   },
 };

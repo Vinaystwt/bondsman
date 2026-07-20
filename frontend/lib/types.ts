@@ -25,6 +25,54 @@ export interface Deployment {
   >;
 }
 
+export interface ActionPayment {
+  quoteHash: string;
+  payer: string | null;
+  settlementTransaction: string;
+  settlementExplorerUrl: string;
+  paymentAmount: string;
+  asset: 'WCSPR' | string;
+  status: 'settled' | 'paid' | 'consuming' | 'consumed' | 'failed' | string;
+}
+
+export interface ActionEvent {
+  contract: string;
+  eventIndex: number;
+  eventType: string;
+  actionId: number | null;
+  data: string;
+  transactionHash: string | null;
+  explorerLink: string | null;
+}
+
+export interface ActionDetail {
+  actionId: number;
+  invoiceId: number;
+  agent: string;
+  amount: string;
+  claimHash: string;
+  reasoning: string;
+  reasoningHash: string;
+  bondRequired: string;
+  bondPosted: string;
+  windowEnd: number;
+  status: string;
+  challenger: string | null;
+  challengerType: 'watchdog' | 'manual' | 'external-wallet' | null;
+  challengeSigning?: 'backend-key' | 'watchdog-key' | 'external-wallet' | null;
+  controllerHash?: string;
+  duplicateProven?: boolean;
+  faultClass?: 'duplicate_claim' | 'delivery_contradiction';
+  evidenceRoot?: string | null;
+  reservedForManual: boolean;
+  transactions: Record<string, string>;
+  payment: ActionPayment | null;
+  proof: { available: boolean; message?: string };
+  receiptUrl: string | null;
+  events: ActionEvent[];
+  explorerLinks: Record<string, string>;
+}
+
 export type CanonicalOutcome = 'SLASHED' | 'REFUNDED';
 
 export interface CanonicalTimelineStage {

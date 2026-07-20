@@ -7,6 +7,7 @@ import type {
   CanonicalReplay,
   Deployment,
   Health,
+  ActionDetail,
   PortableReceipt,
   PublicCapabilities,
   QuoteCheckResponse,
@@ -119,6 +120,8 @@ export const api = {
     serverGet<PortableReceipt>(`/api/receipt/${id}`),
   receiptVerify: (id: number | string) =>
     serverGet<ReceiptVerification>(`/api/receipt/${id}/verify`),
+  actions: () => serverGet<ActionDetail[]>('/api/actions'),
+  action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
   agentCard: () => serverGet<AgentCard>('/.well-known/agent.json'),
   assuranceTemplates: () =>
     serverGet<AssuranceTemplatesResponse>('/api/assurance/templates'),
@@ -191,6 +194,8 @@ export const clientApi = {
     clientGet<PortableReceipt>(`/receipt/${id}`),
   receiptVerify: (id: number | string) =>
     clientGet<ReceiptVerification>(`/receipt/${id}/verify`),
+  action: (id: number | string) =>
+    clientGet<ActionDetail>(`/actions/${id}`),
   assuranceTemplates: () =>
     clientGet<AssuranceTemplatesResponse>('/assurance/templates'),
   assuranceAnalyze: (body: AssuranceAnalyzeRequest) =>

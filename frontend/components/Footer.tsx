@@ -21,8 +21,9 @@ export default function Footer() {
           title="Product"
           links={[
             { href: '/', label: 'Overview' },
-            { href: '/proof', label: 'Proof Console' },
-            { href: '/assurance', label: 'Assurance Studio' },
+            { href: '/app', label: 'App' },
+            { href: '/app/new', label: 'Create bonded action' },
+            { href: '/proof', label: 'Proof' },
           ]}
         />
         <FooterCol
@@ -37,6 +38,7 @@ export default function Footer() {
         <FooterCol
           title="Casper"
           links={[
+            { href: '/verify', label: 'Receipt verifier' },
             {
               href: 'https://testnet.cspr.live',
               label: 'Casper testnet explorer',
