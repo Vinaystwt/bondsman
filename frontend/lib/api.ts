@@ -8,6 +8,7 @@ import type {
   Deployment,
   Health,
   ActionDetail,
+  PaidQuoteResponse,
   PortableReceipt,
   PublicCapabilities,
   QuoteCheckResponse,
@@ -182,8 +183,8 @@ async function clientPost<T>(
  * PAID HTTP probe: liveQuoteProbe (unpaid probe returning HTTP 402).
  * READ ONLY replay helper: quoteConsumptionCheck.
  *
- * No public mutation is exposed. Every method here can be called safely
- * from any visitor.
+ * Paid HTTP methods require wallet authorization and real x402 settlement.
+ * No sponsored operator mutation is exposed from the public frontend.
  */
 export const clientApi = {
   health: () => clientGet<Health>('/health'),
@@ -235,5 +236,29 @@ export const clientApi = {
     } catch {
       return { status: 0, error: 'network' };
     }
+  },
+  async paidQuote(
+    body: { amount: string; faultClass: string },
+    paymentSignature: string,
+  ): Promise<PaidQuoteResponse> {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout('/v1/actions/quote', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'payment-signature': paymentSignature,
+        },
+        body: JSON.stringify(body),
+      }, 120_000);
+    } catch {
+      throw new BackendUnreachable();
+    }
+    if (!res.ok) {
+      const err = await parseErrorBody(res);
+      if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
+      throw new Error(`request failed: ${res.status}`);
+    }
+    return (await res.json()) as PaidQuoteResponse;
   },
 };

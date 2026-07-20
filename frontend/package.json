@@ -14,7 +14,9 @@
     "test:canonical": "node scripts/check-canonical.mjs"
   },
   "dependencies": {
+    "@casper-ecosystem/casper-eip-712": "^1.2.1",
     "@gsap/react": "^2.1.2",
+    "@make-software/casper-x402": "^1.0.0",
     "blakejs": "^1.2.1",
     "casper-js-sdk": "^5.0.12",
     "framer-motion": "^11.15.0",

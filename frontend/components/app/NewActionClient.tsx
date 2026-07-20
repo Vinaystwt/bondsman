@@ -9,14 +9,16 @@ import { Label, StatusPill } from '@/components/ui/Primitives';
 import { EmptyState } from '@/components/ui/States';
 import { clientApi } from '@/lib/api';
 import { formatIsoUtc, formatWcspr, truncateHash } from '@/lib/format';
+import type { CasperWalletState } from '@/lib/casper-wallet';
 import type {
   AssuranceAnalysis,
   AssuranceAnalyzeRequest,
   AssuranceTemplate,
+  PaidQuoteResponse,
   X402PaymentResponse,
 } from '@/lib/types';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 type ProbeState =
   | { kind: 'idle' }
@@ -29,6 +31,13 @@ type ProbeState =
       other?: unknown;
       error?: string;
     };
+
+type PaymentState =
+  | { kind: 'idle' }
+  | { kind: 'awaiting_wallet' }
+  | { kind: 'settlement_pending'; authorization: { validBefore: string } }
+  | { kind: 'settled'; quote: PaidQuoteResponse }
+  | { kind: 'failed'; message: string };
 
 interface Props {
   templates: AssuranceTemplate[];
@@ -43,7 +52,18 @@ const STEP_LABELS: { step: Step; label: string }[] = [
   { step: 4, label: 'Review parties' },
   { step: 5, label: 'Connect payer' },
   { step: 6, label: 'Payment terms' },
+  { step: 7, label: 'Paid quote' },
 ];
+
+const EMPTY_WALLET: CasperWalletState = {
+  available: false,
+  connected: false,
+  locked: false,
+  publicKey: null,
+  payerAccountAddress: null,
+  supports: [],
+  version: null,
+};
 
 export default function NewActionClient({
   templates,
@@ -64,6 +84,10 @@ export default function NewActionClient({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeState>({ kind: 'idle' });
+  const [wallet, setWallet] = useState<CasperWalletState>(EMPTY_WALLET);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [payment, setPayment] = useState<PaymentState>({ kind: 'idle' });
   const stepRefs = useRef<Record<number, HTMLElement | null>>({});
 
   const executable = useMemo(
@@ -75,15 +99,28 @@ export default function NewActionClient({
   const selected = templates.find((template) => template.id === selectedId) ?? null;
   const quoteShape = analysis?.manifest.quoteRequestShape ?? null;
   const canProbe = Boolean(quoteShape && liveQuoteProbeAvailable);
+  const requirement = probe.kind === 'ready' ? probe.x402?.payment.accepts[0] ?? null : null;
+  const paidQuote = payment.kind === 'settled' ? payment.quote : null;
 
   useEffect(() => {
     stepRefs.current[step]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [step]);
 
+  useEffect(() => {
+    let cancelled = false;
+    import('@/lib/casper-wallet').then(({ readCasperWalletState }) => readCasperWalletState()).then((state) => {
+      if (!cancelled) setWallet(state);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function chooseTemplate(id: string) {
     setSelectedId(id);
     setAnalysis(null);
     setProbe({ kind: 'idle' });
+    setPayment({ kind: 'idle' });
     setError(null);
     setStep(2);
   }
@@ -92,6 +129,7 @@ export default function NewActionClient({
     setRunning(true);
     setError(null);
     setProbe({ kind: 'idle' });
+    setPayment({ kind: 'idle' });
     try {
       const result = await clientApi.assuranceAnalyze(body);
       setAnalysis(result);
@@ -115,9 +153,54 @@ export default function NewActionClient({
     setStep(6);
   }
 
+  async function connectWallet() {
+    setWalletBusy(true);
+    setWalletError(null);
+    try {
+      const { connectCasperWallet } = await import('@/lib/casper-wallet');
+      setWallet(await connectCasperWallet());
+    } catch (err) {
+      setWalletError(err instanceof Error ? err.message : 'Wallet connection failed.');
+    } finally {
+      setWalletBusy(false);
+    }
+  }
+
+  async function settlePaidQuote() {
+    if (!quoteShape || !requirement || !wallet.publicKey) return;
+    setPayment({ kind: 'awaiting_wallet' });
+    setWalletError(null);
+    try {
+      const { assertUsableWallet, createX402PaymentSignature } = await import('@/lib/casper-wallet');
+      assertUsableWallet(wallet);
+      const paymentSignature = await createX402PaymentSignature({
+        publicKey: wallet.publicKey,
+        requirement,
+        resourceUrl: new URL('/v1/actions/quote', window.location.origin).toString(),
+      });
+      setPayment({
+        kind: 'settlement_pending',
+        authorization: {
+          validBefore: paymentSignature.authorization.validBefore,
+        },
+      });
+      const quote = await clientApi.paidQuote(
+        { amount: quoteShape.amount, faultClass: quoteShape.faultClass },
+        paymentSignature.header,
+      );
+      setPayment({ kind: 'settled', quote });
+      setStep(7);
+    } catch (err) {
+      setPayment({
+        kind: 'failed',
+        message: err instanceof Error ? err.message : 'Payment settlement failed.',
+      });
+    }
+  }
+
   return (
     <div className="space-y-10">
-      <StepRail activeStep={step} maxStep={analysis ? 6 : selected ? 2 : 1} onGo={setStep} />
+      <StepRail activeStep={step} maxStep={paidQuote ? 7 : analysis ? 6 : selected ? 2 : 1} onGo={setStep} />
 
       {!liveModelAvailable && (
         <div className="rounded-md border border-yellow-400/30 bg-yellow-500/5 px-4 py-3 text-xs text-yellow-200">
@@ -215,37 +298,14 @@ export default function NewActionClient({
           step={5}
           label="LIVE PAYMENT REQUIREMENT"
           title="Continue to paid quote"
-          body="The next phase connects Casper Wallet, settles WCSPR through x402 and returns a payer bound quote."
+          body="Connect Casper Wallet only after the policy and responsible parties are clear."
         />
-        <div className="rounded-md border border-rule bg-surface p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <Label>Payment boundary</Label>
-              <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-                This control requests the live payment requirement only. It does not settle payment, issue a paid quote or create an action.
-              </p>
-            </div>
-            <StatusPill tone="info">No payment</StatusPill>
-          </div>
-          <button
-            type="button"
-            onClick={requestPaymentRequirement}
-            disabled={!canProbe || probe.kind === 'loading'}
-            className="mt-5 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
-          >
-            {probe.kind === 'loading' ? 'Requesting terms' : 'Request payment requirement'}
-          </button>
-          {!quoteShape && (
-            <p className="mt-3 text-xs text-muted">
-              Calculate an executable policy before requesting payment terms.
-            </p>
-          )}
-          {quoteShape && !liveQuoteProbeAvailable && (
-            <p className="mt-3 text-xs text-muted">
-              The backend reports that the live quote probe is unavailable.
-            </p>
-          )}
-        </div>
+        <WalletConnector
+          wallet={wallet}
+          busy={walletBusy}
+          error={walletError}
+          onConnect={connectWallet}
+        />
       </section>
 
       <section ref={(node) => { stepRefs.current[6] = node; }} aria-labelledby="new-action-payment">
@@ -253,9 +313,29 @@ export default function NewActionClient({
           step={6}
           label="LIVE PAYMENT REQUIREMENT"
           title="Review payment terms"
-          body="A 402 response is the expected unpaid result. A paid quote appears only after wallet settlement in the next phase."
+          body="A 402 response is the expected unpaid result. Settle only after reviewing the exact amount, asset, network and payer."
         />
-        <PaymentRequirement probe={probe} />
+        <PaymentRequirement
+          probe={probe}
+          canProbe={canProbe}
+          canSettle={Boolean(requirement && wallet.connected && wallet.publicKey && payment.kind !== 'awaiting_wallet' && payment.kind !== 'settlement_pending' && payment.kind !== 'settled')}
+          liveQuoteProbeAvailable={liveQuoteProbeAvailable}
+          quoteReady={Boolean(quoteShape)}
+          wallet={wallet}
+          payment={payment}
+          onRequest={requestPaymentRequirement}
+          onSettle={settlePaidQuote}
+        />
+      </section>
+
+      <section ref={(node) => { stepRefs.current[7] = node; }} aria-labelledby="new-action-paid-quote">
+        <StepHeading
+          step={7}
+          label="LIVE PAYER BOUND QUOTE"
+          title="Review paid quote"
+          body="The paid quote is bound to the payer and can be submitted once after authorization."
+        />
+        <PaidQuotePanel quote={paidQuote} />
       </section>
     </div>
   );
@@ -271,7 +351,7 @@ function StepRail({
   onGo: (step: Step) => void;
 }) {
   return (
-    <ol className="grid gap-2 rounded-md border border-rule bg-surface/70 p-2 md:grid-cols-6">
+    <ol className="grid gap-2 rounded-md border border-rule bg-surface/70 p-2 md:grid-cols-7">
       {STEP_LABELS.map((item) => {
         const enabled = item.step <= maxStep;
         const active = activeStep === item.step;
@@ -403,13 +483,126 @@ function Party({
   );
 }
 
-function PaymentRequirement({ probe }: { probe: ProbeState }) {
+function WalletConnector({
+  wallet,
+  busy,
+  error,
+  onConnect,
+}: {
+  wallet: CasperWalletState;
+  busy: boolean;
+  error: string | null;
+  onConnect: () => void;
+}) {
+  const payer = wallet.payerAccountAddress;
+  return (
+    <div className="rounded-md border border-rule bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Label>Payer wallet</Label>
+          <h3 className="mt-2 text-lg font-semibold text-bone">
+            {wallet.connected ? 'Casper Wallet connected' : 'Connect Casper Wallet'}
+          </h3>
+          <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
+            The wallet pays the x402 quote and later signs the submit authorization. It does not fund the bond in the current backend architecture.
+          </p>
+        </div>
+        <StatusPill tone={wallet.connected ? 'ok' : wallet.available ? 'info' : 'warn'}>
+          {wallet.connected ? 'Connected' : wallet.available ? 'Wallet detected' : 'Wallet absent'}
+        </StatusPill>
+      </div>
+      {wallet.publicKey && (
+        <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+          <MiniField label="Public key">
+            <CopyHash value={wallet.publicKey} label={truncateHash(wallet.publicKey)} />
+          </MiniField>
+          {payer && (
+            <MiniField label="Payer account">
+              <CopyHash value={payer} label={truncateHash(payer)} />
+            </MiniField>
+          )}
+          <MiniField label="Wallet version">{wallet.version ?? 'not reported'}</MiniField>
+          <MiniField label="Required features">
+            {wallet.supports.includes('sign-typed-data-eip712') && wallet.supports.includes('sign-message')
+              ? 'available'
+              : 'not available'}
+          </MiniField>
+        </dl>
+      )}
+      {wallet.locked && (
+        <p className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">
+          Unlock Casper Wallet and connect again.
+        </p>
+      )}
+      {error && (
+        <p className="mt-4 rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onConnect}
+        disabled={busy}
+        className="mt-5 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
+      >
+        {busy ? 'Connecting' : wallet.connected ? 'Reconnect wallet' : 'Connect payer'}
+      </button>
+    </div>
+  );
+}
+
+function PaymentRequirement({
+  probe,
+  canProbe,
+  canSettle,
+  liveQuoteProbeAvailable,
+  quoteReady,
+  wallet,
+  payment,
+  onRequest,
+  onSettle,
+}: {
+  probe: ProbeState;
+  canProbe: boolean;
+  canSettle: boolean;
+  liveQuoteProbeAvailable: boolean;
+  quoteReady: boolean;
+  wallet: CasperWalletState;
+  payment: PaymentState;
+  onRequest: () => void;
+  onSettle: () => void;
+}) {
   if (probe.kind === 'idle') {
     return (
-      <EmptyState
-        title="No payment requirement requested"
-        body="Request payment terms after policy calculation."
-      />
+      <div className="rounded-md border border-rule bg-surface p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <Label>Payment boundary</Label>
+            <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
+              Requesting terms is unpaid. Settlement starts only after wallet approval in this step.
+            </p>
+          </div>
+          <StatusPill tone="info">No payment yet</StatusPill>
+        </div>
+        <button
+          type="button"
+          onClick={onRequest}
+          disabled={!canProbe}
+          className="mt-5 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
+        >
+          Request payment requirement
+        </button>
+        {!quoteReady && (
+          <p className="mt-3 text-xs text-muted">
+            Calculate an executable policy before requesting payment terms.
+          </p>
+        )}
+        {quoteReady && !liveQuoteProbeAvailable && (
+          <p className="mt-3 text-xs text-muted">
+            The backend reports that live payment terms are unavailable.
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -449,25 +642,136 @@ function PaymentRequirement({ probe }: { probe: ProbeState }) {
       )}
 
       {req ? (
-        <dl className="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          <MiniField label="Amount">{formatWcspr(req.amount)}</MiniField>
-          <MiniField label="Asset">
-            {req.extra?.symbol ?? 'WCSPR'}
-          </MiniField>
-          <MiniField label="Network">{req.network}</MiniField>
-          <MiniField label="Pay to">
-            <CopyHash value={req.payTo} label={truncateHash(req.payTo)} />
-          </MiniField>
-          <MiniField label="Asset package">
-            <CopyHash value={req.asset} label={truncateHash(req.asset)} />
-          </MiniField>
-          <MiniField label="Timeout">{req.maxTimeoutSeconds}s</MiniField>
-        </dl>
+        <>
+          <dl className="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <MiniField label="Amount">{formatWcspr(req.amount)}</MiniField>
+            <MiniField label="Asset">
+              {req.extra?.symbol ?? 'WCSPR'}
+            </MiniField>
+            <MiniField label="Network">{req.network}</MiniField>
+            <MiniField label="Payer">
+              {wallet.payerAccountAddress ? (
+                <CopyHash
+                  value={wallet.payerAccountAddress}
+                  label={truncateHash(wallet.payerAccountAddress)}
+                />
+              ) : (
+                'not connected'
+              )}
+            </MiniField>
+            <MiniField label="Pay to">
+              <CopyHash value={req.payTo} label={truncateHash(req.payTo)} />
+            </MiniField>
+            <MiniField label="Asset package">
+              <CopyHash value={req.asset} label={truncateHash(req.asset)} />
+            </MiniField>
+            <MiniField label="Timeout">{req.maxTimeoutSeconds}s</MiniField>
+          </dl>
+          <div className="mt-5 border-t border-rule pt-5">
+            <PaymentStatus payment={payment} />
+            <button
+              type="button"
+              onClick={onSettle}
+              disabled={!canSettle}
+              className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
+            >
+              {payment.kind === 'awaiting_wallet'
+                ? 'Waiting for wallet'
+                : payment.kind === 'settlement_pending'
+                  ? 'Settlement pending'
+                  : payment.kind === 'settled'
+                    ? 'Payment settled'
+                    : 'Settle payment'}
+            </button>
+          </div>
+        </>
       ) : (
         <pre className="mt-4 max-h-56 overflow-auto rounded border border-rule bg-ink p-3 text-[11px] leading-relaxed text-bone">
           <code>{JSON.stringify(probe.other ?? probe.x402 ?? null, null, 2)}</code>
         </pre>
       )}
+    </div>
+  );
+}
+
+function PaymentStatus({ payment }: { payment: PaymentState }) {
+  if (payment.kind === 'idle') {
+    return (
+      <p className="text-sm text-muted">
+        Review the terms, then approve the x402 typed data signature in Casper Wallet.
+      </p>
+    );
+  }
+  if (payment.kind === 'awaiting_wallet') {
+    return <StatusPill tone="info">Awaiting wallet approval</StatusPill>;
+  }
+  if (payment.kind === 'settlement_pending') {
+    return (
+      <div className="space-y-2">
+        <StatusPill tone="info">Settlement pending</StatusPill>
+        <p className="text-sm text-muted">
+          Authorization valid until {formatIsoUtc(new Date(Number(payment.authorization.validBefore) * 1000).toISOString())}.
+        </p>
+      </div>
+    );
+  }
+  if (payment.kind === 'failed') {
+    return (
+      <p className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
+        {payment.message}
+      </p>
+    );
+  }
+  return <StatusPill tone="ok">Payment settled</StatusPill>;
+}
+
+function PaidQuotePanel({ quote }: { quote: PaidQuoteResponse | null }) {
+  if (!quote) {
+    return (
+      <EmptyState
+        title="No paid quote yet"
+        body="Settle the payment requirement to receive a live payer bound quote."
+      />
+    );
+  }
+  return (
+    <div className="rounded-md border border-rule bg-surface p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <Label>LIVE PAYER BOUND QUOTE</Label>
+          <h3 className="mt-2 text-lg font-semibold text-bone">Quote ready for authorization</h3>
+        </div>
+        <StatusPill tone="ok">Settled</StatusPill>
+      </div>
+      <dl className="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <MiniField label="Quote hash">
+          <CopyHash value={quote.quoteHash} label={truncateHash(quote.quoteHash)} />
+        </MiniField>
+        <MiniField label="Payer">
+          {quote.paymentReceipt.payer ? (
+            <CopyHash
+              value={quote.paymentReceipt.payer}
+              label={truncateHash(quote.paymentReceipt.payer)}
+            />
+          ) : (
+            'not reported'
+          )}
+        </MiniField>
+        <MiniField label="Expiry">{formatIsoUtc(quote.quoteExpiry)}</MiniField>
+        <MiniField label="Minimum bond">{formatWcspr(quote.quotedMinimumBond)}</MiniField>
+        <MiniField label="Fault class">{quote.faultClass}</MiniField>
+        <MiniField label="Verifier">{quote.verifier}</MiniField>
+        <MiniField label="Challenge window">{quote.challengeWindow}s</MiniField>
+        <MiniField label="Settlement transaction">
+          <CopyHash
+            value={quote.paymentReceipt.transaction}
+            label={truncateHash(quote.paymentReceipt.transaction)}
+          />
+        </MiniField>
+      </dl>
+      <div className="mt-5 rounded border border-rule bg-ink px-4 py-3 text-sm text-muted">
+        Sign authorization and action submission are the next gated step. This paid quote has not been submitted yet.
+      </div>
     </div>
   );
 }

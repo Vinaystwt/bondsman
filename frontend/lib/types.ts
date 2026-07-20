@@ -74,6 +74,31 @@ export interface ActionDetail {
   explorerLinks: Record<string, string>;
 }
 
+export interface PaidQuoteResponse {
+  actionType: string;
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  verifier: string;
+  riskTier: string;
+  requiredBond: string;
+  quotedMinimumBond: string;
+  bondSemantics: string;
+  challengeWindow: number;
+  agentReputation: number;
+  policyModule: string;
+  policySnapshot: Record<string, unknown>;
+  quoteExpiry: string;
+  quoteHash: string;
+  paymentReceipt: {
+    network: string;
+    asset: string;
+    amount: string;
+    transaction: string;
+    facilitator: string;
+    payer: string | null;
+    settled: boolean;
+  };
+}
+
 export type CanonicalOutcome = 'SLASHED' | 'REFUNDED';
 
 export interface CanonicalTimelineStage {
