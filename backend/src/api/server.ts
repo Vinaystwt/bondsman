@@ -5,6 +5,7 @@ import type { ResolutionService } from './resolution.js';
 import type { DemoArmService } from './arm.js';
 import { registerRoutes } from './routes.js';
 import type { CurrentBondPolicyReader } from './routes.js';
+import type { TextModelClient } from '../assurance/service.js';
 import { normalizeApiError } from './errors.js';
 import type { WalletChallengeService } from './wallet-challenge.js';
 import type { DemoJobService } from './demo-jobs.js';
@@ -43,6 +44,7 @@ export function buildServer(
   jobs: DemoJobService,
   repositoryPath = process.cwd(),
   readCurrentBondPolicy?: CurrentBondPolicyReader,
+  assuranceModelClient?: TextModelClient,
 ): FastifyInstance {
   const server = Fastify({ logger: false });
   const origins = allowedOrigins();
@@ -162,6 +164,7 @@ export function buildServer(
     jobs,
     repositoryPath,
     readCurrentBondPolicy,
+    assuranceModelClient,
   );
   registerRemoteMcp(server, repository, deployment);
   return server;

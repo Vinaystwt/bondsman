@@ -2,7 +2,7 @@ import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../src/db/database.js';
 import { Repository } from '../../src/db/repositories.js';
 import { buildServer } from '../../src/api/server.js';
@@ -18,6 +18,10 @@ import {
   recordSpend,
   resetSpendGuard,
 } from '../../src/ops/spend-guard.js';
+import {
+  resetAssuranceModelHealthForTests,
+  type TextModelClient,
+} from '../../src/assurance/service.js';
 
 const hash = `hash-${'1'.repeat(64)}`;
 const v1Hash = `hash-${'9'.repeat(64)}`;
@@ -173,7 +177,7 @@ function seedCanonical(repository: Repository) {
   });
 }
 
-function fixture() {
+function fixture(options: { modelClient?: TextModelClient } = {}) {
   process.env.OPERATOR_API_TOKEN = 'test-operator-token';
   const database = openDatabase(':memory:');
   const repository = new Repository(database);
@@ -398,11 +402,20 @@ function fixture() {
       walletChallenge,
       createDemoJobService({ repository, resolution, arm }),
       repositoryPath,
+      undefined,
+      options.modelClient,
     ),
   };
 }
 
 describe('REST routes', () => {
+  beforeEach(() => {
+    resetAssuranceModelHealthForTests();
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ASSURANCE_MODEL;
+    delete process.env.ASSURANCE_MODEL_TIMEOUT_MS;
+  });
+
   it('serves actions, detail, agent, reserve, and deployment state', async () => {
     const context = fixture();
     for (const path of [
@@ -771,6 +784,140 @@ describe('REST routes', () => {
       });
     }
     expect(context.repository.listActions()).toHaveLength(before);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('reports Assurance model health from live attempts instead of key presence', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ASSURANCE_MODEL = 'test-model';
+    const liveModel = JSON.stringify({
+      summary: 'Delivery evidence remains available for review.',
+      riskFactors: [
+        {
+          code: 'NEW_COUNTERPARTY',
+          severity: 'medium',
+          explanation: 'A new supplier warrants bonded execution through the challenge window.',
+        },
+      ],
+      confidence: 0.86,
+      recommendedDecision: 'bonded_execution',
+    });
+    const modelClient = vi.fn<TextModelClient>().mockResolvedValue(liveModel);
+    const context = fixture({ modelClient });
+    const beforeActions = context.repository.listActions().length;
+
+    const configured = await context.server.inject('/api/health');
+    expect(configured.statusCode).toBe(200);
+    expect(configured.json().publicExperience).toMatchObject({
+      assuranceStudioReady: true,
+      assuranceModelConfigured: true,
+      assuranceModelAvailable: false,
+      assuranceModelStatus: 'configured_unverified',
+      assuranceModelLastCheckedAt: null,
+      assuranceModelLastSuccessAt: null,
+      assuranceModelLastFailureCode: null,
+    });
+
+    const analysis = await context.server.inject({
+      method: 'POST',
+      url: '/api/assurance/analyze',
+      payload: {
+        templateId: 'invoice_delivery',
+        description: 'Release supplier payment while preserving buyer-signed non-delivery evidence for the challenge window.',
+        amount: '50000000000000',
+        agentConfidence: 0.91,
+        counterpartyStatus: 'new',
+        evidenceSource: 'signed_delivery_attestation',
+        maxLossBps: 200,
+        urgency: 'normal',
+      },
+    });
+    expect(analysis.statusCode).toBe(200);
+    expect(analysis.json()).toMatchObject({
+      modelAnalysis: {
+        source: 'live_model',
+        modelAvailable: true,
+        model: 'test-model',
+      },
+      policy: {
+        riskTier: 'high',
+        estimatedBond: '2800000000000',
+        bondBasisPoints: 560,
+        faultClass: 'delivery_contradiction',
+        verifier: 'delivery-contradiction-v2',
+      },
+      boundaries: {
+        submitsTransaction: false,
+        makesPayment: false,
+        challengesAction: false,
+        settlesQuote: false,
+      },
+    });
+
+    const available = await context.server.inject('/api/health');
+    expect(available.json().publicExperience).toMatchObject({
+      assuranceStudioReady: true,
+      assuranceModelConfigured: true,
+      assuranceModelAvailable: true,
+      assuranceModelStatus: 'available',
+      assuranceModelLastFailureCode: null,
+    });
+    expect(available.json().publicExperience.assuranceModelLastCheckedAt).toEqual(expect.any(String));
+    expect(available.json().publicExperience.assuranceModelLastSuccessAt).toEqual(expect.any(String));
+    expect(context.repository.listActions()).toHaveLength(beforeActions);
+    await context.server.close();
+    context.database.close();
+  });
+
+  it('keeps Assurance Studio ready and marks model unavailable after live fallback', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ASSURANCE_MODEL = 'test-model';
+    const modelClient = vi.fn<TextModelClient>()
+      .mockResolvedValueOnce('```json\n{"summary":"wrong schema"}\n```')
+      .mockResolvedValueOnce('still not json');
+    const context = fixture({ modelClient });
+    const beforeActions = context.repository.listActions().length;
+
+    const analysis = await context.server.inject({
+      method: 'POST',
+      url: '/api/assurance/analyze',
+      payload: {
+        templateId: 'invoice_delivery',
+        description: 'Release supplier payment while preserving buyer-signed non-delivery evidence for the challenge window.',
+        amount: '50000000000000',
+        agentConfidence: 0.91,
+        counterpartyStatus: 'new',
+        evidenceSource: 'signed_delivery_attestation',
+        maxLossBps: 200,
+        urgency: 'normal',
+      },
+    });
+
+    expect(analysis.statusCode).toBe(200);
+    expect(analysis.json()).toMatchObject({
+      modelAnalysis: {
+        source: 'deterministic_fallback',
+        modelAvailable: false,
+        model: null,
+        failureCode: 'MODEL_PARSE_FAILED',
+      },
+      policy: {
+        estimatedBond: '2800000000000',
+        bondBasisPoints: 560,
+        faultClass: 'delivery_contradiction',
+        verifier: 'delivery-contradiction-v2',
+      },
+    });
+    const health = await context.server.inject('/api/health');
+    expect(health.json().publicExperience).toMatchObject({
+      assuranceStudioReady: true,
+      assuranceModelConfigured: true,
+      assuranceModelAvailable: false,
+      assuranceModelStatus: 'unavailable',
+      assuranceModelLastFailureCode: 'MODEL_PARSE_FAILED',
+    });
+    expect(context.repository.listActions()).toHaveLength(beforeActions);
     await context.server.close();
     context.database.close();
   });

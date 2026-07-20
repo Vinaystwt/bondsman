@@ -194,34 +194,217 @@ const modelSchema = z.object({
 }).strict();
 type ModelAnalysis = z.infer<typeof modelSchema>;
 
+export type AssuranceModelFailureCode =
+  | 'MODEL_PARSE_FAILED'
+  | 'MODEL_SCHEMA_INVALID'
+  | 'MODEL_TIMEOUT'
+  | 'MODEL_REQUEST_FAILED';
+
+export type AssuranceModelStatus =
+  | 'available'
+  | 'unavailable'
+  | 'configured_unverified'
+  | 'not_configured';
+
+export interface AssuranceModelHealth {
+  configured: boolean;
+  operational: boolean;
+  status: AssuranceModelStatus;
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureCode: AssuranceModelFailureCode | null;
+}
+
+export type TextModelClient = (input: {
+  model: string;
+  prompt: string;
+  repair: boolean;
+  timeoutMs: number;
+}) => Promise<string>;
+
+const modelHealthState: AssuranceModelHealth = {
+  configured: false,
+  operational: false,
+  status: 'not_configured',
+  lastCheckedAt: null,
+  lastSuccessAt: null,
+  lastFailureCode: null,
+};
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function logModelDiagnostic(event: string, details: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({ event, ...details }));
+}
+
+function modelFromEnv(env: NodeJS.ProcessEnv): string {
+  return env.ASSURANCE_MODEL?.trim() ||
+    env.AGENT_LLM_MODEL?.trim() ||
+    'claude-haiku-4-5-20251001';
+}
+
+export function resetAssuranceModelHealthForTests(): void {
+  modelHealthState.configured = false;
+  modelHealthState.operational = false;
+  modelHealthState.status = 'not_configured';
+  modelHealthState.lastCheckedAt = null;
+  modelHealthState.lastSuccessAt = null;
+  modelHealthState.lastFailureCode = null;
+}
+
+export function assuranceModelHealth(
+  env: NodeJS.ProcessEnv = process.env,
+): AssuranceModelHealth {
+  const configured = modelConfigured(env);
+  if (!configured) {
+    return {
+      configured: false,
+      operational: false,
+      status: 'not_configured',
+      lastCheckedAt: modelHealthState.lastCheckedAt,
+      lastSuccessAt: modelHealthState.lastSuccessAt,
+      lastFailureCode: modelHealthState.lastFailureCode,
+    };
+  }
+  return {
+    configured: true,
+    operational: modelHealthState.operational,
+    status: modelHealthState.lastCheckedAt === null
+      ? 'configured_unverified'
+      : modelHealthState.operational
+        ? 'available'
+        : 'unavailable',
+    lastCheckedAt: modelHealthState.lastCheckedAt,
+    lastSuccessAt: modelHealthState.lastSuccessAt,
+    lastFailureCode: modelHealthState.lastFailureCode,
+  };
+}
+
+function updateModelSuccess(): void {
+  const checkedAt = nowIso();
+  modelHealthState.configured = true;
+  modelHealthState.operational = true;
+  modelHealthState.status = 'available';
+  modelHealthState.lastCheckedAt = checkedAt;
+  modelHealthState.lastSuccessAt = checkedAt;
+  modelHealthState.lastFailureCode = null;
+}
+
+function updateModelFailure(code: AssuranceModelFailureCode): void {
+  modelHealthState.configured = true;
+  modelHealthState.operational = false;
+  modelHealthState.status = 'unavailable';
+  modelHealthState.lastCheckedAt = nowIso();
+  modelHealthState.lastFailureCode = code;
+}
+
+function unwrapCompleteFence(trimmed: string): string {
+  const match = trimmed.match(/^```(?:json)?[ \t]*\r?\n([\s\S]*)\r?\n```[ \t]*$/i);
+  return match ? match[1]!.trim() : trimmed;
+}
+
+export function parseModelAnalysisText(text: string): ModelAnalysis {
+  const unwrapped = unwrapCompleteFence(text.trim());
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(unwrapped);
+  } catch {
+    throw Object.assign(new Error('model response is not valid JSON'), {
+      code: 'MODEL_PARSE_FAILED' as const,
+    });
+  }
+  const result = modelSchema.safeParse(parsed);
+  if (!result.success) {
+    throw Object.assign(new Error('model response does not match schema'), {
+      code: 'MODEL_SCHEMA_INVALID' as const,
+    });
+  }
+  return result.data;
+}
+
+function failureCode(error: unknown): AssuranceModelFailureCode {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'MODEL_PARSE_FAILED'
+  ) {
+    return 'MODEL_PARSE_FAILED';
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'MODEL_SCHEMA_INVALID'
+  ) {
+    return 'MODEL_SCHEMA_INVALID';
+  }
+  return error instanceof Error && error.message === 'model timeout'
+    ? 'MODEL_TIMEOUT'
+    : 'MODEL_REQUEST_FAILED';
+}
+
 async function liveModelAnalysis(input: AssuranceInput, options: {
   apiKey: string;
   model: string;
   timeoutMs: number;
+  client?: TextModelClient;
 }) {
-  const client = new Anthropic({ apiKey: options.apiKey });
+  const anthropic = new Anthropic({ apiKey: options.apiKey });
   const prompt = [
     'Return strict JSON only. Do not include chain-of-thought.',
     'Interpret this autonomous finance scenario. Identify concise risk factors.',
     'Do not calculate bonds, decide verifier results, claim integrations, or submit transactions.',
     JSON.stringify(normalizedScenario(input)),
   ].join('\n');
-  const response = await Promise.race([
-    client.messages.create({
-      model: options.model,
-      max_tokens: 500,
-      temperature: 0,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('model timeout')), options.timeoutMs),
-    ),
-  ]);
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n');
-  return modelSchema.parse(JSON.parse(text));
+  const client: TextModelClient = options.client ?? (async (request) => {
+    const response = await Promise.race([
+      anthropic.messages.create({
+        model: request.model,
+        max_tokens: 500,
+        temperature: 0,
+        messages: [{ role: 'user', content: request.prompt }],
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('model timeout')), request.timeoutMs),
+      ),
+    ]);
+    return response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n');
+  });
+  let lastError: unknown;
+  for (const repair of [false, true]) {
+    try {
+      const text = await client({
+        model: options.model,
+        prompt: repair
+          ? `${prompt}\n\nReturn the same result as one raw JSON object.\nNo Markdown.\nNo code fences.\nNo commentary.`
+          : prompt,
+        repair,
+        timeoutMs: options.timeoutMs,
+      });
+      return parseModelAnalysisText(text);
+    } catch (error) {
+      lastError = error;
+      const code = failureCode(error);
+      logModelDiagnostic(
+        code === 'MODEL_PARSE_FAILED'
+          ? 'assurance_model_parse_failed'
+          : code === 'MODEL_SCHEMA_INVALID'
+            ? 'assurance_model_schema_invalid'
+            : code === 'MODEL_TIMEOUT'
+              ? 'assurance_model_timeout'
+              : 'assurance_model_request_failed',
+        { model: options.model, attempt: repair ? 'repair' : 'initial' },
+      );
+      if (code === 'MODEL_TIMEOUT' || code === 'MODEL_REQUEST_FAILED') break;
+    }
+  }
+  throw lastError;
 }
 
 export function modelConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -232,6 +415,7 @@ export function modelConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
 export async function analyzeAssurance(input: AssuranceInput, options: {
   deployment: Deployment;
   env?: NodeJS.ProcessEnv;
+  modelClient?: TextModelClient;
 }) {
   const env = options.env ?? process.env;
   const scenario = normalizedScenario(input);
@@ -245,20 +429,29 @@ export async function analyzeAssurance(input: AssuranceInput, options: {
   };
   let source: 'live_model' | 'deterministic_fallback' = 'deterministic_fallback';
   let modelAvailable = false;
+  let modelFailureCode: AssuranceModelFailureCode | null = null;
   if (modelConfigured(env)) {
     try {
+      const model = modelFromEnv(env);
       parsedModel = await liveModelAnalysis(input, {
         apiKey: env.ANTHROPIC_API_KEY!.trim(),
-        model: env.ASSURANCE_MODEL?.trim() ||
-          env.AGENT_LLM_MODEL?.trim() ||
-          'claude-haiku-4-5-20251001',
+        model,
         timeoutMs: Number(env.ASSURANCE_MODEL_TIMEOUT_MS ?? 6_000),
+        ...(options.modelClient ? { client: options.modelClient } : {}),
       });
       source = 'live_model';
       modelAvailable = true;
-    } catch {
+      updateModelSuccess();
+      logModelDiagnostic('assurance_model_success', { model });
+    } catch (error) {
       modelAvailable = false;
+      modelFailureCode = failureCode(error);
+      updateModelFailure(modelFailureCode);
     }
+  } else {
+    modelHealthState.configured = false;
+    modelHealthState.operational = false;
+    modelHealthState.status = 'not_configured';
   }
   const reputationScore = input.counterpartyStatus === 'new' ? -60 : -20;
   const executableFaultClass: FaultClass = template.id === 'duplicate_invoice_test'
@@ -345,8 +538,9 @@ export async function analyzeAssurance(input: AssuranceInput, options: {
     source,
     modelAvailable,
     model: source === 'live_model'
-      ? env.ASSURANCE_MODEL?.trim() || env.AGENT_LLM_MODEL?.trim() || 'claude-haiku-4-5-20251001'
+      ? modelFromEnv(env)
       : null,
+    failureCode: modelFailureCode,
     ...parsedModel,
   };
   const integrationManifest = {

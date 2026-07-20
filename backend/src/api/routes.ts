@@ -54,9 +54,10 @@ import {
   validateCanonical,
 } from '../evidence/replay.js';
 import {
+  assuranceModelHealth,
   analyzeAssurance,
   assuranceInputSchema,
-  modelConfigured,
+  type TextModelClient,
   templates as assuranceTemplates,
 } from '../assurance/service.js';
 import {
@@ -150,7 +151,7 @@ function publicCapabilities() {
     assuranceStudio: {
       enabled: process.env.ASSURANCE_STUDIO_ENABLED !== 'false',
       mode: 'design_only',
-      liveModelAvailable: modelConfigured(),
+      liveModelAvailable: assuranceModelHealth().operational,
     },
     liveQuoteProbe: {
       enabled: true,
@@ -275,6 +276,7 @@ export function registerRoutes(
   repositoryPath = process.cwd(),
   readCurrentBondPolicy: CurrentBondPolicyReader =
     projectedBondPolicyReader(repository, deployment),
+  assuranceModelClient?: TextModelClient,
 ): void {
   const startedAt = Date.now();
   const idempotency = createIdempotencyStore();
@@ -294,10 +296,16 @@ export function registerRoutes(
       controllerHash: currentController,
       actionId: canonicalActionId(),
     });
+    const assuranceModel = assuranceModelHealth();
     const publicExperience = {
       proofConsoleReady: canonical.ready,
       assuranceStudioReady: process.env.ASSURANCE_STUDIO_ENABLED !== 'false',
-      assuranceModelAvailable: modelConfigured(),
+      assuranceModelConfigured: assuranceModel.configured,
+      assuranceModelAvailable: assuranceModel.operational,
+      assuranceModelStatus: assuranceModel.status,
+      assuranceModelLastCheckedAt: assuranceModel.lastCheckedAt,
+      assuranceModelLastSuccessAt: assuranceModel.lastSuccessAt,
+      assuranceModelLastFailureCode: assuranceModel.lastFailureCode,
       canonicalActionId: canonical.actionId,
       canonicalProofAvailable: canonical.errors.every((error) =>
         !/action|quote|transaction/i.test(error),
@@ -377,7 +385,10 @@ export function registerRoutes(
       throw new ApiError(429, 'ASSURANCE_RATE_LIMITED', 'too many assurance analyses');
     }
     const input = assuranceInputSchema.parse(request.body);
-    return analyzeAssurance(input, { deployment });
+    return analyzeAssurance(input, {
+      deployment,
+      ...(assuranceModelClient ? { modelClient: assuranceModelClient } : {}),
+    });
   });
   server.get('/api/invoices', async () => repository.listInvoices());
   server.get('/api/actions', async () =>
