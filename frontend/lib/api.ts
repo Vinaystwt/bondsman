@@ -4,6 +4,7 @@ import type {
   AgentReputation,
   AgentCard,
   CanonicalProof,
+  CanonicalReplay,
   Coverage,
   Deployment,
   DemoReady,
@@ -12,12 +13,15 @@ import type {
   Health,
   Invoice,
   PortableReceipt,
+  PublicCapabilities,
+  QuoteCheckResponse,
   ReceiptVerification,
   Reserve,
   TransactionStatus,
   Verifier,
   WalletResolveResult,
   Watchdog,
+  X402PaymentResponse,
 } from './types';
 
 // Server components talk to the backend origin directly.
@@ -127,6 +131,8 @@ export async function safeGet<T>(
 // Server-side reads.
 export const api = {
   health: () => serverGet<Health>('/api/health'),
+  publicCapabilities: () =>
+    serverGet<PublicCapabilities>('/api/public-capabilities'),
   invoices: () => serverGet<Invoice[]>('/api/invoices'),
   actions: () => serverGet<ActionSummary[]>('/api/actions'),
   action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
@@ -138,6 +144,7 @@ export const api = {
   deployments: () => serverGet<Deployment>('/api/deployments'),
   watchdog: () => serverGet<Watchdog>('/api/watchdog'),
   canonicalProof: () => serverGet<CanonicalProof>('/api/proofs/canonical'),
+  canonicalReplay: () => serverGet<CanonicalReplay>('/api/replay/canonical'),
   featuredProofs: () => serverGet<CanonicalProof[]>('/api/proofs/featured'),
   proof: (id: number | string) => serverGet<CanonicalProof>(`/api/proof/${id}`),
   receipt: (id: number | string) => serverGet<PortableReceipt>(`/api/receipt/${id}`),
@@ -197,6 +204,13 @@ async function clientPost<T>(
 
 export const clientApi = {
   health: () => clientGet<Health>('/health'),
+  publicCapabilities: () =>
+    clientGet<PublicCapabilities>('/public-capabilities'),
+  canonicalReplay: () => clientGet<CanonicalReplay>('/replay/canonical'),
+  receipt: (id: number | string) =>
+    clientGet<PortableReceipt>(`/receipt/${id}`),
+  receiptVerify: (id: number | string) =>
+    clientGet<ReceiptVerification>(`/receipt/${id}/verify`),
   actions: () => clientGet<ActionSummary[]>('/actions'),
   action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
   demoReady: () => clientGet<DemoReady>('/demo/ready'),
@@ -219,4 +233,53 @@ export const clientApi = {
     }),
   putDeploy: (deploy: unknown, nodeUrl?: string) =>
     clientPost<{ deploy_hash: string }>('/rpc/put-deploy', { deploy, nodeUrl }),
+  /**
+   * Live x402 quote probe. Sends an unpaid quote request against the paid HTTP
+   * surface. Expects HTTP 402 with an x402 payment requirement in the body,
+   * and returns the parsed status plus that body so callers can display the
+   * settlement instrument.
+   */
+  async liveQuoteProbe(body: {
+    amount: string;
+    faultClass: string;
+  }): Promise<{
+    status: number;
+    x402?: X402PaymentResponse;
+    other?: unknown;
+    error?: string;
+  }> {
+    try {
+      const res = await fetchWithTimeout('/v1/actions/quote', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const parsed = (await res.json().catch(() => null)) as
+        | X402PaymentResponse
+        | Record<string, unknown>
+        | null;
+      if (res.status === 402 && parsed && typeof parsed === 'object') {
+        return { status: 402, x402: parsed as X402PaymentResponse };
+      }
+      return { status: res.status, other: parsed };
+    } catch {
+      return { status: 0, error: 'network' };
+    }
+  },
+  /**
+   * Read only quote consumption check for the canonical Action 27 replay.
+   * Confirms that the paid quote is bound to the action and will not accept a
+   * second submission.
+   */
+  quoteConsumptionCheck: (quoteHash: string) =>
+    clientPost<QuoteCheckResponse>('/replay/canonical/quote-check', { quoteHash }),
+  /**
+   * Verify an arbitrary receipt against the backend. Used by the receipt
+   * tamper lab: modify a single field client side, then send the full JSON to
+   * the real verifier and show the result.
+   */
+  verifyReceiptBody: (
+    id: number | string,
+    body: PortableReceipt,
+  ) => clientPost<ReceiptVerification>(`/receipt/${id}/verify`, body),
 };

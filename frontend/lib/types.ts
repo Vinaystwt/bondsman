@@ -431,3 +431,126 @@ export interface AgentCard {
   defaultOutputModes: string[];
   skills: AgentCardSkill[];
 }
+
+export interface CanonicalBondEconomics {
+  quotedMinimumBond: string;
+  actualPostedBond: string;
+  bondRelation: 'overcollateralized' | 'exact' | 'undercollateralized' | string;
+  bondDifference: string;
+  minimumSatisfied: boolean;
+  exactMatch: boolean;
+}
+
+export interface EvidenceLabels {
+  quoteProbe: string;
+  payment: string;
+  quote: string;
+  action: string;
+  deliveryInput: string;
+  challenge: string;
+  receipt: string;
+}
+
+export interface CanonicalReplay {
+  schemaId: string;
+  mode: 'canonical_replay' | string;
+  actionId: number;
+  source: 'live_projection' | 'committed_bundle' | string;
+  liveProjectionAvailable: boolean;
+  generatedAt: string;
+  evidenceLabels: EvidenceLabels;
+  proof: CanonicalProof & {
+    bondEconomics: CanonicalBondEconomics;
+    paidQuote?: CanonicalPaidQuote & {
+      quotedMinimumBond?: string;
+      bondSemantics?: string;
+      policySnapshot?: Record<string, unknown> | null;
+      actualPostedBond?: string;
+      bondRelation?: string;
+      bondDifference?: string;
+      minimumSatisfied?: boolean;
+      exactMatch?: boolean;
+    };
+  };
+  receipt: PortableReceipt;
+}
+
+export interface X402Requirement {
+  scheme: string;
+  network: string;
+  payTo: string;
+  amount: string;
+  asset: string;
+  extra: {
+    name?: string;
+    symbol?: string;
+    version?: string;
+    decimals?: string;
+  };
+  maxTimeoutSeconds: number;
+}
+
+export interface X402PaymentResponse {
+  success: false;
+  code: 'X402_PAYMENT_REQUIRED' | string;
+  message: string;
+  payment: {
+    x402Version: number;
+    accepts: X402Requirement[];
+    error?: string;
+  };
+}
+
+export interface QuoteCheckResponse {
+  success: boolean;
+  actionId: number | null;
+  quoteHash: string;
+  status: 'consumed' | 'issued' | 'expired' | string;
+  payerBound: boolean;
+  consumedActionId: number | null;
+  singleUse: boolean;
+  wouldAcceptNewSubmission: boolean;
+  expectedRejectionCode: string | null;
+  explanation: string;
+}
+
+export interface PublicCapabilities {
+  productCategory: string;
+  proofConsole: { enabled: boolean; canonicalActionId: number };
+  assuranceStudio: {
+    enabled: boolean;
+    mode: 'design_only' | string;
+    liveModelAvailable: boolean;
+  };
+  liveQuoteProbe: {
+    enabled: boolean;
+    createsTransactionWithoutPayment: boolean;
+  };
+  paidHttpIntegration: {
+    enabled: boolean;
+    quoteSurface: string;
+    submitSurface: string;
+  };
+  receiptVerification: { enabled: boolean };
+  sponsoredLiveRun: { enabled: boolean };
+  publicChallengeArena: { enabled: boolean };
+  externalWalletChallenge: { enabled: boolean };
+  operatorDemoWrites: { enabled: boolean; public: boolean };
+  mcp: { mode: string };
+}
+
+export interface HealthPublicExperience {
+  proofConsoleReady: boolean;
+  assuranceStudioReady: boolean;
+  assuranceModelConfigured: boolean;
+  assuranceModelAvailable: boolean;
+  assuranceModelStatus: 'available' | 'unavailable' | 'unknown' | string;
+  assuranceModelLastCheckedAt: string | null;
+  assuranceModelLastSuccessAt: string | null;
+  assuranceModelLastFailureCode: string | null;
+  canonicalActionId: number;
+  canonicalProofAvailable: boolean;
+  canonicalReceiptValid: boolean;
+  liveQuoteProbeAvailable: boolean;
+  publicMutationModesEnabled: boolean;
+}
