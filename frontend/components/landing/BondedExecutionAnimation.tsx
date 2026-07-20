@@ -47,38 +47,22 @@ function toShort(atomic: string | null, unit: string, digits = 0): string {
   }
 }
 
-const ACCENT = '#35C281';
-const ACCENT_DEEP = '#1C7A52';
-const SLASH = '#E5484D';
-const RULE = '#232A27';
-const RAISED = '#18211D';
-const BONE = '#E8EDEA';
-const BONE_DIM = '#a4b0aa';
+const ACCENT = '#B7791F';
+const ACCENT_DEEP = '#6E4814';
+const SLASH = '#E0231C';
+const RULE = '#2A2620';
+const RAISED = '#1C1913';
+const BONE = '#ECE6D8';
+const BONE_DIM = '#A59C8A';
+const INK = '#0E0D0B';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 /**
- * Continuous bonded execution animation.
+ * Product loop animation for the homepage hero.
  *
- * One GSAP master timeline drives the entire narrative: request, payment
- * requirement, WCSPR settlement, paid quote, bond lock, execution, delayed
- * contradiction, watchdog challenge, controller resolution, slash and receipt.
- * The timeline repeats indefinitely with a final hold on the receipt state and
- * a short soft reset back to idle.
- *
- * The whole scene lives in one SVG viewBox so packets travel along real path
- * geometry. The red contradiction packet follows the evidence connector via
- * MotionPathPlugin. Every packet, path stroke and label is animated with
- * transform and opacity only, so the layout never reflows.
- *
- * Lifecycle:
- *   - IntersectionObserver + visibilitychange pause and resume the timeline
- *     so the browser does no work when the hero is offscreen or the tab is
- *     hidden.
- *   - prefers-reduced-motion snaps to the final verified state and disables
- *     the loop.
- *   - healthMode degraded or unreachable renders a static historical state
- *     and never enters the loop.
+ * The timeline runs once, keeps the final consequence visible and can be
+ * replayed manually. Offscreen and hidden tabs pause the active timeline.
  */
 export default function BondedExecutionAnimation({
   data,
@@ -87,9 +71,13 @@ export default function BondedExecutionAnimation({
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
-  const gradId = useId().replace(/:/g, '');
+  const idPrefix = useId().replace(/:/g, '');
+  const paymentPathId = `${idPrefix}-path-payment`;
+  const evidencePathId = `${idPrefix}-path-evidence`;
 
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [runId, setRunId] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -117,145 +105,119 @@ export default function BondedExecutionAnimation({
       if (!scope) return;
       const q = gsap.utils.selector(scope);
 
-      // Reset every animated element to the idle state before we build. This
-      // is what runs when React remounts and when the loop restarts.
-      gsap.set(
-        q('[data-anim="stage"], [data-anim="packet"], [data-anim="label"], [data-anim="line"]'),
-        { autoAlpha: 0 },
-      );
+      timelineRef.current?.kill();
+      timelineRef.current = null;
+
+      gsap.set(q('[data-anim="node"], [data-anim="line"], [data-anim="packet"]'), {
+        autoAlpha: 0,
+      });
+      gsap.set(q('[data-role="consequence-total"]'), { scale: 0.96 });
+      gsap.set(q('[data-role="state-label"]'), { textContent: 'Preparing bond' });
 
       if (!shouldAnimate) {
-        // Snap to the completed state: everything visible, packets at rest.
-        gsap.set(
-          q('[data-anim="stage"], [data-anim="label"], [data-anim="line"]'),
-          { autoAlpha: 1 },
-        );
-        gsap.set(q('[data-role="verified-mark"]'), { autoAlpha: 1 });
-        gsap.set(q('[data-role="live-pulse"]'), { autoAlpha: 0 });
+        gsap.set(q('[data-anim="node"], [data-anim="line"]'), { autoAlpha: 1 });
+        gsap.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
+        gsap.set(q('[data-role="consequence-total"]'), { scale: 1 });
+        setIsRunning(false);
         return;
       }
 
+      setIsRunning(true);
+
       const tl = gsap.timeline({
-        repeat: -1,
-        repeatDelay: 2.4,
-        defaults: { ease: 'power2.out', duration: 0.55 },
+        defaults: { duration: 0.42, ease: 'power2.out' },
+        onComplete: () => {
+          setIsRunning(false);
+          gsap.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
+        },
       });
 
       timelineRef.current = tl;
 
-      // 1. Agent request appears.
-      tl.addLabel('request', 0);
-      tl.to(q('[data-stage="agent"]'), { autoAlpha: 1 }, 'request');
-      tl.to(q('[data-line="agent-to-gate"]'), { autoAlpha: 1, duration: 0.35 }, 'request+=0.15');
-
-      // 2. Payment requirement + settlement.
-      tl.addLabel('payment', '+=0.15');
-      tl.to(q('[data-stage="payment"]'), { autoAlpha: 1 }, 'payment');
+      tl.to(q('[data-stage="intent"]'), { autoAlpha: 1 }, 0);
+      tl.to(q('[data-stage="bond"]'), { autoAlpha: 1 }, '+=0.18');
+      tl.to(q('[data-line="intent-bond"]'), { autoAlpha: 1, duration: 0.25 }, '<');
       tl.fromTo(
         q('[data-packet="payment"]'),
-        { autoAlpha: 0, motionPath: { path: '#path-payment', start: 0, end: 0 } },
+        {
+          autoAlpha: 0,
+          motionPath: { path: `#${paymentPathId}`, start: 0, end: 0 },
+        },
         {
           autoAlpha: 1,
-          duration: 0.9,
+          duration: 0.85,
           ease: 'power1.inOut',
-          motionPath: { path: '#path-payment', start: 0, end: 1 },
+          motionPath: { path: `#${paymentPathId}`, start: 0, end: 1 },
         },
-        'payment+=0.05',
+        '<',
       );
-      tl.to(q('[data-packet="payment"]'), { autoAlpha: 0, duration: 0.2 }, '>-0.05');
-      tl.to(q('[data-stage="payment"] [data-role="stage-value"]'), {
-        color: ACCENT,
-        duration: 0.2,
-      });
+      tl.to(q('[data-packet="payment"]'), { autoAlpha: 0, duration: 0.12 }, '>');
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Bond locked' });
 
-      // 3. Paid quote.
-      tl.addLabel('quote', '+=0.15');
-      tl.to(q('[data-stage="quote"]'), { autoAlpha: 1 }, 'quote');
-      tl.to(q('[data-line="payment-to-quote"]'), { autoAlpha: 1, duration: 0.25 }, 'quote');
+      tl.to(q('[data-stage="execute"]'), { autoAlpha: 1 }, '+=0.15');
+      tl.to(q('[data-line="bond-execute"]'), { autoAlpha: 1, duration: 0.25 }, '<');
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Action executed' });
 
-      // 4. Bond lock.
-      tl.addLabel('bond', '+=0.3');
-      tl.to(q('[data-stage="bond"]'), { autoAlpha: 1 }, 'bond');
-      tl.to(q('[data-line="quote-to-bond"]'), { autoAlpha: 1, duration: 0.25 }, 'bond');
-
-      // 5. Execution.
-      tl.addLabel('execute', '+=0.25');
-      tl.to(q('[data-stage="execute"]'), { autoAlpha: 1 }, 'execute');
-      tl.to(q('[data-line="bond-to-execute"]'), { autoAlpha: 1, duration: 0.25 }, 'execute');
-
-      // 6. Delayed evidence packet enters along the evidence connector.
-      tl.addLabel('evidence', '+=0.6');
-      tl.to(q('[data-stage="evidence"]'), { autoAlpha: 1 }, 'evidence');
+      tl.to(q('[data-stage="evidence"]'), { autoAlpha: 1 }, '+=0.34');
+      tl.to(q('[data-line="execute-evidence"]'), { autoAlpha: 1, duration: 0.25 }, '<');
       tl.fromTo(
         q('[data-packet="evidence"]'),
         {
           autoAlpha: 0,
-          motionPath: { path: '#path-evidence', start: 0, end: 0 },
+          motionPath: { path: `#${evidencePathId}`, start: 0, end: 0 },
         },
         {
           autoAlpha: 1,
-          duration: 1.4,
+          duration: 0.95,
           ease: 'power1.inOut',
-          motionPath: { path: '#path-evidence', start: 0, end: 1 },
+          motionPath: { path: `#${evidencePathId}`, start: 0, end: 1 },
         },
-        'evidence+=0.1',
+        '<',
       );
-      tl.to(q('[data-packet="evidence"]'), { autoAlpha: 0, duration: 0.25 }, '>');
+      tl.to(q('[data-packet="evidence"]'), { autoAlpha: 0, duration: 0.14 }, '>');
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Failure proven' });
 
-      // 7. Watchdog challenge.
-      tl.addLabel('challenge', '+=0.05');
-      tl.to(q('[data-stage="watchdog"]'), { autoAlpha: 1 }, 'challenge');
-      tl.to(q('[data-line="watchdog-to-controller"]'), { autoAlpha: 1, duration: 0.35 }, 'challenge');
+      tl.to(q('[data-stage="watchdog"]'), { autoAlpha: 1 }, '+=0.06');
+      tl.to(q('[data-line="evidence-watchdog"]'), { autoAlpha: 1, duration: 0.25 }, '<');
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Watchdog challenged' });
 
-      // 8. Controller resolution.
-      tl.addLabel('resolve', '+=0.25');
-      tl.to(q('[data-stage="controller"]'), { autoAlpha: 1 }, 'resolve');
+      tl.to(q('[data-stage="consequence"]'), { autoAlpha: 1 }, '+=0.22');
+      tl.to(q('[data-line="watchdog-consequence"]'), { autoAlpha: 1, duration: 0.25 }, '<');
       tl.to(
-        q('[data-stage="controller"] [data-role="stage-value"]'),
-        { color: SLASH, duration: 0.25 },
-        'resolve+=0.05',
+        q('[data-role="consequence-total"]'),
+        { scale: 1, transformOrigin: '50% 50%', duration: 0.28 },
+        '<',
       );
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Bond slashed' });
 
-      // 9. Slash split.
-      tl.addLabel('slash', '+=0.4');
-      tl.to(q('[data-stage="split"]'), { autoAlpha: 1 }, 'slash');
-      tl.to(q('[data-line="controller-to-split"]'), { autoAlpha: 1, duration: 0.3 }, 'slash');
-
-      // 10. Receipt sealed and verified.
-      tl.addLabel('receipt', '+=0.35');
-      tl.to(q('[data-stage="receipt"]'), { autoAlpha: 1 }, 'receipt');
-      tl.to(q('[data-line="controller-to-receipt"]'), { autoAlpha: 1, duration: 0.25 }, 'receipt');
-      tl.to(q('[data-role="verified-mark"]'), { autoAlpha: 1, duration: 0.35 }, 'receipt+=0.2');
-
-      // Final readable hold before the repeatDelay + soft reset.
-      tl.addLabel('final', '+=1.2');
-      tl.to(
-        q('[data-anim="stage"], [data-anim="line"], [data-role="verified-mark"], [data-anim="label"]'),
-        { autoAlpha: 0, duration: 0.6, ease: 'power1.in' },
-        'final+=1.4',
-      );
+      tl.to(q('[data-stage="receipt"]'), { autoAlpha: 1 }, '+=0.2');
+      tl.to(q('[data-line="consequence-receipt"]'), { autoAlpha: 1, duration: 0.25 }, '<');
+      tl.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
 
       return () => {
         tl.kill();
       };
     },
-    { scope: containerRef, dependencies: [shouldAnimate] },
+    {
+      scope: containerRef,
+      dependencies: [shouldAnimate, runId, paymentPathId, evidencePathId],
+    },
   );
 
-  // Pause on offscreen or hidden.
   useEffect(() => {
     const el = containerRef.current;
     const tl = timelineRef.current;
-    if (!el || !tl) return;
+    if (!el || !tl || !shouldAnimate) return;
 
     let onScreen = false;
     let visible = document.visibilityState === 'visible';
 
     const evaluate = () => {
+      if (tl.progress() >= 1) return;
       if (onScreen && visible) {
         if (tl.paused()) tl.resume();
-      } else {
-        if (!tl.paused()) tl.pause();
+      } else if (!tl.paused()) {
+        tl.pause();
       }
     };
 
@@ -278,11 +240,11 @@ export default function BondedExecutionAnimation({
       io.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [shouldAnimate]);
+  }, [shouldAnimate, runId]);
 
   const summary = useMemo(
     () =>
-      'Bondsman execution animation: request, payment settlement, paid quote, bond lock, action execution, delayed evidence, watchdog challenge, controller resolution, slash, split allocation and signed receipt.',
+      'Bondsman lifecycle animation: intent, bond, execute, evidence, watchdog, consequence and signed receipt.',
     [],
   );
 
@@ -293,327 +255,289 @@ export default function BondedExecutionAnimation({
         ? degradedReason
           ? `Live execution paused. ${degradedReason}`
           : 'Live execution paused. Historical proof preserved.'
-        : null;
+        : reducedMotion
+          ? 'Motion reduced. Showing final proof state.'
+          : null;
 
   return (
     <div
       ref={containerRef}
       className="relative overflow-hidden rounded-lg border border-rule bg-surface"
     >
+      <div className="flex items-center justify-between gap-4 border-b border-rule px-4 py-3">
+        <div>
+          <p className="serial text-[0.62rem] text-muted">ACTION LOOP</p>
+          <p className="mt-1 text-sm font-medium text-bone">
+            Economic consequence before autonomy
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRunId((current) => current + 1)}
+          className="min-h-10 rounded-md border border-rule px-3 py-2 text-sm text-bone transition-colors hover:border-accent/60 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!shouldAnimate || isRunning}
+        >
+          Replay
+        </button>
+      </div>
+
       <div
         role="img"
         aria-label={`Bondsman bonded execution animation. ${summary}`}
         className="relative"
       >
         <svg
-          viewBox="0 0 720 560"
+          viewBox="0 0 720 520"
           xmlns="http://www.w3.org/2000/svg"
           className="block h-auto w-full"
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
-            <linearGradient id={`${gradId}-flow`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={ACCENT} stopOpacity="0" />
-              <stop offset="50%" stopColor={ACCENT} stopOpacity="0.8" />
-              <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
-            </linearGradient>
-
-            {/* Payment path: from external agent down into the payment stage. */}
             <path
-              id="path-payment"
-              d="M 140 84 C 140 130 220 150 220 190"
+              id={paymentPathId}
+              d="M 122 156 C 170 126 236 126 286 156"
               fill="none"
             />
-            {/* Evidence path: from the buyer signer channel at the bottom into
-                the watchdog, following a real curve inside the SVG. */}
             <path
-              id="path-evidence"
-              d="M 360 508 C 500 500 580 450 590 340"
+              id={evidencePathId}
+              d="M 432 252 C 480 292 508 340 518 386"
               fill="none"
             />
           </defs>
 
-          {/* Backdrop rectangle for the execution gate. */}
           <rect
-            x={40}
-            y={130}
-            width={640}
-            height={230}
+            x={24}
+            y={24}
+            width={672}
+            height={472}
             rx={12}
-            fill={RAISED}
+            fill={INK}
             stroke={RULE}
           />
+          <path
+            d="M 48 82 H 672 M 48 438 H 672"
+            stroke={RULE}
+            strokeDasharray="4 8"
+            opacity={0.7}
+          />
+
           <text
-            data-anim="label"
-            x={56}
-            y={152}
+            x={48}
+            y={58}
             fill={BONE_DIM}
             fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={11}
+            fontSize={10}
             letterSpacing="3"
           >
-            BONDSMAN EXECUTION GATE
+            BONDED ACTION {data?.actionId ? `NO. ${data.actionId}` : 'NO. 0027'}
+          </text>
+          <text
+            data-role="state-label"
+            x={520}
+            y={58}
+            fill={ACCENT}
+            fontFamily="ui-monospace, Menlo, monospace"
+            fontSize={11}
+            textAnchor="end"
+          >
+            Preparing bond
           </text>
 
-          {/* External agent node */}
-          <g data-anim="stage" data-stage="agent">
-            <Node
-              x={40}
-              y={30}
-              w={200}
-              h={54}
-              title="EXTERNAL AGENT"
-              subtitle="a2a request"
+          <FlowLine
+            name="intent-bond"
+            d="M 158 158 C 196 140 246 140 284 158"
+          />
+          <FlowLine
+            name="bond-execute"
+            d="M 410 158 C 448 140 498 140 536 158"
+          />
+          <FlowLine
+            name="execute-evidence"
+            d="M 592 208 C 560 232 518 246 458 250"
+          />
+          <FlowLine
+            name="evidence-watchdog"
+            d="M 396 306 C 430 344 472 372 518 390"
+            slash
+          />
+          <FlowLine
+            name="watchdog-consequence"
+            d="M 460 412 C 394 426 328 426 262 412"
+            slash
+          />
+          <FlowLine
+            name="consequence-receipt"
+            d="M 244 392 C 298 346 370 330 444 342"
+          />
+
+          <g data-anim="node" data-stage="intent">
+            <LoopNode
+              x={64}
+              y={116}
+              w={96}
+              h={84}
+              title="INTENT"
+              value="agent asks"
+              detail="money move"
             />
           </g>
 
-          {/* Payment step */}
-          <g data-anim="stage" data-stage="payment">
-            <StageBox
-              x={70}
-              y={180}
-              w={140}
-              h={80}
-              title="PAYMENT"
-              label={paymentAmountLabel}
-              hash={data?.settlementTx}
-            />
-          </g>
-
-          {/* Quote step */}
-          <g data-anim="stage" data-stage="quote">
-            <StageBox
-              x={230}
-              y={180}
-              w={140}
-              h={80}
-              title="QUOTE"
-              label="paid quote"
-              hash={data?.quoteHash}
-            />
-          </g>
-
-          {/* Bond step */}
-          <g data-anim="stage" data-stage="bond">
-            <StageBox
-              x={390}
-              y={180}
-              w={140}
-              h={80}
+          <g data-anim="node" data-stage="bond">
+            <LoopNode
+              x={284}
+              y={116}
+              w={132}
+              h={84}
               title="BOND"
-              label={bondLabel}
-              subtitle="vault locked"
+              value={bondLabel}
+              detail="locked first"
               accent
             />
           </g>
 
-          {/* Execute step */}
-          <g data-anim="stage" data-stage="execute">
-            <StageBox
-              x={550}
-              y={180}
-              w={130}
-              h={80}
+          <g data-anim="node" data-stage="execute">
+            <LoopNode
+              x={536}
+              y={116}
+              w={120}
+              h={84}
               title="EXECUTE"
-              label="payout cleared"
-              subtitle={data?.actionId ? `Action ${data.actionId}` : null}
+              value="authorized"
+              detail={paymentAmountLabel}
             />
           </g>
 
-          {/* Delayed evidence channel */}
-          <g data-anim="stage" data-stage="evidence">
+          <g data-anim="node" data-stage="evidence">
+            <LoopNode
+              x={336}
+              y={228}
+              w={126}
+              h={84}
+              title="EVIDENCE"
+              value="failure proof"
+              detail={data?.quoteHash ? shortHash(data.quoteHash) : 'signed buyer'}
+              slash
+            />
+          </g>
+
+          <g data-anim="node" data-stage="watchdog">
+            <LoopNode
+              x={516}
+              y={368}
+              w={130}
+              h={78}
+              title="WATCHDOG"
+              value="challenge"
+              detail={data?.watchdogChallengeTx ? shortHash(data.watchdogChallengeTx) : 'objective rule'}
+              slash
+            />
+          </g>
+
+          <g data-anim="node" data-stage="consequence">
             <rect
-              x={40}
-              y={480}
-              width={640}
-              height={60}
-              rx={10}
+              x={76}
+              y={356}
+              width={188}
+              height={106}
+              rx={8}
               fill={RAISED}
-              stroke={RULE}
+              stroke={SLASH}
+              strokeOpacity={0.64}
             />
             <text
-              x={56}
-              y={504}
+              x={94}
+              y={382}
               fill={BONE_DIM}
               fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={11}
+              fontSize={10}
               letterSpacing="3"
             >
-              DELAYED EVIDENCE CHANNEL
+              CONSEQUENCE
             </text>
             <text
-              x={56}
-              y={526}
+              data-role="consequence-total"
+              x={94}
+              y={411}
+              fill={SLASH}
+              fontFamily="ui-monospace, Menlo, monospace"
+              fontSize={17}
+              fontWeight={700}
+            >
+              bond slashed
+            </text>
+            <text
+              x={94}
+              y={436}
               fill={BONE}
               fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={13}
+              fontSize={11}
             >
-              buyer signer · goods_not_received
+              reward {rewardLabel}
+            </text>
+            <text
+              x={94}
+              y={452}
+              fill={BONE_DIM}
+              fontFamily="ui-monospace, Menlo, monospace"
+              fontSize={10}
+            >
+              reserve {reserveLabel}
             </text>
           </g>
 
-          {/* Watchdog node */}
-          <g data-anim="stage" data-stage="watchdog">
-            <Node
-              x={480}
-              y={380}
-              w={200}
-              h={54}
-              title="WATCHDOG"
-              subtitle="independent · deterministic"
-              slash
-            />
-          </g>
-
-          {/* Controller resolution node */}
-          <g data-anim="stage" data-stage="controller">
-            <StageBox
-              x={40}
-              y={380}
-              w={210}
-              h={54}
-              title="CONTROLLER"
-              label="slash resolved"
-              slash
-            />
-          </g>
-
-          {/* Split allocation */}
-          <g data-anim="stage" data-stage="split">
-            <StageBox
-              x={40}
-              y={445}
-              w={210}
-              h={30}
-              title="REWARD"
-              label={rewardLabel}
-              compact
-            />
-            <StageBox
-              x={260}
-              y={445}
-              w={210}
-              h={30}
-              title="RESERVE"
-              label={reserveLabel}
-              compact
-            />
-          </g>
-
-          {/* Portable receipt */}
-          <g data-anim="stage" data-stage="receipt">
-            <Node
-              x={480}
-              y={445}
-              w={200}
-              h={30}
-              title="PORTABLE RECEIPT"
-              subtitle="signed · verified"
-              small
-            />
-            <g data-role="verified-mark">
-              <circle cx={666} cy={460} r={9} fill={ACCENT} />
-              <path
-                d="M661 460 l4 4 l7 -8"
-                stroke="#0B0F0D"
-                strokeWidth={2}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
-          </g>
-
-          {/* Connectors */}
-          <g data-anim="line" data-line="agent-to-gate">
-            <path
-              d="M 140 84 L 140 180"
+          <g data-anim="node" data-stage="receipt">
+            <rect
+              x={440}
+              y={304}
+              width={180}
+              height={74}
+              rx={8}
+              fill={RAISED}
               stroke={ACCENT}
-              strokeWidth={1.5}
-              fill="none"
-              strokeDasharray="4 4"
-              opacity={0.6}
+              strokeOpacity={0.55}
             />
-          </g>
-          <g data-anim="line" data-line="payment-to-quote">
+            <text
+              x={458}
+              y={329}
+              fill={BONE_DIM}
+              fontFamily="ui-monospace, Menlo, monospace"
+              fontSize={10}
+              letterSpacing="3"
+            >
+              RECEIPT
+            </text>
+            <text
+              x={458}
+              y={354}
+              fill={ACCENT}
+              fontFamily="ui-monospace, Menlo, monospace"
+              fontSize={14}
+            >
+              signed and verified
+            </text>
+            <circle cx={598} cy={328} r={11} fill={ACCENT} />
             <path
-              d="M 210 220 L 230 220"
-              stroke={ACCENT}
-              strokeWidth={1.5}
+              d="M592 328 l4 4 l8 -9"
+              stroke={INK}
+              strokeWidth={2.2}
               fill="none"
-            />
-          </g>
-          <g data-anim="line" data-line="quote-to-bond">
-            <path
-              d="M 370 220 L 390 220"
-              stroke={ACCENT}
-              strokeWidth={1.5}
-              fill="none"
-            />
-          </g>
-          <g data-anim="line" data-line="bond-to-execute">
-            <path
-              d="M 530 220 L 550 220"
-              stroke={ACCENT}
-              strokeWidth={1.5}
-              fill="none"
-            />
-          </g>
-          <g data-anim="line" data-line="watchdog-to-controller">
-            <path
-              d="M 480 405 L 250 405"
-              stroke={SLASH}
-              strokeWidth={1.5}
-              fill="none"
-            />
-          </g>
-          <g data-anim="line" data-line="controller-to-split">
-            <path
-              d="M 145 435 L 145 445"
-              stroke={SLASH}
-              strokeWidth={1.5}
-              fill="none"
-            />
-          </g>
-          <g data-anim="line" data-line="controller-to-receipt">
-            <path
-              d="M 250 460 L 480 460"
-              stroke={ACCENT_DEEP}
-              strokeWidth={1.2}
-              fill="none"
-              strokeDasharray="3 3"
-              opacity={0.7}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </g>
 
-          {/* Green settlement packet along payment path */}
           <circle
             data-anim="packet"
             data-packet="payment"
             r={5}
             fill={ACCENT}
           />
-          {/* Red contradiction packet along evidence path */}
           <circle
             data-anim="packet"
             data-packet="evidence"
             r={5.5}
             fill={SLASH}
           />
-
-          {/* Live pulse indicator inside the gate */}
-          <g data-role="live-pulse">
-            <circle cx={676} cy={148} r={4} fill={ACCENT}>
-              {shouldAnimate && (
-                <animate
-                  attributeName="opacity"
-                  values="0.2;1;0.2"
-                  dur="2.4s"
-                  repeatCount="indefinite"
-                />
-              )}
-            </circle>
-          </g>
         </svg>
       </div>
 
@@ -626,96 +550,54 @@ export default function BondedExecutionAnimation({
   );
 }
 
-/**
- * Rectangular node used for external actors: agent, watchdog, receipt.
- */
-function Node({
-  x,
-  y,
-  w,
-  h,
-  title,
-  subtitle,
+function FlowLine({
+  name,
+  d,
   slash = false,
-  small = false,
 }: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  title: string;
-  subtitle?: string | null;
+  name: string;
+  d: string;
   slash?: boolean;
-  small?: boolean;
 }) {
-  const border = slash ? SLASH : ACCENT;
   return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={6}
-        fill={RAISED}
-        stroke={border}
-        strokeOpacity={0.35}
-      />
-      <text
-        x={x + 12}
-        y={y + (small ? 14 : 20)}
-        fill={BONE_DIM}
-        fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={small ? 9 : 10}
-        letterSpacing="3"
-      >
-        {title}
-      </text>
-      {subtitle && (
-        <text
-          x={x + 12}
-          y={y + (small ? 26 : 40)}
-          fill={BONE}
-          fontFamily="ui-monospace, Menlo, monospace"
-          fontSize={small ? 11 : 13}
-        >
-          {subtitle}
-        </text>
-      )}
-    </g>
+    <path
+      data-anim="line"
+      data-line={name}
+      d={d}
+      stroke={slash ? SLASH : ACCENT_DEEP}
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeDasharray={slash ? '5 5' : '4 6'}
+      fill="none"
+      opacity={0.74}
+    />
   );
 }
 
-/**
- * Sub-stage inside the execution gate.
- */
-function StageBox({
+function LoopNode({
   x,
   y,
   w,
   h,
   title,
-  label,
-  hash,
-  subtitle,
+  value,
+  detail,
   accent = false,
   slash = false,
-  compact = false,
 }: {
   x: number;
   y: number;
   w: number;
   h: number;
   title: string;
-  label: string;
-  hash?: string | null;
-  subtitle?: string | null;
+  value: string;
+  detail?: string | null;
   accent?: boolean;
   slash?: boolean;
-  compact?: boolean;
 }) {
   const border = slash ? SLASH : accent ? ACCENT : RULE;
-  const labelColor = slash ? SLASH : accent ? ACCENT : BONE;
+  const valueColor = slash ? SLASH : accent ? ACCENT : BONE;
+
   return (
     <g>
       <rect
@@ -723,51 +605,39 @@ function StageBox({
         y={y}
         width={w}
         height={h}
-        rx={6}
-        fill="#0f1613"
+        rx={8}
+        fill={RAISED}
         stroke={border}
-        strokeOpacity={accent || slash ? 0.55 : 0.4}
+        strokeOpacity={accent || slash ? 0.6 : 0.48}
       />
       <text
-        x={x + 12}
-        y={y + (compact ? 12 : 18)}
+        x={x + 14}
+        y={y + 25}
         fill={BONE_DIM}
         fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={9}
+        fontSize={10}
         letterSpacing="3"
       >
         {title}
       </text>
       <text
-        data-role="stage-value"
-        x={x + 12}
-        y={y + (compact ? 24 : 40)}
-        fill={labelColor}
+        x={x + 14}
+        y={y + 50}
+        fill={valueColor}
         fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={compact ? 11 : 13}
+        fontSize={13}
       >
-        {label}
+        {value}
       </text>
-      {subtitle && (
+      {detail && (
         <text
-          x={x + 12}
-          y={y + 58}
+          x={x + 14}
+          y={y + 68}
           fill={BONE_DIM}
           fontFamily="ui-monospace, Menlo, monospace"
           fontSize={10}
         >
-          {subtitle}
-        </text>
-      )}
-      {hash && (
-        <text
-          x={x + 12}
-          y={y + h - 8}
-          fill={BONE_DIM}
-          fontFamily="ui-monospace, Menlo, monospace"
-          fontSize={9}
-        >
-          {shortHash(hash)}
+          {detail}
         </text>
       )}
     </g>
@@ -777,5 +647,5 @@ function StageBox({
 function shortHash(h: string): string {
   const clean = h.replace(/^hash-/, '').replace(/^account-hash-/, '');
   if (clean.length <= 14) return clean;
-  return `${clean.slice(0, 6)}…${clean.slice(-4)}`;
+  return `${clean.slice(0, 6)}...${clean.slice(-4)}`;
 }

@@ -67,48 +67,33 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
             </div>
 
             <p className="serial mt-8 text-[0.66rem] text-muted">
-              Bonded execution assurance
+              BONDED EXECUTION ON CASPER
             </p>
             <h1 className="mt-3 max-w-3xl text-5xl font-semibold leading-[1.03] tracking-tight text-bone sm:text-6xl">
-              Make the agent answerable before it acts.
+              Before an agent moves money, make it post the bond.
             </h1>
             <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-muted">
-              Bondsman requires economic collateral before an autonomous financial action, then settles objective failure on Casper. Live x402 settlement, deterministic bond policy and portable signed receipts.
+              Bondsman prices autonomous financial actions, binds each quote to its payer, locks collateral on Casper and turns objectively provable failure into an automatic economic consequence.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/proof"
-                className="rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong"
+                href="/app/new"
+                className="rounded-md bg-accent px-6 py-3 font-medium text-ink transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
-                Verify the live proof
+                Create bonded action
               </Link>
               <Link
-                href="/assurance"
-                className="rounded-md border border-rule px-6 py-3 text-bone transition-colors hover:border-accent/50"
+                href="/proof/27"
+                className="rounded-md border border-rule px-6 py-3 text-bone transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
-                Design an assurance policy
+                Replay a real slash
               </Link>
             </div>
 
-            <ul className="mt-8 grid gap-2 text-xs text-muted sm:grid-cols-2">
-              <li className="flex items-center gap-2">
-                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
-                Live AI risk interpretation
-              </li>
-              <li className="flex items-center gap-2">
-                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
-                Deterministic bond policy
-              </li>
-              <li className="flex items-center gap-2">
-                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
-                Casper testnet contracts
-              </li>
-              <li className="flex items-center gap-2">
-                <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent" />
-                Portable signed receipts
-              </li>
-            </ul>
+            <p className="mt-6 max-w-prose text-sm text-muted">
+              Explore without a wallet. Connect only when you execute.
+            </p>
 
             {healthMode === 'degraded' && degradedReason && (
               <p className="mt-6 max-w-prose rounded-md border border-yellow-400/30 bg-yellow-500/5 px-4 py-3 text-xs leading-relaxed text-yellow-200">

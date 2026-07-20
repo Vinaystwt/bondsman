@@ -61,44 +61,115 @@ export default async function Home() {
         canonical={canonical}
       />
 
-      {/* Choose your path */}
-      <Section id="choose" tone="raised">
+      {/* Problem */}
+      <Section id="problem" tone="raised">
         <Container>
           <SectionHeader
-            eyebrow="Get started"
-            title="Choose what you want to do"
-            lede="Three ways in. Understand the mechanism, verify the real proof, or design accountability for your own agent."
+            eyebrow="Problem"
+            title="Autonomous finance needs a cost for being wrong."
+            lede="Agents can already request payments, quotes and execution. The missing step is collateral posted before the action, with a rule for what happens when the outcome fails."
           />
-          <PanelGrid cols={3} className="mt-10">
-            <PathCard
-              href="#how-it-works"
-              eyebrow="Understand"
-              title="Understand the product"
-              body="See why autonomous actions need economic accountability."
+          <div className="mt-10 grid gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-end">
+            <div className="rounded-lg border border-rule bg-surface p-6">
+              <Label>Before Bondsman</Label>
+              <p className="mt-4 text-2xl font-semibold leading-tight text-bone">
+                The agent can be approved, paid and wrong, while the loss stays outside the system.
+              </p>
+            </div>
+            <div className="rounded-lg border border-rule bg-ink p-6">
+              <Label>After Bondsman</Label>
+              <p className="mt-4 text-2xl font-semibold leading-tight text-bone">
+                The agent acts only after a paid quote and a bond. If objective evidence proves failure, the bond pays the consequence.
+              </p>
+            </div>
+          </div>
+        </Container>
+      </Section>
+
+      {/* Product loop */}
+      <Section id="product-loop">
+        <Container>
+          <SectionHeader
+            eyebrow="Product loop"
+            title="One loop from intent to receipt"
+            lede="Bondsman turns a financial action into a priced commitment, a locked bond, a monitored outcome and a signed receipt."
+          />
+          <PanelGrid cols={4} className="mt-10" gap="lg">
+            <ProductStep
+              n="01"
+              title="Price the action"
+              body="The scenario becomes a fault class, verifier and minimum bond."
             />
-            <PathCard
-              href="/proof"
-              eyebrow="Verify"
-              title="Verify the real proof"
-              body="Inspect a real x402 payment, bonded action, slash and signed receipt."
+            <ProductStep
+              n="02"
+              title="Bind the payer"
+              body="The paid quote is tied to the wallet that settled it."
+            />
+            <ProductStep
+              n="03"
+              title="Lock collateral"
+              body="Casper holds the bond before the agent action is accepted."
               primary
             />
-            <PathCard
-              href="/assurance"
-              eyebrow="Design"
-              title="Design protection for an agent"
-              body="Describe your own agent action and receive an assurance policy."
+            <ProductStep
+              n="04"
+              title="Settle consequence"
+              body="A valid challenge turns failure into a slash, reward and receipt."
             />
           </PanelGrid>
         </Container>
       </Section>
 
-      {/* The memorable failure story */}
-      <Section>
+      {/* Create action */}
+      <Section id="create-action" tone="raised">
+        <Container>
+          <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
+            <div>
+              <Label>Create action</Label>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
+                Create a bonded action in the browser.
+              </h2>
+              <p className="mt-5 max-w-prose leading-relaxed text-muted">
+                Start without a wallet. Describe the action, review the priced policy, then connect Casper Wallet only when you are ready to pay for a quote and submit a real action.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/app/new"
+                  className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                >
+                  Create bonded action
+                </Link>
+                <Link
+                  href="/build"
+                  className="rounded-md border border-rule px-5 py-2.5 text-sm text-bone transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                >
+                  See integration guide
+                </Link>
+              </div>
+            </div>
+            <div className="rounded-lg border border-rule bg-surface p-6">
+              <Label>Example action</Label>
+              <div className="mt-4 space-y-4">
+                <PreviewRow label="Action" value="Supplier payment" />
+                <PreviewRow label="Risk tier" value="High" />
+                <PreviewRow label="Minimum bond" value="2,800 csprUSD" tone="accent" />
+                <PreviewRow label="Evidence" value="Signed delivery attestation" />
+                <div className="flex items-center justify-between border-t border-rule pt-3 text-xs">
+                  <span className="text-muted">Wallet</span>
+                  <StatusPill tone="info">CONNECT ONLY TO EXECUTE</StatusPill>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </Section>
+
+      {/* Real historical consequence */}
+      <Section id="real-consequence">
         <Container>
           <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
-              <Label>The story</Label>
+              <Label>Real historical consequence</Label>
               <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-bone sm:text-4xl">
                 The AI was wrong and lost its own money.
               </h2>
@@ -107,8 +178,8 @@ export default async function Home() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/proof"
-                  className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+                  href="/proof/27"
+                  className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
                 >
                   Inspect Action 27
                 </Link>
@@ -124,7 +195,7 @@ export default async function Home() {
                     The backend is not responding right now. Action No. 0027 remains settled on Casper testnet. Try again in a moment.
                   </p>
                   <Link
-                    href="/proof"
+                    href="/proof/27"
                     className="mt-4 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
                   >
                     Open the Proof Console
@@ -136,34 +207,34 @@ export default async function Home() {
         </Container>
       </Section>
 
-      {/* How Bondsman works */}
-      <Section id="how-it-works" tone="raised">
+      {/* Developer integration */}
+      <Section id="developer-integration" tone="raised">
         <Container>
           <SectionHeader
-            eyebrow="How it works"
-            title="Four authorities. One accountable action."
-            lede="Bondsman separates model interpretation from deterministic pricing, an independent watchdog and Casper contracts that hold the collateral."
+            eyebrow="Developer integration"
+            title="Integrate the paid product loop."
+            lede="Agents can discover Bondsman through A2A, use MCP tools for design and verification, or call the paid HTTP surface directly."
           />
           <PanelGrid cols={4} className="mt-10" gap="lg">
             <AuthorityCard
-              title="AI interpretation"
-              body="The model reads the scenario and identifies meaningful risk. It does not calculate the bond and it does not verify evidence."
-              tag="MODEL DRIVEN"
+              title="Design"
+              body="Read templates and price a scenario before any payment is required."
+              tag="NO WALLET"
             />
             <AuthorityCard
-              title="Policy engine"
-              body="The deterministic policy calculates the minimum bond and selects the supported evidence rules for the fault class."
-              tag="DETERMINISTIC"
+              title="Pay quote"
+              body="Settle the quote fee with the same payer that will authorize submit."
+              tag="X402"
             />
             <AuthorityCard
-              title="Watchdog"
-              body="The autonomous watchdog observes objective evidence and independently submits a valid challenge when it applies."
-              tag="INDEPENDENT"
+              title="Submit"
+              body="Send the payer signed authorization with an idempotency key."
+              tag="SIGNED"
             />
             <AuthorityCard
-              title="Casper contracts"
-              body="The contracts hold the collateral, resolve the fault and settle the final economic consequence on chain."
-              tag="ON CHAIN"
+              title="Verify"
+              body="Poll the action, verify the receipt and retain portable proof."
+              tag="RECEIPT"
             />
           </PanelGrid>
           <Appear className="mt-12">
@@ -176,57 +247,13 @@ export default async function Home() {
         </Container>
       </Section>
 
-      {/* Design your own */}
-      <Section>
-        <Container>
-          <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
-            <div>
-              <Label>Assurance Studio</Label>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-                Design accountability for your own agent.
-              </h2>
-              <p className="mt-5 max-w-prose leading-relaxed text-muted">
-                Describe an autonomous action. The live model interprets the risk. The deterministic policy prices the minimum bond. You receive a portable integration manifest.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href="/assurance"
-                  className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
-                >
-                  Design your own policy
-                </Link>
-                <Link
-                  href="/build"
-                  className="rounded-md border border-rule px-5 py-2.5 text-sm text-bone transition-colors hover:border-accent/50"
-                >
-                  See the integration guide
-                </Link>
-              </div>
-            </div>
-            <div className="rounded-lg border border-rule bg-surface p-6">
-              <Label>Example result</Label>
-              <div className="mt-4 space-y-4">
-                <PreviewRow label="Action" value="Supplier payment" />
-                <PreviewRow label="Risk tier" value="High" />
-                <PreviewRow label="Minimum bond" value="2,800 csprUSD" tone="accent" />
-                <PreviewRow label="Evidence" value="Signed delivery attestation" />
-                <div className="flex items-center justify-between border-t border-rule pt-3 text-xs">
-                  <span className="text-muted">Status</span>
-                  <StatusPill tone="ok">EXECUTABLE TODAY</StatusPill>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </Section>
-
-      {/* Casper ecosystem */}
+      {/* Casper value */}
       <Section id="casper" tone="ruled">
         <Container>
           <SectionHeader
-            eyebrow="Casper ecosystem"
-            title="Built as reusable Casper agent infrastructure"
-            lede="Bondsman is more than one hackathon proof. Its surfaces plug directly into how Casper agents will discover services, price risk and prove outcomes."
+            eyebrow="Casper value"
+            title="Bonds are useful because Casper can hold and settle them."
+            lede="The chain is not decoration. Casper holds collateral, records challenges, resolves slashes and gives agents receipts they can carry across integrations."
           />
           <PanelGrid cols={3} className="mt-10">
             <FactCard
@@ -247,21 +274,21 @@ export default async function Home() {
               statusTone="ok"
             />
             <FactCard
-              title="Assurance manifest"
+              title="Policy manifest"
               body="A signed manifest carries the fault class, verifier, evidence source and bond policy an integrator needs."
               status="READY"
               statusTone="info"
             />
             <FactCard
-              title="RWA adapter"
-              body="Invoice or procurement delivery is executable today against the deployed verifier."
-              status="EXECUTABLE TODAY"
-              statusTone="ok"
+              title="Delivery adapter"
+              body="Invoice and procurement delivery are supported by the historical verifier path and ready for partner integration."
+              status="SUPPORTED"
+              statusTone="info"
             />
             <FactCard
-              title="DeFi and treasury blueprints"
-              body="Treasury guardrails, DEX execution and x402 paid service delivery are blueprints ready for a design partner."
-              status="INTEGRATION BLUEPRINT"
+              title="Adapter blueprints"
+              body="Treasury guardrails, DEX execution and x402 paid service delivery remain adapter blueprints, not deployed customer flows."
+              status="BLUEPRINT"
               statusTone="info"
             />
           </PanelGrid>
@@ -306,40 +333,31 @@ export default async function Home() {
   );
 }
 
-function PathCard({
-  href,
-  eyebrow,
+function ProductStep({
+  n,
   title,
   body,
   primary = false,
 }: {
-  href: string;
-  eyebrow: string;
+  n: string;
   title: string;
   body: string;
   primary?: boolean;
 }) {
   return (
-    <Link
-      href={href}
-      className={`group flex h-full flex-col justify-between rounded-lg border p-6 transition-colors ${
+    <div
+      className={`flex h-full flex-col rounded-lg border p-6 ${
         primary
-          ? 'border-accent/40 bg-accent/[0.05] hover:border-accent/70 hover:bg-accent/10'
-          : 'border-rule bg-surface hover:border-accent/40'
+          ? 'border-accent/40 bg-accent/[0.05]'
+          : 'border-rule bg-surface'
       }`}
     >
-      <div>
-        <Label className={primary ? 'text-accent' : undefined}>{eyebrow}</Label>
-        <h3 className="mt-3 text-xl font-semibold text-bone">{title}</h3>
-        <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
-      </div>
-      <span className="mt-6 inline-flex items-center gap-1 text-sm text-accent">
-        Continue
-        <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">
-          →
-        </span>
+      <span className={`font-mono text-sm ${primary ? 'text-accent' : 'text-muted'}`}>
+        {n}
       </span>
-    </Link>
+      <h3 className="mt-4 text-lg font-semibold text-bone">{title}</h3>
+      <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
+    </div>
   );
 }
 
