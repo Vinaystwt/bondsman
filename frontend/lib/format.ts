@@ -38,7 +38,7 @@ export function formatBase(atomic: string | bigint): string {
 
 /** Convert a Casper testnet ISO or Date to a short UTC display. */
 export function formatIsoUtc(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'not available';
   try {
     const d = new Date(iso);
     const s = d.toLocaleString('en-US', {

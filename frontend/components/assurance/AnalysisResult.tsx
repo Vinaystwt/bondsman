@@ -185,12 +185,12 @@ function VerifierLayer({
           <>
             <Field label="Proposed fault class">
               <span className="text-bone">
-                {m.proposedFaultClass ?? template.proposedFaultClass ?? '—'}
+                {m.proposedFaultClass ?? template.proposedFaultClass ?? 'not proposed'}
               </span>
             </Field>
             <Field label="Proposed verifier">
               <span className="text-bone">
-                {m.proposedVerifier ?? template.proposedVerifier ?? '—'}
+                {m.proposedVerifier ?? template.proposedVerifier ?? 'not proposed'}
               </span>
             </Field>
           </>

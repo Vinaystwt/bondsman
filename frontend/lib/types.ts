@@ -1,71 +1,6 @@
 // Shapes mirror the live backend at http://127.0.0.1:3001 exactly.
 // All money values are strings in atomic units, 9 decimals.
-
-export type ActionStatus =
-  | 'Initiated'
-  | 'Bonded'
-  | 'Executed'
-  | 'Challenged'
-  | 'ResolvedSlash'
-  | 'ResolvedRefund';
-
-export type EventType =
-  | 'BondLocked'
-  | 'ActionInitiated'
-  | 'PayoutApproved'
-  | 'DuplicateDetected'
-  | 'BondSlashed'
-  | 'ResolvedSlash'
-  | 'BondReleased'
-  | 'ResolvedRefund'
-  | 'BondPosted'
-  | 'ActionExecuted';
-
-export interface Invoice {
-  id: number;
-  invoiceNumber: string;
-  debtor: string;
-  amount: string;
-  vendor: string;
-  dueDate: string;
-  delivered: boolean;
-  claimHash: string;
-  paid: boolean;
-}
-
-export interface ActionSummary {
-  actionId: number;
-  invoiceId: number;
-  agent: string;
-  amount: string;
-  claimHash: string;
-  reasoning: string;
-  reasoningHash: string;
-  bondRequired: string;
-  bondPosted: string;
-  windowEnd: number;
-  status: ActionStatus;
-  challenger: string | null;
-  challengerType: 'watchdog' | 'manual' | 'external-wallet' | null;
-  reservedForManual: boolean;
-  transactions: ActionTransactions;
-}
-
-export interface WatchdogCatch {
-  actionId: number;
-  reward: string;
-  reasoning: string;
-  challengeTx: string | null;
-  resolveTx: string | null;
-  timestamp: number;
-}
-
-export interface Watchdog {
-  running: boolean;
-  account: string;
-  recentCatches: WatchdogCatch[];
-  totalRewardEarned: string;
-}
+// Only the types the final public frontend actually consumes are exposed.
 
 export interface Health {
   ok: true;
@@ -74,122 +9,6 @@ export interface Health {
   watchdog: { running: boolean };
   uptimeSec: number;
   deploymentsPath: string;
-}
-
-export interface ActionTransactions {
-  initiate?: string;
-  approve?: string;
-  postBond?: string;
-  execute?: string;
-  challenge?: string;
-  resolve?: string;
-}
-
-export interface CesEvent {
-  contract: string;
-  eventIndex: number;
-  eventType: EventType;
-  actionId: number;
-  data: string;
-  transactionHash: string | null;
-  explorerLink: string | null;
-}
-
-export interface ActionDetail extends ActionSummary {
-  events: CesEvent[];
-  explorerLinks: Partial<Record<keyof ActionTransactions, string>>;
-}
-
-export interface DemoReadyCase extends ActionDetail {
-  demo: true;
-  remainingMs: number;
-  minRemainingMs: number;
-  safeToChallengeNow: boolean;
-}
-
-export interface SlashProof {
-  actionId: number;
-  status: 'ResolvedSlash';
-  challenger: string | null;
-  challengerType: 'manual' | 'watchdog' | 'external-wallet' | null;
-  bond: string;
-  amount: string;
-  challengeTx: string | null;
-  resolveTx: string | null;
-  explorerLinks: Partial<Record<keyof ActionTransactions, string>>;
-}
-
-export interface DemoProofs {
-  latestManualSlash: SlashProof | null;
-  latestWatchdogSlash: SlashProof | null;
-  readyCases: DemoReadyCase[];
-  totals?: {
-    slashes: number;
-    refunds: number;
-    slashedBonds: string;
-  };
-}
-
-export type DemoJobStatus =
-  | 'queued'
-  | 'arming'
-  | 'action_ready'
-  | 'submitting_challenge'
-  | 'challenge_finalized'
-  | 'resolving'
-  | 'resolved'
-  | 'failed';
-
-export interface DemoJob {
-  id: string;
-  kind: 'challenge' | 'arm' | 'watchdog';
-  actionId: number | null;
-  status: DemoJobStatus;
-  challengeTx: string | null;
-  resolveTx: string | null;
-  error: string | null;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export type DemoReady =
-  | {
-      success: true;
-      count: number;
-      minRemainingMs: number;
-      best: DemoReadyCase;
-      cases: DemoReadyCase[];
-    }
-  | {
-      success: false;
-      code: 'NO_READY_CASE';
-      message: string;
-      nextStep: string;
-      count: 0;
-      minRemainingMs: number;
-      cases: [];
-    };
-
-export interface AgentReputation {
-  agent: string;
-  clean: number;
-  slashed: number;
-  score: number;
-  actions: ActionSummary[];
-}
-
-export interface SlashEvent {
-  contract: string;
-  eventIndex: number;
-  eventType: string;
-  actionId: number;
-  data: string;
-  transactionHash: string | null;
-}
-
-export interface Reserve {
-  balance: string;
-  slashes: SlashEvent[];
 }
 
 export interface Deployment {
@@ -204,35 +23,6 @@ export interface Deployment {
     string,
     { publicKey: string; accountHash: string }
   >;
-}
-
-export interface ChallengeResult {
-  challenge: string;
-  resolve: string;
-}
-
-export interface ResolveResult {
-  resolve: string;
-}
-
-export interface TransactionStatus {
-  status: string;
-  final: boolean;
-  success: boolean;
-  error: string | null;
-}
-
-export interface WalletResolveResult {
-  success: boolean;
-  challenger: string;
-  challengerType: 'external-wallet';
-  rewardAmount: string;
-  challengerShare: string;
-  reserveShare: string;
-  challengeDeployHash: string;
-  resolveDeployHash: string;
-  challengeExplorerLink: string;
-  resolveExplorerLink: string;
 }
 
 export type CanonicalOutcome = 'SLASHED' | 'REFUNDED';
@@ -388,29 +178,6 @@ export interface ReceiptVerification {
   reason?: string;
 }
 
-export interface Verifier {
-  id: string;
-  title: string;
-  onChain: boolean;
-  schema: Record<string, unknown>;
-  example: Record<string, unknown>;
-}
-
-export interface Coverage {
-  reserveBalance: string;
-  openBondedExposure: string;
-  coverageRatio: number;
-  cumulativeSlashes: string;
-  cumulativeRefunds: string;
-  maxSingleActionCoverage: string;
-  largestPossibleUncoveredLoss: string;
-  explanation: {
-    bondCoverageRatio: string;
-    reserveRole: string;
-    uncoveredCap: string;
-  };
-}
-
 export interface AgentCardSkill {
   id: string;
   name: string;
@@ -537,6 +304,22 @@ export interface PublicCapabilities {
   externalWalletChallenge: { enabled: boolean };
   operatorDemoWrites: { enabled: boolean; public: boolean };
   mcp: { mode: string };
+}
+
+export interface HealthPublicExperience {
+  proofConsoleReady: boolean;
+  assuranceStudioReady: boolean;
+  assuranceModelConfigured: boolean;
+  assuranceModelAvailable: boolean;
+  assuranceModelStatus: 'available' | 'unavailable' | 'unknown' | string;
+  assuranceModelLastCheckedAt: string | null;
+  assuranceModelLastSuccessAt: string | null;
+  assuranceModelLastFailureCode: string | null;
+  canonicalActionId: number;
+  canonicalProofAvailable: boolean;
+  canonicalReceiptValid: boolean;
+  liveQuoteProbeAvailable: boolean;
+  publicMutationModesEnabled: boolean;
 }
 
 export type AssuranceStatus = 'executable_now' | 'blueprint' | string;
@@ -666,20 +449,4 @@ export interface AssuranceAnalysis {
   policy: AssurancePolicy;
   manifest: AssuranceManifest;
   integrationManifest: AssuranceManifest;
-}
-
-export interface HealthPublicExperience {
-  proofConsoleReady: boolean;
-  assuranceStudioReady: boolean;
-  assuranceModelConfigured: boolean;
-  assuranceModelAvailable: boolean;
-  assuranceModelStatus: 'available' | 'unavailable' | 'unknown' | string;
-  assuranceModelLastCheckedAt: string | null;
-  assuranceModelLastSuccessAt: string | null;
-  assuranceModelLastFailureCode: string | null;
-  canonicalActionId: number;
-  canonicalProofAvailable: boolean;
-  canonicalReceiptValid: boolean;
-  liveQuoteProbeAvailable: boolean;
-  publicMutationModesEnabled: boolean;
 }

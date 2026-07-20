@@ -93,7 +93,7 @@ export default function QuoteSingleUseCheck({
           </Field>
           <Field label="Expected result">
             <span className="font-mono text-bone">
-              {result.expectedRejectionCode ?? '—'}
+              {result.expectedRejectionCode ?? 'not reported'}
             </span>
           </Field>
           <Field label="Status">

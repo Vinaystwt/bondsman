@@ -32,7 +32,7 @@ interface Props {
 const SCALE = 10n ** 9n;
 
 function toShort(atomic: string | null, unit: string, digits = 0): string {
-  if (!atomic) return `— ${unit}`;
+  if (!atomic) return `${unit} unavailable`;
   try {
     const v = BigInt(atomic);
     const whole = v / SCALE;
@@ -43,7 +43,7 @@ function toShort(atomic: string | null, unit: string, digits = 0): string {
       maximumFractionDigits: digits,
     })} ${unit}`;
   } catch {
-    return `— ${unit}`;
+    return `${unit} unavailable`;
   }
 }
 
@@ -123,7 +123,6 @@ export default function BondedExecutionAnimation({
         q('[data-anim="stage"], [data-anim="packet"], [data-anim="label"], [data-anim="line"]'),
         { autoAlpha: 0 },
       );
-      gsap.set(q('[data-anim="line"]'), { drawSVGDuration: 0 });
 
       if (!shouldAnimate) {
         // Snap to the completed state: everything visible, packets at rest.

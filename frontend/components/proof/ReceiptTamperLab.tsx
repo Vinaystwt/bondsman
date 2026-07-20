@@ -103,13 +103,47 @@ interface Props {
  * receipt. The user can mutate one field and send the modified body to the
  * real verification endpoint. Signature verification fails on any tamper.
  */
+/**
+ * The receipt panel distinguishes three separate states:
+ *   valid       — the verifier returned { valid: true }
+ *   invalid     — the verifier returned { valid: false } with a reason
+ *   unavailable — the verifier did not return a well formed response
+ *
+ * Unavailable never renders as SIGNATURE INVALID. Only a real verifier
+ * response with valid=false may claim the cryptographic invalid state.
+ */
+export type VerificationState =
+  | { kind: 'valid' }
+  | { kind: 'invalid'; reason: string }
+  | { kind: 'unavailable'; reason: string };
+
+export function verificationStateFrom(
+  res: ReceiptVerification | null | undefined,
+): VerificationState | null {
+  if (res === null || res === undefined) return null;
+  if (typeof res !== 'object') {
+    return { kind: 'unavailable', reason: 'malformed verifier response' };
+  }
+  if (res.valid === true) return { kind: 'valid' };
+  if (res.valid === false) {
+    return {
+      kind: 'invalid',
+      reason: res.reason ?? 'signature verification failed',
+    };
+  }
+  return {
+    kind: 'unavailable',
+    reason: 'malformed verifier response',
+  };
+}
+
 export default function ReceiptTamperLab({
   receipt: original,
   initialVerification,
 }: Props) {
   const [option, setOption] = useState<TamperOption>('none');
-  const [verification, setVerification] = useState<ReceiptVerification | null>(
-    initialVerification,
+  const [state, setState] = useState<VerificationState | null>(
+    verificationStateFrom(initialVerification),
   );
   const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
   const [pending, setPending] = useState<null | 'verify' | 'apply' | 'reset'>(
@@ -131,10 +165,11 @@ export default function ReceiptTamperLab({
     setPending('verify');
     try {
       const res = await clientApi.receiptVerify(original.actionId);
-      setVerification(res);
+      setState(verificationStateFrom(res));
       setVerifiedAt(new Date().toISOString());
     } catch {
-      setVerification({ valid: false, reason: 'verification unavailable' });
+      setState({ kind: 'unavailable', reason: 'backend request failed' });
+      setVerifiedAt(new Date().toISOString());
     } finally {
       setPending(null);
     }
@@ -152,13 +187,11 @@ export default function ReceiptTamperLab({
       if (!spec) return;
       const modified = spec.apply(original);
       const res = await clientApi.verifyReceiptBody(original.actionId, modified);
-      setVerification(res);
+      setState(verificationStateFrom(res));
       setVerifiedAt(new Date().toISOString());
     } catch {
-      setVerification({
-        valid: false,
-        reason: 'verification unavailable',
-      });
+      setState({ kind: 'unavailable', reason: 'backend request failed' });
+      setVerifiedAt(new Date().toISOString());
     } finally {
       setPending(null);
     }
@@ -166,7 +199,7 @@ export default function ReceiptTamperLab({
 
   function resetReceipt() {
     setOption('none');
-    setVerification(initialVerification);
+    setState(verificationStateFrom(initialVerification));
     setVerifiedAt(null);
   }
 
@@ -194,8 +227,9 @@ export default function ReceiptTamperLab({
     URL.revokeObjectURL(url);
   }
 
-  const valid = verification?.valid === true;
-  const invalid = verification?.valid === false;
+  const valid = state?.kind === 'valid';
+  const invalid = state?.kind === 'invalid';
+  const unavailable = state?.kind === 'unavailable';
 
   return (
     <section className="rounded-md border border-rule bg-surface p-6">
@@ -213,12 +247,18 @@ export default function ReceiptTamperLab({
             . The signature verification fails on any change.
           </p>
         </div>
-        <StatusPill tone={valid ? 'ok' : invalid ? 'fault' : 'neutral'}>
+        <StatusPill
+          tone={
+            valid ? 'ok' : invalid ? 'fault' : unavailable ? 'warn' : 'neutral'
+          }
+        >
           {valid
             ? 'SIGNATURE VALID'
             : invalid
               ? 'SIGNATURE INVALID'
-              : 'NOT VERIFIED'}
+              : unavailable
+                ? 'VERIFICATION UNAVAILABLE'
+                : 'NOT VERIFIED'}
         </StatusPill>
       </div>
 
@@ -249,9 +289,14 @@ export default function ReceiptTamperLab({
         </Field>
       </dl>
 
-      {invalid && verification?.reason && (
+      {invalid && (
         <div className="mt-5 rounded-md border border-slash/40 bg-slash/10 px-4 py-3 text-sm text-slash">
-          {verification.reason}
+          {state?.kind === 'invalid' ? state.reason : ''}
+        </div>
+      )}
+      {unavailable && (
+        <div className="mt-5 rounded-md border border-yellow-400/30 bg-yellow-500/5 px-4 py-3 text-sm text-yellow-200">
+          The verifier did not return a well formed response. Try again in a moment. Historical evidence remains settled on Casper testnet.
         </div>
       )}
 
