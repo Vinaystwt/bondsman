@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/Primitives';
 import { BackendDown } from '@/components/ui/States';
 import CopyHash from '@/components/ui/CopyHash';
+import LiveQuoteProbe from '@/components/proof/LiveQuoteProbe';
 import { contractExplorer, truncateHash } from '@/lib/format';
 
 export const metadata: Metadata = {
@@ -182,6 +183,17 @@ export default async function BuildPage() {
         title="Adopt bonded accountability from any autonomous agent"
         lede="Bondsman ships as an assurance surface, an x402 paid HTTP endpoint, an A2A agent card and an MCP server. Design first, pay for a quote, submit under payer authorization, then verify the portable receipt."
       />
+
+      <section aria-label="Test the payment requirement" className="space-y-4">
+        <Label>Test in browser</Label>
+        <h2 className="text-2xl font-semibold text-bone">
+          Test the payment requirement
+        </h2>
+        <p className="max-w-prose text-sm leading-relaxed text-muted">
+          This sends an unpaid request and expects HTTP 402. It does not create a payment, quote or action.
+        </p>
+        <LiveQuoteProbe />
+      </section>
 
       <section aria-label="End to end integration flow">
         <Label>End to end integration</Label>

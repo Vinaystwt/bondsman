@@ -11,10 +11,10 @@ import {
 import HealthBanner, {
   resolveProofState,
 } from '@/components/proof/HealthBanner';
-import LiveQuoteProbe from '@/components/proof/LiveQuoteProbe';
 import QuoteSingleUseCheck from '@/components/proof/QuoteSingleUseCheck';
 import ReplayTimeline from '@/components/proof/ReplayTimeline';
 import BondEconomicsCard from '@/components/proof/BondEconomicsCard';
+import ReceiptPanel from '@/components/proof/ReceiptPanel';
 import ReceiptTamperLab from '@/components/proof/ReceiptTamperLab';
 import {
   DeliveryContradictionPanel,
@@ -22,14 +22,13 @@ import {
   PaymentPanel,
   PaidQuotePanel,
 } from '@/components/proof/PanelGrid';
-import WhatIsReal from '@/components/proof/WhatIsReal';
 import CopyHash from '@/components/ui/CopyHash';
-import { formatWcspr, truncateHash, txExplorer } from '@/lib/format';
+import { formatMoney, truncateHash, txExplorer } from '@/lib/format';
 
 export const metadata: Metadata = {
-  title: 'Proof Console',
+  title: 'Proof',
   description:
-    'Verify a complete bonded agent action on Casper. Live x402 probe, canonical Action 27 replay, quote single use test and a receipt tamper lab against the real verifier.',
+    'Replay Action 27, a real historical Casper testnet slash with signed receipt verification.',
 };
 
 export const revalidate = 30;
@@ -92,147 +91,123 @@ export default async function ProofConsolePage() {
     exactMatch: true,
   };
 
+  const settlementTx = proof.payment?.settlementTransaction ?? null;
+
   return (
-    <Container className="space-y-14 py-14 lg:py-20">
+    <Container className="space-y-12 py-14 lg:py-20">
       <SectionHeader
-        eyebrow="Proof Console"
-        title="Verify a complete bonded agent action"
-        lede="Run a real payment probe, inspect settled Casper evidence, test single use protection and try to break the signed receipt. Every hash opens on the Casper testnet explorer."
+        eyebrow="REAL HISTORICAL CASPER TESTNET ACTION"
+        title={`Action ${actionId} proof`}
+        lede="Replay the paid quote, bond lock, execution, delayed evidence, watchdog challenge, slash and signed receipt without a wallet or a new transaction."
       />
 
       <HealthBanner state={state} />
 
-      {/* Sequence overview */}
-      <section aria-label="Proof console guided sequence" className="grid gap-4 lg:grid-cols-3">
-        <StepCard step={1} label="Request payment terms" body="Live x402 probe returns the real WCSPR settlement instrument." />
-        <StepCard step={2} label="Inspect settlement" body="See the settled WCSPR payment for the canonical action." />
-        <StepCard step={3} label="Verify quote consumption" body="Read only check that the paid quote will not accept a second submission." />
-        <StepCard step={4} label="Replay the bonded action" body="Approver posted the bond, executed the payout and consumed the paid quote." />
-        <StepCard step={5} label="Inspect the contradiction" body="Buyer signed delivery attestation arrived after execution." />
-        <StepCard step={6} label="Watchdog challenge" body="The independent watchdog submitted the challenge with the signed evidence." />
-        <StepCard step={7} label="Slash economics" body="Bond slashed. Challenger reward and reserve credit set on chain." />
-        <StepCard step={8} label="Verify the receipt" body="Signed portable receipt verified against the public verifier." />
-        <StepCard step={9} label="Tamper the receipt" body="Modify a field client side and watch the real verifier reject it." />
+      <section className="grid gap-5 rounded-md border border-rule bg-surface p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div>
+          <Label>Canonical outcome</Label>
+          <h2 className="mt-2 text-2xl font-semibold text-bone">
+            Bond slashed after buyer signed contradiction evidence
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted">
+            This is historical Action {actionId}. It is not a simulation, not a new payment and not a fresh backend sponsored action.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusPill tone="fault">{proof.outcome}</StatusPill>
+          <StatusPill tone="info">{proof.faultClass}</StatusPill>
+        </div>
+        <dl className="grid gap-4 border-t border-rule pt-5 text-sm sm:grid-cols-2 lg:col-span-2 lg:grid-cols-4">
+          <SummaryField label="Principal">{formatMoney(proof.valueAtRisk)}</SummaryField>
+          <SummaryField label="Bond">{formatMoney(proof.bond)}</SummaryField>
+          <SummaryField label="Settlement">
+            {settlementTx ? (
+              <CopyHash
+                value={settlementTx}
+                href={txExplorer(settlementTx)}
+                label={truncateHash(settlementTx)}
+              />
+            ) : (
+              'not available'
+            )}
+          </SummaryField>
+          <SummaryField label="Receipt">
+            {initialVerification?.valid ? 'signature valid' : 'verification pending'}
+          </SummaryField>
+        </dl>
       </section>
 
-      {/* 1. Live probe */}
-      <LiveQuoteProbe />
-
-      {/* 2. Settlement summary */}
-      <section className="rounded-md border border-rule bg-surface p-6">
+      <section id="lifecycle" className="space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <Label>Step 2 · Settlement snapshot</Label>
-            <h3 className="mt-1 text-lg font-semibold text-bone">
-              Historical Casper testnet settlement for Action No. {actionId.padStart(4, '0')}
-            </h3>
+            <Label>Replay control</Label>
+            <h2 className="mt-1 text-xl font-semibold text-bone">
+              Lifecycle rail
+            </h2>
           </div>
-          <StatusPill tone="info">REAL HISTORICAL CASPER TRANSACTION</StatusPill>
+          <a
+            href="#receipt-verifier"
+            className="rounded-md border border-rule px-4 py-2 text-sm text-bone transition-colors hover:border-accent/50"
+          >
+            Jump to receipt
+          </a>
         </div>
-        {proof.payment ? (
-          <dl className="mt-5 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Settlement amount">
-              <span className="font-mono text-bone">
-                {formatWcspr(proof.payment.paymentAmount)}
-              </span>
-            </Field>
-            <Field label="Settlement transaction">
-              <CopyHash
-                value={proof.payment.settlementTransaction}
-                href={txExplorer(proof.payment.settlementTransaction)}
-                label={truncateHash(proof.payment.settlementTransaction)}
-              />
-            </Field>
-            <Field label="Network">{proof.payment.network}</Field>
-            <Field label="Facilitator">{proof.payment.facilitator}</Field>
-            <Field label="Pay to account">
-              <CopyHash
-                value={proof.payment.payTo}
-                label={truncateHash(proof.payment.payTo)}
-              />
-            </Field>
-            <Field label="Payer">
-              <CopyHash
-                value={proof.payment.payer}
-                label={truncateHash(proof.payment.payer)}
-              />
-            </Field>
-          </dl>
-        ) : (
-          <p className="mt-4 text-sm text-muted">Payment record unavailable.</p>
-        )}
+        <ReplayTimeline replay={replay} />
       </section>
 
-      {/* 3. Quote single use */}
-      {quoteHash && <QuoteSingleUseCheck quoteHash={quoteHash} actionId={actionId} />}
-
-      {/* 4-7. Guided timeline */}
-      <ReplayTimeline replay={replay} />
-
-      {/* Bond economics */}
       <BondEconomicsCard
         economics={bondEconomics}
         policySnapshot={proof.paidQuote?.policySnapshot}
         actionId={actionId}
       />
 
-      {/* Deep evidence */}
-      <section aria-label="Evidence explorer">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <Label>Evidence explorer</Label>
-            <h3 className="mt-1 text-lg font-semibold text-bone">
-              Every panel opens directly against the backend record
-            </h3>
+      <details className="rounded-md border border-rule bg-surface p-5">
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <Label>Advanced evidence</Label>
+              <h2 className="mt-1 text-xl font-semibold text-bone">
+                Payment, quote, contradiction and slash details
+              </h2>
+            </div>
+            <StatusPill tone="info">Read only</StatusPill>
           </div>
+        </summary>
+        <div className="mt-5 space-y-6 border-t border-rule pt-5">
+          {quoteHash && (
+            <QuoteSingleUseCheck quoteHash={quoteHash} actionId={actionId} />
+          )}
+          <PanelGrid cols={2} gap="lg">
+            <PaymentPanel payment={proof.payment} />
+            <PaidQuotePanel
+              quote={proof.paidQuote}
+              consumedActionId={actionId}
+            />
+            <DeliveryContradictionPanel proof={proof} />
+            <EconomicPanel proof={proof} />
+          </PanelGrid>
         </div>
-        <PanelGrid cols={2} className="mt-5" gap="lg">
-          <PaymentPanel payment={proof.payment} />
-          <PaidQuotePanel
-            quote={proof.paidQuote}
-            consumedActionId={actionId}
-          />
-          <DeliveryContradictionPanel proof={proof} />
-          <EconomicPanel proof={proof} />
-        </PanelGrid>
+      </details>
+
+      <section id="receipt-verifier">
+        <ReceiptPanel
+          receipt={receipt}
+          verification={initialVerification}
+          actionId={actionId}
+        />
       </section>
 
-      {/* 8-9. Receipt lab */}
       {receipt && (
         <ReceiptTamperLab
           receipt={receipt}
           initialVerification={initialVerification}
         />
       )}
-
-      <WhatIsReal />
     </Container>
   );
 }
 
-function StepCard({
-  step,
-  label,
-  body,
-}: {
-  step: number;
-  label: string;
-  body: string;
-}) {
-  return (
-    <div className="rounded-md border border-rule bg-surface/60 p-4">
-      <div className="flex items-center gap-3">
-        <span className="grid h-8 w-8 place-items-center rounded-full border border-accent/40 bg-accent/10 font-mono text-xs text-accent">
-          {step}
-        </span>
-        <p className="text-sm font-semibold text-bone">{label}</p>
-      </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted">{body}</p>
-    </div>
-  );
-}
-
-function Field({
+function SummaryField({
   label,
   children,
 }: {
@@ -242,7 +217,7 @@ function Field({
   return (
     <div>
       <dt className="serial text-[0.6rem] text-muted">{label}</dt>
-      <dd className="mt-1 text-sm text-bone break-all">{children}</dd>
+      <dd className="mt-1 break-all text-bone">{children}</dd>
     </div>
   );
 }
