@@ -62,6 +62,35 @@ async function parseErrorBody(
   return null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function assertPaidQuoteResponse(value: unknown): asserts value is PaidQuoteResponse {
+  if (!isRecord(value)) throw new Error('paid quote malformed');
+  const receipt = value.paymentReceipt;
+  if (!/^0x[0-9a-f]{64}$/i.test(String(value.quoteHash ?? ''))) {
+    throw new Error('paid quote malformed: quoteHash');
+  }
+  if (!['duplicate_claim', 'delivery_contradiction'].includes(String(value.faultClass))) {
+    throw new Error('paid quote malformed: faultClass');
+  }
+  if (
+    typeof value.verifier !== 'string' ||
+    typeof value.requiredBond !== 'string' ||
+    typeof value.quotedMinimumBond !== 'string' ||
+    typeof value.quoteExpiry !== 'string' ||
+    Number.isNaN(Date.parse(value.quoteExpiry)) ||
+    !isRecord(receipt) ||
+    receipt.settled !== true ||
+    typeof receipt.payer !== 'string' ||
+    !/^00[0-9a-f]{64}$/i.test(receipt.payer) ||
+    !/^[0-9a-f]{64}$/i.test(String(receipt.transaction ?? ''))
+  ) {
+    throw new Error('paid quote malformed: paymentReceipt');
+  }
+}
+
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -261,7 +290,9 @@ export const clientApi = {
       if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
       throw new Error(`request failed: ${res.status}`);
     }
-    return (await res.json()) as PaidQuoteResponse;
+    const parsed = await res.json();
+    assertPaidQuoteResponse(parsed);
+    return parsed;
   },
   async submitPaidAction(body: {
     quoteHash: string;
@@ -269,13 +300,18 @@ export const clientApi = {
     buyerPublicKey?: string;
     eventType?: 'delivery_rejected' | 'goods_not_received';
     submitAuthorization: SubmitAuthorization;
+    idempotencyKey?: string;
   }): Promise<PaidActionSubmitResponse> {
+    const { idempotencyKey, ...payload } = body;
     let res: Response;
     try {
       res = await fetchWithTimeout('/v1/actions/submit', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+        headers: {
+          'content-type': 'application/json',
+          ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+        },
+        body: JSON.stringify(payload),
       }, 120_000);
     } catch {
       throw new BackendUnreachable();

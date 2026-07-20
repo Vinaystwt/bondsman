@@ -5,6 +5,13 @@ import type { X402Requirement } from './types';
 export const WALLET_SUPPORT_SIGN_MESSAGE = 'sign-message';
 export const WALLET_SUPPORT_SIGN_TYPED_DATA = 'sign-typed-data-eip712';
 
+const REQUIRED_PROVIDER_METHODS = [
+  'requestConnection',
+  'getActivePublicKeySupports',
+  'signTypedData',
+  'signMessage',
+] as const;
+
 export interface CasperWalletState {
   available: boolean;
   connected: boolean;
@@ -12,6 +19,7 @@ export interface CasperWalletState {
   publicKey: string | null;
   payerAccountAddress: string | null;
   supports: string[];
+  missingMethods: string[];
   version: string | null;
 }
 
@@ -47,6 +55,19 @@ function provider(): CasperWalletProviderApi | null {
   return typeof factory === 'function' ? factory() : null;
 }
 
+function missingProviderMethods(p: unknown): string[] {
+  if (!p || typeof p !== 'object') return [...REQUIRED_PROVIDER_METHODS];
+  const record = p as Record<string, unknown>;
+  return REQUIRED_PROVIDER_METHODS.filter((method) => typeof record[method] !== 'function');
+}
+
+function assertProviderMethods(p: unknown) {
+  const missing = missingProviderMethods(p);
+  if (missing.length > 0) {
+    throw new Error(`Casper Wallet is missing ${missing.join(', ')}. Update Casper Wallet or switch to an account that supports paid execution.`);
+  }
+}
+
 function parseWalletResponse<T>(response: T | string): T {
   if (typeof response !== 'string') return response;
   try {
@@ -66,9 +87,11 @@ export async function readCasperWalletState(): Promise<CasperWalletState> {
       publicKey: null,
       payerAccountAddress: null,
       supports: [],
+      missingMethods: [...REQUIRED_PROVIDER_METHODS],
       version: null,
     };
   }
+  const missingMethods = missingProviderMethods(p);
   try {
     const [connected, version] = await Promise.all([
       p.isConnected(),
@@ -82,6 +105,7 @@ export async function readCasperWalletState(): Promise<CasperWalletState> {
         publicKey: null,
         payerAccountAddress: null,
         supports: [],
+        missingMethods,
         version,
       };
     }
@@ -96,6 +120,7 @@ export async function readCasperWalletState(): Promise<CasperWalletState> {
       publicKey,
       payerAccountAddress: payerAccountAddress(publicKey),
       supports,
+      missingMethods,
       version,
     };
   } catch {
@@ -106,6 +131,7 @@ export async function readCasperWalletState(): Promise<CasperWalletState> {
       publicKey: null,
       payerAccountAddress: null,
       supports: [],
+      missingMethods,
       version: null,
     };
   }
@@ -114,6 +140,7 @@ export async function readCasperWalletState(): Promise<CasperWalletState> {
 export async function connectCasperWallet(): Promise<CasperWalletState> {
   const p = provider();
   if (!p) throw new Error('Casper Wallet is not installed.');
+  assertProviderMethods(p);
   const response = parseWalletResponse(await p.requestConnection());
   const approved =
     response === true ||
@@ -130,6 +157,9 @@ export async function connectCasperWallet(): Promise<CasperWalletState> {
 export function assertUsableWallet(state: CasperWalletState) {
   if (!state.available) throw new Error('Casper Wallet is not installed.');
   if (state.locked) throw new Error('Casper Wallet is locked.');
+  if (state.missingMethods.length > 0) {
+    throw new Error(`Casper Wallet is missing ${state.missingMethods.join(', ')}. Update Casper Wallet before payment.`);
+  }
   if (!state.connected || !state.publicKey) {
     throw new Error('Connect Casper Wallet to continue.');
   }
@@ -227,6 +257,7 @@ export async function createX402PaymentSignature(input: {
 }) {
   const p = provider();
   if (!p) throw new Error('Casper Wallet is not installed.');
+  assertProviderMethods(p);
   const name = input.requirement.extra?.name;
   const version = input.requirement.extra?.version;
   if (!name || !version) throw new Error('Payment requirement is missing token metadata.');
@@ -318,6 +349,7 @@ export function submitAuthorizationPayload(input: SubmitAuthorizationInput & {
 export async function signSubmitAuthorization(input: SubmitAuthorizationInput) {
   const p = provider();
   if (!p) throw new Error('Casper Wallet is not installed.');
+  assertProviderMethods(p);
   const timestamp = Date.now();
   const nonce = randomNonceHex();
   const payload = submitAuthorizationPayload({ ...input, timestamp, nonce });

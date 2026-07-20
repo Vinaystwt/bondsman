@@ -35,9 +35,14 @@ type ProbeState =
 
 type PaymentState =
   | { kind: 'idle' }
+  | { kind: 'payload_constructing' }
   | { kind: 'awaiting_wallet' }
-  | { kind: 'settlement_pending'; authorization: { validBefore: string } }
+  | { kind: 'wallet_signature_received'; authorization: { validBefore: string } }
+  | { kind: 'verification_pending'; authorization: { validBefore: string } }
   | { kind: 'settled'; quote: PaidQuoteResponse }
+  | { kind: 'rejected'; message: string }
+  | { kind: 'expired'; message: string }
+  | { kind: 'malformed'; message: string }
   | { kind: 'failed'; message: string };
 
 type SubmitState =
@@ -70,8 +75,11 @@ const EMPTY_WALLET: CasperWalletState = {
   publicKey: null,
   payerAccountAddress: null,
   supports: [],
+  missingMethods: [],
   version: null,
 };
+
+const FLOW_KEY = 'bondsman.newAction.v1';
 
 export default function NewActionClient({
   templates,
@@ -99,6 +107,9 @@ export default function NewActionClient({
   const [payment, setPayment] = useState<PaymentState>({ kind: 'idle' });
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const stepRefs = useRef<Record<number, HTMLElement | null>>({});
+  const paymentBusyRef = useRef(false);
+  const requirementBusyRef = useRef(false);
+  const submitBusyRef = useRef(false);
 
   const executable = useMemo(
     () => templates.filter((template) => template.executableNow),
@@ -125,6 +136,35 @@ export default function NewActionClient({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(FLOW_KEY) ?? '{}') as {
+        paidQuote?: PaidQuoteResponse;
+        actionId?: number;
+      };
+      if (saved.paidQuote) {
+        setPayment({ kind: 'settled', quote: saved.paidQuote });
+        setStep(7);
+      }
+      if (typeof saved.actionId === 'number') {
+        setSubmit({ kind: 'created', actionId: saved.actionId });
+      }
+    } catch {
+      /* ignore malformed recovery state */
+    }
+  }, []);
+
+  function persistFlow(next: { paidQuote?: PaidQuoteResponse; actionId?: number | null }) {
+    try {
+      const current = JSON.parse(window.localStorage.getItem(FLOW_KEY) ?? '{}') as Record<string, unknown>;
+      const updated = { ...current, ...next };
+      if (next.actionId === null) delete updated.actionId;
+      window.localStorage.setItem(FLOW_KEY, JSON.stringify(updated));
+    } catch {
+      /* noncritical local recovery */
+    }
+  }
 
   function chooseTemplate(id: string) {
     setSelectedId(id);
@@ -154,15 +194,20 @@ export default function NewActionClient({
   }
 
   async function requestPaymentRequirement() {
-    if (!quoteShape) return;
+    if (!quoteShape || requirementBusyRef.current || probe.kind === 'loading') return;
+    requirementBusyRef.current = true;
     const requestedAt = new Date().toISOString();
     setProbe({ kind: 'loading', requestedAt });
-    const result = await clientApi.liveQuoteProbe({
-      amount: quoteShape.amount,
-      faultClass: quoteShape.faultClass,
-    });
-    setProbe({ kind: 'ready', requestedAt, ...result });
-    setStep(6);
+    try {
+      const result = await clientApi.liveQuoteProbe({
+        amount: quoteShape.amount,
+        faultClass: quoteShape.faultClass,
+      });
+      setProbe({ kind: 'ready', requestedAt, ...result });
+      setStep(6);
+    } finally {
+      requirementBusyRef.current = false;
+    }
   }
 
   async function connectWallet() {
@@ -179,19 +224,34 @@ export default function NewActionClient({
   }
 
   async function settlePaidQuote() {
-    if (!quoteShape || !requirement || !wallet.publicKey) return;
-    setPayment({ kind: 'awaiting_wallet' });
+    if (!quoteShape || !requirement || !wallet.publicKey || paymentBusyRef.current) return;
+    paymentBusyRef.current = true;
+    setPayment({ kind: 'payload_constructing' });
     setWalletError(null);
     try {
-      const { assertUsableWallet, createX402PaymentSignature } = await import('@/lib/casper-wallet');
-      assertUsableWallet(wallet);
+      const {
+        assertUsableWallet,
+        createX402PaymentSignature,
+        readCasperWalletState,
+      } = await import('@/lib/casper-wallet');
+      const freshWallet = await readCasperWalletState();
+      setWallet(freshWallet);
+      assertUsableWallet(freshWallet);
+      if (!freshWallet.publicKey) throw new Error('Connect Casper Wallet to continue.');
+      setPayment({ kind: 'awaiting_wallet' });
       const paymentSignature = await createX402PaymentSignature({
-        publicKey: wallet.publicKey,
+        publicKey: freshWallet.publicKey,
         requirement,
         resourceUrl: new URL('/v1/actions/quote', window.location.origin).toString(),
       });
       setPayment({
-        kind: 'settlement_pending',
+        kind: 'wallet_signature_received',
+        authorization: {
+          validBefore: paymentSignature.authorization.validBefore,
+        },
+      });
+      setPayment({
+        kind: 'verification_pending',
         authorization: {
           validBefore: paymentSignature.authorization.validBefore,
         },
@@ -201,30 +261,52 @@ export default function NewActionClient({
         paymentSignature.header,
       );
       setPayment({ kind: 'settled', quote });
+      persistFlow({ paidQuote: quote, actionId: null });
       setSubmit({ kind: 'idle' });
       setStep(7);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Payment settlement failed.';
+      const lower = message.toLowerCase();
       setPayment({
-        kind: 'failed',
-        message: err instanceof Error ? err.message : 'Payment settlement failed.',
+        kind: lower.includes('expired')
+          ? 'expired'
+          : lower.includes('malformed')
+            ? 'malformed'
+            : lower.includes('rejected') || lower.includes('cancel')
+              ? 'rejected'
+              : 'failed',
+        message,
       });
+    } finally {
+      paymentBusyRef.current = false;
     }
   }
 
   async function createAction() {
-    if (!paidQuote || !wallet.publicKey) return;
+    if (!paidQuote || !wallet.publicKey || submitBusyRef.current) return;
+    submitBusyRef.current = true;
     setSubmit({ kind: 'signing' });
     try {
       const {
         assertUsableWallet,
         buyerPublicKeyBase64,
+        readCasperWalletState,
         signSubmitAuthorization,
       } = await import('@/lib/casper-wallet');
-      assertUsableWallet(wallet);
+      const freshWallet = await readCasperWalletState();
+      setWallet(freshWallet);
+      assertUsableWallet(freshWallet);
+      if (!freshWallet.publicKey) throw new Error('Connect Casper Wallet to continue.');
+      if (
+        paidQuote.paymentReceipt.payer &&
+        freshWallet.payerAccountAddress?.toLowerCase() !== paidQuote.paymentReceipt.payer.toLowerCase()
+      ) {
+        throw new Error('Wallet account changed. Reconnect the original payer before submitting this paid quote.');
+      }
       const eventType = 'goods_not_received' as const;
-      const buyerPublicKey = buyerPublicKeyBase64(wallet.publicKey);
+      const buyerPublicKey = buyerPublicKeyBase64(freshWallet.publicKey);
       const authorization = await signSubmitAuthorization({
-        publicKey: wallet.publicKey,
+        publicKey: freshWallet.publicKey,
         quoteHash: paidQuote.quoteHash,
         faultClass: paidQuote.faultClass,
         buyerPublicKey,
@@ -242,8 +324,10 @@ export default function NewActionClient({
           nonce: authorization.nonce,
           signature: authorization.signature,
         },
+        idempotencyKey: `submit:${paidQuote.quoteHash}:${authorization.nonce}`,
       });
       rememberActionId(response.action.actionId);
+      persistFlow({ paidQuote, actionId: response.action.actionId });
       setSubmit({ kind: 'created', actionId: response.action.actionId });
       router.push(`/app/actions/${response.action.actionId}`);
     } catch (err) {
@@ -251,6 +335,8 @@ export default function NewActionClient({
         kind: 'failed',
         message: err instanceof Error ? err.message : 'Action creation failed.',
       });
+    } finally {
+      submitBusyRef.current = false;
     }
   }
 
@@ -374,7 +460,13 @@ export default function NewActionClient({
         <PaymentRequirement
           probe={probe}
           canProbe={canProbe}
-          canSettle={Boolean(requirement && wallet.connected && wallet.publicKey && payment.kind !== 'awaiting_wallet' && payment.kind !== 'settlement_pending' && payment.kind !== 'settled')}
+          canSettle={Boolean(
+            requirement &&
+              wallet.connected &&
+              wallet.publicKey &&
+              wallet.missingMethods.length === 0 &&
+              ['idle', 'rejected', 'expired'].includes(payment.kind),
+          )}
           liveQuoteProbeAvailable={liveQuoteProbeAvailable}
           quoteReady={Boolean(quoteShape)}
           wallet={wallet}
@@ -520,6 +612,7 @@ function PartyReview({ analysis }: { analysis: AssuranceAnalysis | null }) {
       <Party label="Acting agent" value="Configured backend agent" note="Creates the bonded action after the paid quote is authorized." />
       <Party label="Bond funder" value="Configured backend agent account" note="Funds the bond on the current backend architecture." />
       <Party label="Transaction submitter" value="Backend deployer and agent accounts" note="Submits Casper transactions after payer authorization." />
+      <Party label="Gas funder" value="Backend deployer and agent accounts" note="Pays action gas for invoice setup, bond approval, bond posting and execution." />
       <Party label="Evidence signer" value="Buyer Ed25519 public key" note="Required for delivery contradiction submit evidence binding." />
       <Party label="Watchdog" value="Autonomous watchdog service" note={`Challenges objective faults through ${faultClass} and ${verifier}.`} />
     </div>
@@ -584,11 +677,16 @@ function WalletConnector({
           )}
           <MiniField label="Wallet version">{wallet.version ?? 'not reported'}</MiniField>
           <MiniField label="Required features">
-            {wallet.supports.includes('sign-typed-data-eip712') && wallet.supports.includes('sign-message')
+            {wallet.missingMethods.length === 0 && wallet.supports.includes('sign-typed-data-eip712') && wallet.supports.includes('sign-message')
               ? 'available'
               : 'not available'}
           </MiniField>
         </dl>
+      )}
+      {wallet.missingMethods.length > 0 && (
+        <p className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">
+          Unsupported capability: {wallet.missingMethods.join(', ')}. Update Casper Wallet, unlock it, then reconnect before payment.
+        </p>
       )}
       {wallet.locked && (
         <p className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">
@@ -738,8 +836,12 @@ function PaymentRequirement({
             >
               {payment.kind === 'awaiting_wallet'
                 ? 'Waiting for wallet'
-                : payment.kind === 'settlement_pending'
-                  ? 'Settlement pending'
+                : payment.kind === 'payload_constructing'
+                  ? 'Preparing payload'
+                  : payment.kind === 'wallet_signature_received'
+                    ? 'Signature received'
+                    : payment.kind === 'verification_pending'
+                      ? 'Verifying payment'
                   : payment.kind === 'settled'
                     ? 'Payment settled'
                     : 'Settle payment'}
@@ -766,21 +868,32 @@ function PaymentStatus({ payment }: { payment: PaymentState }) {
   if (payment.kind === 'awaiting_wallet') {
     return <StatusPill tone="info">Awaiting wallet approval</StatusPill>;
   }
-  if (payment.kind === 'settlement_pending') {
+  if (payment.kind === 'payload_constructing') {
+    return <StatusPill tone="info">Constructing payment payload</StatusPill>;
+  }
+  if (payment.kind === 'wallet_signature_received') {
+    return <StatusPill tone="ok">Wallet signature received</StatusPill>;
+  }
+  if (payment.kind === 'verification_pending') {
     return (
       <div className="space-y-2">
-        <StatusPill tone="info">Settlement pending</StatusPill>
+        <StatusPill tone="info">Payment verification pending</StatusPill>
         <p className="text-sm text-muted">
           Authorization valid until {formatIsoUtc(new Date(Number(payment.authorization.validBefore) * 1000).toISOString())}.
         </p>
       </div>
     );
   }
-  if (payment.kind === 'failed') {
+  if (payment.kind === 'failed' || payment.kind === 'rejected' || payment.kind === 'expired' || payment.kind === 'malformed') {
     return (
-      <p className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
-        {payment.message}
-      </p>
+      <div className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
+        <p>{payment.message}</p>
+        {payment.kind === 'failed' && (
+          <p className="mt-2 text-slash/85">
+            Do not retry from this state if the wallet showed a submitted payment. Check wallet history before starting a new attempt.
+          </p>
+        )}
+      </div>
     );
   }
   return <StatusPill tone="ok">Payment settled</StatusPill>;
@@ -895,6 +1008,11 @@ function SubmitStatus({ submit }: { submit: SubmitState }) {
   return (
     <p className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
       {submit.message}
+      {submit.message.includes('consumed') && (
+        <span className="mt-2 block text-slash/85">
+          The quote may already have created an action. Open App to check recent public actions before signing again.
+        </span>
+      )}
     </p>
   );
 }
