@@ -357,6 +357,11 @@ async function liveModelAnalysis(input: AssuranceInput, options: {
     'Return strict JSON only. Do not include chain-of-thought.',
     'Interpret this autonomous finance scenario. Identify concise risk factors.',
     'Do not calculate bonds, decide verifier results, claim integrations, or submit transactions.',
+    'Return exactly one object with top-level keys: summary, riskFactors, confidence, recommendedDecision.',
+    'riskFactors must be an array of objects with only: code, severity, explanation.',
+    'severity must be one of: low, medium, high.',
+    'recommendedDecision must be one of: bonded_execution, manual_review, decline.',
+    'Do not include templateId, scenario, policy, bond, verifier, transaction, slash, or extra fields.',
     JSON.stringify(normalizedScenario(input)),
   ].join('\n');
   const client: TextModelClient = options.client ?? (async (request) => {
