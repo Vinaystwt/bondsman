@@ -3,6 +3,9 @@ import type {
   ActionSummary,
   AgentReputation,
   AgentCard,
+  AssuranceAnalysis,
+  AssuranceAnalyzeRequest,
+  AssuranceTemplatesResponse,
   CanonicalProof,
   CanonicalReplay,
   Coverage,
@@ -145,6 +148,8 @@ export const api = {
   watchdog: () => serverGet<Watchdog>('/api/watchdog'),
   canonicalProof: () => serverGet<CanonicalProof>('/api/proofs/canonical'),
   canonicalReplay: () => serverGet<CanonicalReplay>('/api/replay/canonical'),
+  assuranceTemplates: () =>
+    serverGet<AssuranceTemplatesResponse>('/api/assurance/templates'),
   featuredProofs: () => serverGet<CanonicalProof[]>('/api/proofs/featured'),
   proof: (id: number | string) => serverGet<CanonicalProof>(`/api/proof/${id}`),
   receipt: (id: number | string) => serverGet<PortableReceipt>(`/api/receipt/${id}`),
@@ -207,6 +212,16 @@ export const clientApi = {
   publicCapabilities: () =>
     clientGet<PublicCapabilities>('/public-capabilities'),
   canonicalReplay: () => clientGet<CanonicalReplay>('/replay/canonical'),
+  assuranceTemplates: () =>
+    clientGet<AssuranceTemplatesResponse>('/assurance/templates'),
+  /**
+   * Analyze an assurance scenario against a template. Returns the model
+   * interpretation, deterministic policy and integration manifest. When the
+   * live model is unavailable, the backend returns a deterministic fallback
+   * that this frontend labels honestly.
+   */
+  assuranceAnalyze: (body: AssuranceAnalyzeRequest) =>
+    clientPost<AssuranceAnalysis>('/assurance/analyze', body),
   receipt: (id: number | string) =>
     clientGet<PortableReceipt>(`/receipt/${id}`),
   receiptVerify: (id: number | string) =>

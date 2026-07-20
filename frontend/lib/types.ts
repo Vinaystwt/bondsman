@@ -539,6 +539,135 @@ export interface PublicCapabilities {
   mcp: { mode: string };
 }
 
+export type AssuranceStatus = 'executable_now' | 'blueprint' | string;
+
+export interface AssuranceTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  implementationStatus: AssuranceStatus;
+  executableNow: boolean;
+  currentAdapter: string | null;
+  supportedFaultClasses: string[];
+  proposedFaultClass: string | null;
+  proposedVerifier: string | null;
+  objectiveEvidence: string[];
+  casperValue: string;
+  requiredFields: string[];
+}
+
+export interface AssuranceTemplatesResponse {
+  schemaId: string;
+  templates: AssuranceTemplate[];
+}
+
+export type AssuranceCounterpartyStatus = 'new' | 'known' | 'trusted' | 'unknown';
+export type AssuranceEvidenceSource =
+  | 'signed_delivery_attestation'
+  | 'paid_claim_registry'
+  | 'multisig_approval'
+  | 'oracle_report'
+  | 'execution_receipt';
+export type AssuranceUrgency = 'low' | 'normal' | 'high';
+
+export interface AssuranceAnalyzeRequest {
+  templateId: string;
+  description: string;
+  amount: string;
+  agentConfidence: number;
+  counterpartyStatus: AssuranceCounterpartyStatus;
+  evidenceSource: AssuranceEvidenceSource;
+  maxLossBps: number;
+  urgency: AssuranceUrgency;
+}
+
+export interface AssuranceRiskFactor {
+  code: string;
+  severity: 'low' | 'medium' | 'high' | string;
+  explanation: string;
+}
+
+export interface AssuranceModelAnalysis {
+  source: 'live_model' | 'deterministic_fallback' | string;
+  modelAvailable: boolean;
+  model: string | null;
+  failureCode: string | null;
+  summary: string;
+  riskFactors: AssuranceRiskFactor[];
+  confidence: number;
+  recommendedDecision: string;
+}
+
+export interface AssurancePolicy {
+  authority: string;
+  formulaVersion: string;
+  riskTier: string;
+  estimatedMinimumBond: string;
+  bondBasisPoints: number;
+  faultClass: string | null;
+  verifier: string | null;
+  estimatedBond: string;
+  challengeWindowSeconds: number;
+  evidenceRequirements: string[];
+  implementationStatus: AssuranceStatus;
+  executableNow: boolean;
+}
+
+export interface AssuranceManifest {
+  schemaId: string;
+  scenarioId: string;
+  scenarioHash: string;
+  template: {
+    id: string;
+    name: string;
+    implementationStatus: AssuranceStatus;
+    executableNow: boolean;
+  };
+  actionCategory: string;
+  amount: { value: string; asset: string; decimals: number };
+  riskIndicators: AssuranceRiskFactor[];
+  modelAnalysisHash: string;
+  riskTier: string;
+  bondPolicy: {
+    authority: string;
+    estimatedBond: string;
+    bondBasisPoints: number;
+  };
+  faultClass: string | null;
+  verifier: string | null;
+  proposedFaultClass: string | null;
+  proposedVerifier: string | null;
+  challengeWindowSeconds: number;
+  evidenceRequirements: string[];
+  implementationStatus: AssuranceStatus;
+  executableNow: boolean;
+  quoteRequestShape?: {
+    method: string;
+    path: string;
+    amount: string;
+    faultClass: string;
+  };
+  submitRequirements: string[];
+  expectedReceiptFields: string[];
+  casperNetwork: string;
+  contractReferences: Record<string, string>;
+  boundaries: Record<string, boolean>;
+  policyResultHash: string;
+  manifestHash: string;
+}
+
+export interface AssuranceAnalysis {
+  schemaId: string;
+  mode: 'design_only' | string;
+  scenarioHash: string;
+  generatedAt: string;
+  modelAnalysis: AssuranceModelAnalysis;
+  policy: AssurancePolicy;
+  manifest: AssuranceManifest;
+  integrationManifest: AssuranceManifest;
+}
+
 export interface HealthPublicExperience {
   proofConsoleReady: boolean;
   assuranceStudioReady: boolean;
