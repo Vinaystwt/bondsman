@@ -178,12 +178,6 @@ export default function BondedExecutionAnimation({
       tl.addLabel('bond', '+=0.3');
       tl.to(q('[data-stage="bond"]'), { autoAlpha: 1 }, 'bond');
       tl.to(q('[data-line="quote-to-bond"]'), { autoAlpha: 1, duration: 0.25 }, 'bond');
-      tl.fromTo(
-        q('[data-role="bond-vault"]'),
-        { scale: 0.7 },
-        { scale: 1, duration: 0.4, transformOrigin: '50% 50%' },
-        'bond+=0.05',
-      );
 
       // 5. Execution.
       tl.addLabel('execute', '+=0.25');
@@ -412,26 +406,6 @@ export default function BondedExecutionAnimation({
               subtitle="vault locked"
               accent
             />
-            <g data-role="bond-vault">
-              <rect
-                x={470}
-                y={196}
-                width={44}
-                height={48}
-                rx={4}
-                fill="none"
-                stroke={ACCENT}
-                strokeWidth={1.4}
-              />
-              <path
-                d={`M478 218 L484 224 L508 200`}
-                stroke={ACCENT}
-                strokeWidth={2}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
           </g>
 
           {/* Execute step */}
