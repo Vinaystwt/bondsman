@@ -1,35 +1,26 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#0B0F0D" />
-      <stop offset="1" stop-color="#121815" />
+      <stop offset="0" stop-color="#0E0D0B"/>
+      <stop offset="1" stop-color="#16140F"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0" x2="0" y1="0" y2="1">
-      <stop offset="0" stop-color="#35C281" stop-opacity="0.20" />
-      <stop offset="1" stop-color="#35C281" stop-opacity="0" />
-    </linearGradient>
+    <pattern id="ledger" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#2A2620" stroke-opacity="0.45"/>
+    </pattern>
   </defs>
-  <rect width="1200" height="630" fill="url(#bg)" />
-  <rect x="0" y="0" width="1200" height="630" fill="url(#glow)" />
-  <g transform="translate(96 96)">
-    <g stroke="#35C281" stroke-linecap="round" stroke-linejoin="round" fill="none">
-      <path d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14" stroke-width="3.6" transform="scale(1.6)" />
-      <path d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50" stroke-width="3.6" transform="scale(1.6)" />
-      <path d="M8 32 H56" stroke-width="4.6" transform="scale(1.6)" />
-    </g>
-    <circle cx="51.2" cy="51.2" r="6.72" fill="#35C281" />
-  </g>
-  <g font-family="ui-sans-serif, system-ui, sans-serif">
-    <text x="200" y="128" fill="#828D88" font-size="20" letter-spacing="4">BONDED EXECUTION ASSURANCE</text>
-  </g>
-  <g font-family="ui-sans-serif, system-ui, sans-serif" font-weight="600">
-    <text x="96" y="330" fill="#E8EDEA" font-size="80" letter-spacing="-2">Make the agent</text>
-    <text x="96" y="420" fill="#E8EDEA" font-size="80" letter-spacing="-2">answerable before it acts.</text>
-  </g>
-  <g font-family="ui-sans-serif, system-ui, sans-serif">
-    <text x="96" y="500" fill="#828D88" font-size="26">Live x402 on Casper. Deterministic bond policy. Portable signed receipts.</text>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#ledger)"/>
+  <rect x="64" y="58" width="1072" height="514" rx="24" fill="none" stroke="#2A2620"/>
+  <g transform="translate(96 72) scale(0.15)">
+    <path fill="#B7791F" fill-rule="evenodd" d="M400 195H492V300H430L359 364V677H263V317L400 195ZM532 195H623L760 317V677H665V364L592 300H532V195ZM425 468H599V677H425V468ZM263 710H484V737L437 828H263V710ZM539 710H760V828H586L539 737V710Z"/>
   </g>
   <g font-family="ui-monospace, SFMono-Regular, monospace">
-    <text x="96" y="580" fill="#35C281" font-size="18" letter-spacing="3">BONDSMAN · NO BOND, NO ACTION</text>
+    <text x="246" y="128" fill="#8C8473" font-size="20" letter-spacing="4">BONDED EXECUTION ON CASPER</text>
+    <text x="96" y="548" fill="#B7791F" font-size="18" letter-spacing="3">BONDSMAN | NO BOND, NO ACTION</text>
+  </g>
+  <g font-family="ui-serif, Georgia, serif" font-weight="700">
+    <text x="96" y="292" fill="#ECE6D8" font-size="76">Before an agent moves</text>
+    <text x="96" y="380" fill="#ECE6D8" font-size="76">money, make it post</text>
+    <text x="96" y="468" fill="#ECE6D8" font-size="76">the bond.</text>
   </g>
 </svg>

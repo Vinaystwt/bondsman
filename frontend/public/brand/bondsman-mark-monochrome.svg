@@ -1,8 +1,3 @@
-<svg width="256" height="256" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14" stroke-width="3.6" />
-    <path d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50" stroke-width="3.6" />
-    <path d="M8 32 H56" stroke-width="4.6" />
-  </g>
-  <circle cx="32" cy="32" r="4.2" fill="currentColor" />
+<svg width="256" height="256" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <path fill="currentColor" fill-rule="evenodd" d="M400 195H492V300H430L359 364V677H263V317L400 195ZM532 195H623L760 317V677H665V364L592 300H532V195ZM425 468H599V677H425V468ZM263 710H484V737L437 828H263V710ZM539 710H760V828H586L539 737V710Z"/>
 </svg>

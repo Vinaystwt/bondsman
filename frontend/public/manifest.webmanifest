@@ -1,11 +1,11 @@
 {
   "name": "Bondsman",
   "short_name": "Bondsman",
-  "description": "Bonded execution assurance for autonomous finance.",
+  "description": "Bonded execution on Casper for autonomous finance.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B0F0D",
-  "theme_color": "#0B0F0D",
+  "background_color": "#0E0D0B",
+  "theme_color": "#0E0D0B",
   "icons": [
     {
       "src": "/brand/icon-192.png",

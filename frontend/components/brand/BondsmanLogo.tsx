@@ -10,17 +10,15 @@ interface BondsmanLogoProps {
   title?: string;
 }
 
+const MARK_PATH =
+  'M400 195H492V300H430L359 364V677H263V317L400 195ZM532 195H623L760 317V677H665V364L592 300H532V195ZM425 468H599V677H425V468ZM263 710H484V737L437 828H263V710ZM539 710H760V828H586L539 737V710Z';
+
 /**
- * Bondsman brand mark. Original vector identity, no bitmap dependency.
+ * Bondsman brand mark reconstructed from the final source logo.
  *
- * Concept: an enclosed bond seal. Two brackets frame a central horizontal
- * bond bar carrying a small sealed dot at its centre. The brackets are the
- * accountability boundary; the bar is the collateral held across the gate;
- * the dot is the receipt seal that closes an action.
- *
- * Drawn on a 64 unit grid. Single stroke weight for legibility down to 16.
- * currentColor render so the mark takes on the surrounding text colour when
- * monochrome is enabled; otherwise it locks to the brand green.
+ * The mark is a geometric bond seal: two upper pillars, a central collateral
+ * block and two separated base slabs. It is filled instead of stroked so small
+ * app icons preserve the same weight as the source artwork.
  */
 export function BondsmanMark({
   size = 32,
@@ -33,34 +31,21 @@ export function BondsmanMark({
   title?: string;
   monochrome?: boolean;
 }) {
-  const stroke = monochrome ? 'currentColor' : 'var(--accent, #35C281)';
-  const style: CSSProperties = { color: stroke };
+  const fill = monochrome ? 'currentColor' : 'var(--accent, #B7791F)';
+  const style: CSSProperties = { color: fill };
   return (
     <svg
       role="img"
       aria-label={title}
       width={size}
       height={size}
-      viewBox="0 0 64 64"
+      viewBox="0 0 1024 1024"
       fill="none"
       className={className}
       style={style}
     >
       <title>{title}</title>
-      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-        <path
-          d="M14 10 H10 A2 2 0 0 0 8 12 V52 A2 2 0 0 0 10 54 H14"
-          fill="none"
-          strokeWidth="3.6"
-        />
-        <path
-          d="M50 10 H54 A2 2 0 0 1 56 12 V52 A2 2 0 0 1 54 54 H50"
-          fill="none"
-          strokeWidth="3.6"
-        />
-        <path d="M8 32 H56" strokeWidth="4.6" />
-      </g>
-      <circle cx="32" cy="32" r="4.2" fill="currentColor" />
+      <path d={MARK_PATH} fill="currentColor" fillRule="evenodd" />
     </svg>
   );
 }
