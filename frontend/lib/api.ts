@@ -130,7 +130,7 @@ export async function safeGet<T>(
   try {
     return { data: await fn(), reachable: true };
   } catch (err) {
-    if (err instanceof BackendUnreachable) {
+    if (err instanceof BackendUnreachable || err instanceof ApiError) {
       return { data: null, reachable: false };
     }
     throw err;

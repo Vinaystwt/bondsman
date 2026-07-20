@@ -97,7 +97,7 @@ export default function BondedExecutionAnimation({
   const rewardLabel = toShort(data?.challengerRewardBase ?? null, 'csprUSD', 0);
   const reserveLabel = toShort(data?.reserveCreditBase ?? null, 'csprUSD', 0);
 
-  const shouldAnimate = healthMode === 'healthy' && !reducedMotion;
+  const shouldAnimate = !reducedMotion;
 
   useGSAP(
     () => {
