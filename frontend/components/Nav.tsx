@@ -20,6 +20,11 @@ function isActive(pathname: string, href: string): boolean {
 export default function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setOpen(false);
@@ -44,9 +49,9 @@ export default function Nav() {
             <Link
               key={link.href}
               href={link.href}
-              aria-current={isActive(pathname, link.href) ? 'page' : undefined}
+              aria-current={mounted && isActive(pathname, link.href) ? 'page' : undefined}
               className={`rounded px-3 py-2 text-sm transition-colors ${
-                isActive(pathname, link.href)
+                mounted && isActive(pathname, link.href)
                   ? 'text-accent'
                   : 'text-muted hover:text-bone'
               }`}
@@ -95,7 +100,7 @@ export default function Nav() {
                 href={link.href}
                 onClick={() => setOpen(false)}
                 className={`rounded px-3 py-2.5 text-sm ${
-                  isActive(pathname, link.href)
+                  mounted && isActive(pathname, link.href)
                     ? 'bg-accent/10 text-accent'
                     : 'text-muted hover:text-bone'
                 }`}

@@ -60,8 +60,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={fontVariables}>
-      <body className="min-h-screen bg-ink font-sans text-bone antialiased">
+    <html lang="en" className={fontVariables} suppressHydrationWarning>
+      <body
+        className="min-h-screen bg-ink font-sans text-bone antialiased"
+        suppressHydrationWarning
+      >
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-4 focus:py-2 focus:text-ink"

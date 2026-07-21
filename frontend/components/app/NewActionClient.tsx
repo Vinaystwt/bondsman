@@ -9,6 +9,7 @@ import CopyHash from '@/components/ui/CopyHash';
 import { Label, StatusPill } from '@/components/ui/Primitives';
 import { EmptyState } from '@/components/ui/States';
 import { clientApi } from '@/lib/api';
+import { findActionByQuoteHash, shouldRecoverSubmit } from '@/lib/action-monitor';
 import { formatIsoUtc, formatWcspr, truncateHash } from '@/lib/format';
 import type { CasperWalletState } from '@/lib/casper-wallet';
 import type {
@@ -50,6 +51,7 @@ type SubmitState =
   | { kind: 'signing' }
   | { kind: 'submitting' }
   | { kind: 'created'; actionId: number }
+  | { kind: 'recovery_pending'; message: string; quoteHash: string }
   | { kind: 'failed'; message: string };
 
 interface Props {
@@ -79,7 +81,112 @@ const EMPTY_WALLET: CasperWalletState = {
   version: null,
 };
 
-const FLOW_KEY = 'bondsman.newAction.v1';
+const FLOW_KEY = 'bondsman.newAction.v2';
+const OLD_FLOW_KEY = 'bondsman.newAction.v1';
+const RECOVERY_SCHEMA_VERSION = 1;
+
+interface PaidQuoteRecoveryRecord {
+  schemaVersion: 1;
+  quoteHash: string;
+  quoteExpiry: string;
+  payerAccount: string;
+  faultClass: 'duplicate_claim' | 'delivery_contradiction';
+  principalAmount: string;
+  selectedTemplateId: string;
+  scenarioHash: string | null;
+  paymentSettlementTx: string;
+  actionId: number | null;
+  savedAt: string;
+}
+
+interface SubmitAttempt {
+  quoteHash: string;
+  authorization: {
+    publicKey: string;
+    timestamp: number;
+    nonce: string;
+    signature: string;
+  };
+  buyerPublicKey: string;
+  eventType: 'delivery_rejected' | 'goods_not_received';
+  idempotencyKey: string;
+}
+
+const QUOTE_HASH_RE = /^0x[0-9a-f]{64}$/i;
+const ACCOUNT_HASH_RE = /^00[0-9a-f]{64}$/i;
+const TX_HASH_RE = /^[0-9a-f]{64}$/i;
+
+function isExecutableFaultClass(value: string): value is PaidQuoteRecoveryRecord['faultClass'] {
+  return value === 'duplicate_claim' || value === 'delivery_contradiction';
+}
+
+function isPositiveAtomic(value: string): boolean {
+  try {
+    return BigInt(value) > 0n;
+  } catch {
+    return false;
+  }
+}
+
+function schemaRecord(value: unknown): PaidQuoteRecoveryRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion !== RECOVERY_SCHEMA_VERSION) return null;
+  if (!QUOTE_HASH_RE.test(String(record.quoteHash ?? ''))) return null;
+  if (!Date.parse(String(record.quoteExpiry ?? ''))) return null;
+  if (Date.parse(String(record.quoteExpiry)) <= Date.now()) return null;
+  if (!ACCOUNT_HASH_RE.test(String(record.payerAccount ?? ''))) return null;
+  if (!isExecutableFaultClass(String(record.faultClass))) return null;
+  if (!isPositiveAtomic(String(record.principalAmount ?? ''))) return null;
+  if (typeof record.selectedTemplateId !== 'string' || record.selectedTemplateId.length === 0) return null;
+  if (record.scenarioHash !== null && typeof record.scenarioHash !== 'string') return null;
+  if (!TX_HASH_RE.test(String(record.paymentSettlementTx ?? ''))) return null;
+  if (record.actionId !== null && typeof record.actionId !== 'number') return null;
+  if (!Date.parse(String(record.savedAt ?? ''))) return null;
+  return {
+    schemaVersion: RECOVERY_SCHEMA_VERSION,
+    quoteHash: String(record.quoteHash),
+    quoteExpiry: String(record.quoteExpiry),
+    payerAccount: String(record.payerAccount),
+    faultClass: String(record.faultClass) as PaidQuoteRecoveryRecord['faultClass'],
+    principalAmount: String(record.principalAmount),
+    selectedTemplateId: String(record.selectedTemplateId),
+    scenarioHash: record.scenarioHash === null ? null : String(record.scenarioHash),
+    paymentSettlementTx: String(record.paymentSettlementTx),
+    actionId: record.actionId === null ? null : Number(record.actionId),
+    savedAt: String(record.savedAt),
+  };
+}
+
+function quoteFromRecovery(
+  record: PaidQuoteRecoveryRecord,
+  analysis: AssuranceAnalysis | null,
+): PaidQuoteResponse {
+  return {
+    actionType: 'paid_assurance_action',
+    faultClass: record.faultClass,
+    verifier: analysis?.policy.verifier ?? 'recovered',
+    riskTier: analysis?.policy.riskTier ?? 'recovered',
+    requiredBond: analysis?.policy.estimatedMinimumBond ?? record.principalAmount,
+    quotedMinimumBond: analysis?.manifest.quoteRequestShape?.amount ?? record.principalAmount,
+    bondSemantics: 'recovered paid quote',
+    challengeWindow: analysis?.policy.challengeWindowSeconds ?? 0,
+    agentReputation: 0,
+    policyModule: analysis?.policy.authority ?? 'recovered',
+    policySnapshot: {},
+    quoteExpiry: record.quoteExpiry,
+    quoteHash: record.quoteHash,
+    paymentReceipt: {
+      network: 'casper-test',
+      asset: 'WCSPR',
+      amount: record.principalAmount,
+      transaction: record.paymentSettlementTx,
+      facilitator: 'recovered',
+      payer: record.payerAccount,
+      settled: true,
+    },
+  };
+}
 
 export default function NewActionClient({
   templates,
@@ -106,10 +213,12 @@ export default function NewActionClient({
   const [walletBusy, setWalletBusy] = useState(false);
   const [payment, setPayment] = useState<PaymentState>({ kind: 'idle' });
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
+  const [recoveryRecord, setRecoveryRecord] = useState<PaidQuoteRecoveryRecord | null>(null);
   const stepRefs = useRef<Record<number, HTMLElement | null>>({});
   const paymentBusyRef = useRef(false);
   const requirementBusyRef = useRef(false);
   const submitBusyRef = useRef(false);
+  const submitAttemptRef = useRef<SubmitAttempt | null>(null);
 
   const executable = useMemo(
     () => templates.filter((template) => template.executableNow),
@@ -122,6 +231,12 @@ export default function NewActionClient({
   const canProbe = Boolean(quoteShape && liveQuoteProbeAvailable);
   const requirement = probe.kind === 'ready' ? probe.x402?.payment.accepts[0] ?? null : null;
   const paidQuote = payment.kind === 'settled' ? payment.quote : null;
+  const payerMismatch = Boolean(
+    paidQuote?.paymentReceipt.payer &&
+      wallet.connected &&
+      wallet.payerAccountAddress &&
+      wallet.payerAccountAddress.toLowerCase() !== paidQuote.paymentReceipt.payer.toLowerCase(),
+  );
 
   useEffect(() => {
     stepRefs.current[step]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -139,34 +254,62 @@ export default function NewActionClient({
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem(FLOW_KEY) ?? '{}') as {
-        paidQuote?: PaidQuoteResponse;
-        actionId?: number;
-      };
-      if (saved.paidQuote) {
-        setPayment({ kind: 'settled', quote: saved.paidQuote });
+      window.localStorage.removeItem(OLD_FLOW_KEY);
+      const saved = schemaRecord(JSON.parse(window.localStorage.getItem(FLOW_KEY) ?? 'null'));
+      const restoredTemplate = saved
+        ? templates.find((template) => template.id === saved.selectedTemplateId)
+        : null;
+      if (saved && restoredTemplate?.supportedFaultClasses.includes(saved.faultClass)) {
+        setSelectedId(saved.selectedTemplateId);
+        setRecoveryRecord(saved);
+        setPayment({ kind: 'settled', quote: quoteFromRecovery(saved, null) });
         setStep(7);
       }
-      if (typeof saved.actionId === 'number') {
+      if (typeof saved?.actionId === 'number') {
         setSubmit({ kind: 'created', actionId: saved.actionId });
       }
     } catch {
       /* ignore malformed recovery state */
     }
-  }, []);
+  }, [templates]);
 
-  function persistFlow(next: { paidQuote?: PaidQuoteResponse; actionId?: number | null }) {
+  function clearPersistedFlow() {
     try {
-      const current = JSON.parse(window.localStorage.getItem(FLOW_KEY) ?? '{}') as Record<string, unknown>;
-      const updated = { ...current, ...next };
-      if (next.actionId === null) delete updated.actionId;
-      window.localStorage.setItem(FLOW_KEY, JSON.stringify(updated));
+      window.localStorage.removeItem(FLOW_KEY);
+      window.localStorage.removeItem(OLD_FLOW_KEY);
+    } catch {
+      /* noncritical local recovery */
+    }
+    setRecoveryRecord(null);
+    submitAttemptRef.current = null;
+  }
+
+  function persistPaidQuote(quote: PaidQuoteResponse, actionId: number | null) {
+    if (!selectedId || !quote.paymentReceipt.payer || !quote.paymentReceipt.settled) return;
+    const record: PaidQuoteRecoveryRecord = {
+      schemaVersion: RECOVERY_SCHEMA_VERSION,
+      quoteHash: quote.quoteHash,
+      quoteExpiry: quote.quoteExpiry,
+      payerAccount: quote.paymentReceipt.payer,
+      faultClass: quote.faultClass,
+      principalAmount: quoteShape?.amount ?? quote.paymentReceipt.amount,
+      selectedTemplateId: selectedId,
+      scenarioHash: analysis?.scenarioHash ?? analysis?.manifest.scenarioHash ?? null,
+      paymentSettlementTx: quote.paymentReceipt.transaction,
+      actionId,
+      savedAt: new Date().toISOString(),
+    };
+    if (!schemaRecord(record)) return;
+    try {
+      window.localStorage.setItem(FLOW_KEY, JSON.stringify(record));
+      setRecoveryRecord(record);
     } catch {
       /* noncritical local recovery */
     }
   }
 
   function chooseTemplate(id: string) {
+    clearPersistedFlow();
     setSelectedId(id);
     setAnalysis(null);
     setProbe({ kind: 'idle' });
@@ -177,6 +320,7 @@ export default function NewActionClient({
   }
 
   async function runAnalysis(body: AssuranceAnalyzeRequest) {
+    clearPersistedFlow();
     setRunning(true);
     setError(null);
     setProbe({ kind: 'idle' });
@@ -261,7 +405,7 @@ export default function NewActionClient({
         paymentSignature.header,
       );
       setPayment({ kind: 'settled', quote });
-      persistFlow({ paidQuote: quote, actionId: null });
+      persistPaidQuote(quote, null);
       setSubmit({ kind: 'idle' });
       setStep(7);
     } catch (err) {
@@ -282,6 +426,69 @@ export default function NewActionClient({
     }
   }
 
+  function validatePaidQuoteBeforeSubmit(quote: PaidQuoteResponse, freshWallet: CasperWalletState): string | null {
+    if (!QUOTE_HASH_RE.test(quote.quoteHash)) return 'Recovered quote hash is malformed. Start a new action.';
+    if (Date.parse(quote.quoteExpiry) <= Date.now()) {
+      clearPersistedFlow();
+      setPayment({ kind: 'expired', message: 'Paid quote expired. Request a fresh payment requirement.' });
+      return 'Paid quote expired. Request a fresh payment requirement.';
+    }
+    if (!selected) return 'Choose the original policy before submitting this paid quote.';
+    if (!selected.supportedFaultClasses.includes(quote.faultClass)) {
+      return 'The selected policy does not match this paid quote fault class.';
+    }
+    if (!isPositiveAtomic(quote.paymentReceipt.amount)) {
+      return 'Paid quote amount is invalid. Start a new action.';
+    }
+    if (!quote.paymentReceipt.settled || !quote.paymentReceipt.payer) {
+      return 'Paid quote does not have a settled payer receipt.';
+    }
+    if (
+      freshWallet.payerAccountAddress?.toLowerCase() !==
+      quote.paymentReceipt.payer.toLowerCase()
+    ) {
+      return 'Wallet account changed. Reconnect the original payer before submitting this paid quote.';
+    }
+    if (recoveryRecord) {
+      if (recoveryRecord.quoteHash.toLowerCase() !== quote.quoteHash.toLowerCase()) {
+        return 'Recovered quote record does not match the active quote.';
+      }
+      if (recoveryRecord.selectedTemplateId !== selected.id) {
+        return 'Recovered quote belongs to another policy.';
+      }
+      if (recoveryRecord.faultClass !== quote.faultClass) {
+        return 'Recovered quote fault class changed. Start a new action.';
+      }
+      if (
+        analysis?.scenarioHash &&
+        recoveryRecord.scenarioHash &&
+        analysis.scenarioHash !== recoveryRecord.scenarioHash
+      ) {
+        return 'Recovered quote belongs to a different scenario. Start a new action.';
+      }
+    }
+    if (quoteShape) {
+      if (quoteShape.faultClass !== quote.faultClass) {
+        return 'Current scenario fault class does not match the paid quote.';
+      }
+      if (recoveryRecord && quoteShape.amount !== recoveryRecord.principalAmount) {
+        return 'Current scenario amount does not match the paid quote.';
+      }
+    }
+    return null;
+  }
+
+  async function recoverSubmittedAction(quoteHash: string): Promise<number | null> {
+    const actions = await clientApi.actions();
+    const found = findActionByQuoteHash(actions, quoteHash);
+    if (!found) return null;
+    rememberActionId(found.actionId);
+    if (paidQuote) persistPaidQuote(paidQuote, found.actionId);
+    setSubmit({ kind: 'created', actionId: found.actionId });
+    router.push(`/app/actions/${found.actionId}`);
+    return found.actionId;
+  }
+
   async function createAction() {
     if (!paidQuote || !wallet.publicKey || submitBusyRef.current) return;
     submitBusyRef.current = true;
@@ -297,47 +504,99 @@ export default function NewActionClient({
       setWallet(freshWallet);
       assertUsableWallet(freshWallet);
       if (!freshWallet.publicKey) throw new Error('Connect Casper Wallet to continue.');
-      if (
-        paidQuote.paymentReceipt.payer &&
-        freshWallet.payerAccountAddress?.toLowerCase() !== paidQuote.paymentReceipt.payer.toLowerCase()
-      ) {
-        throw new Error('Wallet account changed. Reconnect the original payer before submitting this paid quote.');
-      }
+      const validationError = validatePaidQuoteBeforeSubmit(paidQuote, freshWallet);
+      if (validationError) throw new Error(validationError);
       const eventType = 'goods_not_received' as const;
-      const buyerPublicKey = buyerPublicKeyBase64(freshWallet.publicKey);
-      const authorization = await signSubmitAuthorization({
-        publicKey: freshWallet.publicKey,
-        quoteHash: paidQuote.quoteHash,
-        faultClass: paidQuote.faultClass,
-        buyerPublicKey,
-        eventType,
-      });
+      const existingAttempt = submitAttemptRef.current?.quoteHash === paidQuote.quoteHash
+        ? submitAttemptRef.current
+        : null;
+      const prepared = existingAttempt ?? (() => {
+        const buyerPublicKey = buyerPublicKeyBase64(freshWallet.publicKey!);
+        return { buyerPublicKey };
+      })();
+      let attempt = existingAttempt;
+      if (!attempt) {
+        const authorization = await signSubmitAuthorization({
+          publicKey: freshWallet.publicKey,
+          quoteHash: paidQuote.quoteHash,
+          faultClass: paidQuote.faultClass,
+          buyerPublicKey: prepared.buyerPublicKey,
+          eventType,
+        });
+        attempt = {
+          quoteHash: paidQuote.quoteHash,
+          buyerPublicKey: prepared.buyerPublicKey,
+          eventType,
+          authorization: {
+            publicKey: authorization.publicKey,
+            timestamp: authorization.timestamp,
+            nonce: authorization.nonce,
+            signature: authorization.signature,
+          },
+          idempotencyKey: `submit:${paidQuote.quoteHash}:${authorization.nonce}`,
+        };
+        submitAttemptRef.current = attempt;
+      }
       setSubmit({ kind: 'submitting' });
       const response = await clientApi.submitPaidAction({
         quoteHash: paidQuote.quoteHash,
         faultClass: paidQuote.faultClass,
-        buyerPublicKey,
-        eventType,
-        submitAuthorization: {
-          publicKey: authorization.publicKey,
-          timestamp: authorization.timestamp,
-          nonce: authorization.nonce,
-          signature: authorization.signature,
-        },
-        idempotencyKey: `submit:${paidQuote.quoteHash}:${authorization.nonce}`,
+        buyerPublicKey: attempt.buyerPublicKey,
+        eventType: attempt.eventType,
+        submitAuthorization: attempt.authorization,
+        idempotencyKey: attempt.idempotencyKey,
       });
       rememberActionId(response.action.actionId);
-      persistFlow({ paidQuote, actionId: response.action.actionId });
+      persistPaidQuote(paidQuote, response.action.actionId);
       setSubmit({ kind: 'created', actionId: response.action.actionId });
       router.push(`/app/actions/${response.action.actionId}`);
     } catch (err) {
-      setSubmit({
-        kind: 'failed',
-        message: err instanceof Error ? err.message : 'Action creation failed.',
-      });
+      const message = err instanceof Error ? err.message : 'Action creation failed.';
+      if (paidQuote && shouldRecoverSubmit(message)) {
+        try {
+          const recoveredActionId = await recoverSubmittedAction(paidQuote.quoteHash);
+          if (recoveredActionId) return;
+        } catch {
+          /* keep pending recovery state */
+        }
+        setSubmit({
+          kind: 'recovery_pending',
+          quoteHash: paidQuote.quoteHash,
+          message: 'Recovery pending. The submit response was lost or the quote may already be consumed.',
+        });
+      } else {
+        if (submit.kind === 'signing') submitAttemptRef.current = null;
+        setSubmit({ kind: 'failed', message });
+      }
     } finally {
       submitBusyRef.current = false;
     }
+  }
+
+  async function checkRecovery() {
+    if (!paidQuote || submitBusyRef.current) return;
+    submitBusyRef.current = true;
+    try {
+      const recoveredActionId = await recoverSubmittedAction(paidQuote.quoteHash);
+      if (!recoveredActionId) {
+        setSubmit({
+          kind: 'recovery_pending',
+          quoteHash: paidQuote.quoteHash,
+          message: 'Recovery pending. No created action is visible for this paid quote yet.',
+        });
+      }
+    } finally {
+      submitBusyRef.current = false;
+    }
+  }
+
+  function startNewAction() {
+    if (!window.confirm('Clear the recovered paid quote and start a new action?')) return;
+    clearPersistedFlow();
+    setPayment({ kind: 'idle' });
+    setSubmit({ kind: 'idle' });
+    setProbe({ kind: 'idle' });
+    setStep(selected ? 2 : 1);
   }
 
   return (
@@ -487,7 +746,11 @@ export default function NewActionClient({
           quote={paidQuote}
           submit={submit}
           wallet={wallet}
+          recovered={Boolean(recoveryRecord)}
+          payerMismatch={payerMismatch}
           onCreate={createAction}
+          onCheckRecovery={checkRecovery}
+          onStartNew={startNewAction}
         />
       </section>
     </div>
@@ -903,12 +1166,20 @@ function PaidQuotePanel({
   quote,
   submit,
   wallet,
+  recovered,
+  payerMismatch,
   onCreate,
+  onCheckRecovery,
+  onStartNew,
 }: {
   quote: PaidQuoteResponse | null;
   submit: SubmitState;
   wallet: CasperWalletState;
+  recovered: boolean;
+  payerMismatch: boolean;
   onCreate: () => void;
+  onCheckRecovery: () => void;
+  onStartNew: () => void;
 }) {
   if (!quote) {
     return (
@@ -923,10 +1194,18 @@ function PaidQuotePanel({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <Label>LIVE PAYER BOUND QUOTE</Label>
-          <h3 className="mt-2 text-lg font-semibold text-bone">Quote ready for authorization</h3>
+          <h3 className="mt-2 text-lg font-semibold text-bone">
+            {recovered ? 'Recovered paid quote' : 'Quote ready for authorization'}
+          </h3>
         </div>
         <StatusPill tone="ok">Settled</StatusPill>
       </div>
+      {recovered && (
+        <div className="mt-4 rounded border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-bone">
+          <p>Recovered paid quote.</p>
+          <p className="mt-1 text-muted">Reconnect the original payer to continue.</p>
+        </div>
+      )}
       <dl className="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <MiniField label="Quote hash">
           <CopyHash value={quote.quoteHash} label={truncateHash(quote.quoteHash)} />
@@ -956,28 +1235,56 @@ function PaidQuotePanel({
       <div className="mt-5 rounded border border-rule bg-ink px-4 py-3 text-sm text-muted">
         The submit authorization will bind this quote hash, fault class, evidence signer, event type, timestamp and nonce.
       </div>
+      {payerMismatch && (
+        <div className="mt-4 rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">
+          <p>Connected payer does not match the paid quote.</p>
+          <p className="mt-2 break-all text-slash/85">
+            Expected {quote.paymentReceipt.payer}; connected {wallet.payerAccountAddress ?? 'none'}.
+          </p>
+        </div>
+      )}
       <div className="mt-5 border-t border-rule pt-5">
         <SubmitStatus submit={submit} />
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={
-            !wallet.connected ||
-            !wallet.publicKey ||
-            submit.kind === 'signing' ||
-            submit.kind === 'submitting' ||
-            submit.kind === 'created'
-          }
-          className="mt-4 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
-        >
-          {submit.kind === 'signing'
-            ? 'Waiting for signature'
-            : submit.kind === 'submitting'
-              ? 'Creating action'
-              : submit.kind === 'created'
-                ? 'Action created'
-                : 'Sign authorization and create action'}
-        </button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={
+              !wallet.connected ||
+              !wallet.publicKey ||
+              payerMismatch ||
+              submit.kind === 'signing' ||
+              submit.kind === 'submitting' ||
+              submit.kind === 'created' ||
+              submit.kind === 'recovery_pending'
+            }
+            className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong disabled:opacity-60"
+          >
+            {submit.kind === 'signing'
+              ? 'Waiting for signature'
+              : submit.kind === 'submitting'
+                ? 'Creating action'
+                : submit.kind === 'created'
+                  ? 'Action created'
+                  : 'Sign authorization and create action'}
+          </button>
+          {(submit.kind === 'recovery_pending' || submit.kind === 'failed') && (
+            <button
+              type="button"
+              onClick={onCheckRecovery}
+              className="rounded-md border border-rule px-5 py-2.5 text-sm text-bone transition-colors hover:border-accent/60"
+            >
+              Check for created action
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onStartNew}
+            className="rounded-md border border-rule px-5 py-2.5 text-sm text-bone transition-colors hover:border-slash/60"
+          >
+            Start new action
+          </button>
+        </div>
         {!wallet.connected && (
           <p className="mt-3 text-xs text-muted">
             Reconnect the payer wallet before submitting the paid quote.
@@ -1004,6 +1311,16 @@ function SubmitStatus({ submit }: { submit: SubmitState }) {
   }
   if (submit.kind === 'created') {
     return <StatusPill tone="ok">Action {submit.actionId} created</StatusPill>;
+  }
+  if (submit.kind === 'recovery_pending') {
+    return (
+      <div className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">
+        <p>Recovery pending.</p>
+        <p className="mt-2 text-yellow-100/85">
+          {submit.message} Check for the created action before starting any new payment or signing attempt.
+        </p>
+      </div>
+    );
   }
   return (
     <p className="rounded border border-slash/40 bg-slash/10 px-3 py-2 text-sm text-slash">

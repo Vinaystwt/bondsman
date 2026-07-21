@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Container } from '@/components/ui/Primitives';
-import ActionSummary from '@/components/app/ActionSummary';
+import ActionMonitor from '@/components/app/ActionMonitor';
 
 export const metadata = {
   title: 'Action Monitor',
@@ -26,7 +26,7 @@ export default async function ActionPage({
 
   return (
     <Container className="py-14 lg:py-20">
-      <ActionSummary action={action} />
+      <ActionMonitor initialAction={action} />
     </Container>
   );
 }

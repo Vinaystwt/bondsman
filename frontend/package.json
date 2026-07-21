@@ -11,7 +11,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "node --test scripts/*.test.mjs",
-    "test:canonical": "node scripts/check-canonical.mjs"
+    "test:canonical": "node scripts/check-canonical.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:navigation": "playwright test e2e/navigation-endurance.spec.ts"
   },
   "dependencies": {
     "@casper-ecosystem/casper-eip-712": "^1.2.1",
@@ -26,6 +28,7 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",

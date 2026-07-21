@@ -159,10 +159,10 @@ export const api = {
     serverGet<AssuranceTemplatesResponse>('/api/assurance/templates'),
 };
 
-async function clientGet<T>(path: string): Promise<T> {
+async function clientGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   let res: Response;
   try {
-    res = await fetchWithTimeout(`/api${path}`, { cache: 'no-store' });
+    res = await fetchWithTimeout(`/api${path}`, { cache: 'no-store', signal });
   } catch {
     throw new BackendUnreachable();
   }
@@ -226,8 +226,9 @@ export const clientApi = {
     clientGet<PortableReceipt>(`/receipt/${id}`),
   receiptVerify: (id: number | string) =>
     clientGet<ReceiptVerification>(`/receipt/${id}/verify`),
-  action: (id: number | string) =>
-    clientGet<ActionDetail>(`/actions/${id}`),
+  actions: () => clientGet<ActionDetail[]>('/actions'),
+  action: (id: number | string, signal?: AbortSignal) =>
+    clientGet<ActionDetail>(`/actions/${id}`, signal),
   assuranceTemplates: () =>
     clientGet<AssuranceTemplatesResponse>('/assurance/templates'),
   assuranceAnalyze: (body: AssuranceAnalyzeRequest) =>

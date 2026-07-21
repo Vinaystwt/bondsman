@@ -163,15 +163,15 @@ export default async function ProofConsolePage() {
 
       <details className="rounded-md border border-rule bg-surface p-5">
         <summary className="cursor-pointer list-none">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div>
+          <span className="flex flex-wrap items-baseline justify-between gap-3">
+            <span>
               <Label>Advanced evidence</Label>
-              <h2 className="mt-1 text-xl font-semibold text-bone">
+              <span className="mt-1 block text-xl font-semibold text-bone">
                 Payment, quote, contradiction and slash details
-              </h2>
-            </div>
+              </span>
+            </span>
             <StatusPill tone="info">Read only</StatusPill>
-          </div>
+          </span>
         </summary>
         <div className="mt-5 space-y-6 border-t border-rule pt-5">
           {quoteHash && (

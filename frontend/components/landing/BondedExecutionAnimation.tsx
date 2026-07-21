@@ -97,7 +97,7 @@ export default function BondedExecutionAnimation({
   const rewardLabel = toShort(data?.challengerRewardBase ?? null, 'csprUSD', 0);
   const reserveLabel = toShort(data?.reserveCreditBase ?? null, 'csprUSD', 0);
 
-  const shouldAnimate = !reducedMotion;
+  const shouldAnimate = healthMode === 'healthy' && !reducedMotion;
 
   useGSAP(
     () => {
@@ -116,7 +116,7 @@ export default function BondedExecutionAnimation({
 
       if (!shouldAnimate) {
         gsap.set(q('[data-anim="node"], [data-anim="line"]'), { autoAlpha: 1 });
-        gsap.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
+        gsap.set(q('[data-role="state-label"]'), { textContent: 'HISTORICAL MECHANISM' });
         gsap.set(q('[data-role="consequence-total"]'), { scale: 1 });
         setIsRunning(false);
         return;
@@ -250,13 +250,13 @@ export default function BondedExecutionAnimation({
 
   const disabledCause =
     healthMode === 'unreachable'
-      ? 'Backend unavailable. Showing historical proof state.'
+      ? 'Backend unavailable. Showing historical mechanism.'
       : healthMode === 'degraded'
         ? degradedReason
-          ? `Live execution paused. ${degradedReason}`
-          : 'Live execution paused. Historical proof preserved.'
+          ? `Historical mechanism. ${degradedReason}`
+          : 'Historical mechanism. Backend health is degraded.'
         : reducedMotion
-          ? 'Motion reduced. Showing final proof state.'
+          ? 'Motion reduced. Showing complete final state.'
           : null;
 
   return (
