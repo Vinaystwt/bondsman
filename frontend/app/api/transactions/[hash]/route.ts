@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
+const API_BASE = (
+  process.env.BACKEND_ORIGIN?.trim() ||
+  process.env.NEXT_PUBLIC_API_BASE?.trim() ||
+  'http://127.0.0.1:3001'
+).replace(/\/+$/, '');
 const TIMEOUT_MS = 30_000;
 
 export async function GET(
@@ -17,7 +21,7 @@ export async function GET(
     return NextResponse.json(data, { status: res.status });
   } catch {
     return NextResponse.json(
-      { success: false, code: 'BACKEND_UNREACHABLE', message: 'Backend not reachable' },
+      { success: false, code: 'BACKEND_UNREACHABLE', message: 'Live service not reachable' },
       { status: 502 },
     );
   }

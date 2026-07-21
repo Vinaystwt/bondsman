@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { MotionPathPlugin } from 'gsap/MotionPathPlugin';
 import { useGSAP } from '@gsap/react';
+import { CANONICAL_ACTION_27_PROOF } from '@/lib/canonical-action-27-fallback';
+import { formatMoney, formatWcspr, truncateHash } from '@/lib/format';
 
 if (typeof window !== 'undefined') {
-  gsap.registerPlugin(MotionPathPlugin, useGSAP);
+  gsap.registerPlugin(useGSAP);
 }
 
 interface CanonicalAnimationData {
@@ -29,41 +30,28 @@ interface Props {
   degradedReason?: string | null;
 }
 
-const SCALE = 10n ** 9n;
-
-function toShort(atomic: string | null, unit: string, digits = 0): string {
-  if (!atomic) return `${unit} unavailable`;
-  try {
-    const v = BigInt(atomic);
-    const whole = v / SCALE;
-    const frac = Number(v % SCALE) / Number(SCALE);
-    const n = Number(whole) + frac;
-    return `${n.toLocaleString('en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: digits,
-    })} ${unit}`;
-  } catch {
-    return `${unit} unavailable`;
-  }
-}
-
-const ACCENT = '#B7791F';
-const ACCENT_DEEP = '#6E4814';
-const SLASH = '#E0231C';
-const RULE = '#2A2620';
-const RAISED = '#1C1913';
-const BONE = '#ECE6D8';
-const BONE_DIM = '#A59C8A';
-const INK = '#0E0D0B';
-
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
-/**
- * Product loop animation for the homepage hero.
- *
- * The timeline runs once, keeps the final consequence visible and can be
- * replayed manually. Offscreen and hidden tabs pause the active timeline.
- */
+function fallbackAnimationData(): CanonicalAnimationData {
+  const proof = CANONICAL_ACTION_27_PROOF;
+  return {
+    actionId: proof.actionId,
+    paymentAmountBase: proof.payment?.paymentAmount ?? '100000000',
+    settlementTx: proof.payment?.settlementTransaction ?? null,
+    quoteHash: proof.paidQuote?.quoteHash ?? null,
+    bondBase: proof.bond,
+    challengerRewardBase: proof.economicImpact.challengerReward,
+    reserveCreditBase: proof.economicImpact.reserveCredit,
+    watchdogChallengeTx:
+      proof.timeline.find((s) => s.stage === 'challenge')?.txHash ?? null,
+    resolveTx: proof.timeline.find((s) => s.stage === 'resolve')?.txHash ?? null,
+  };
+}
+
+function shortOrLabel(value: string | null, fallback: string): string {
+  return value ? truncateHash(value) : fallback;
+}
+
 export default function BondedExecutionAnimation({
   data,
   healthMode,
@@ -71,13 +59,10 @@ export default function BondedExecutionAnimation({
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
-  const idPrefix = useId().replace(/:/g, '');
-  const paymentPathId = `${idPrefix}-path-payment`;
-  const evidencePathId = `${idPrefix}-path-evidence`;
-
   const [reducedMotion, setReducedMotion] = useState(false);
   const [runId, setRunId] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [statusText, setStatusText] = useState('Complete mechanism');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,16 +73,91 @@ export default function BondedExecutionAnimation({
     return () => mql.removeEventListener('change', update);
   }, []);
 
-  const paymentAmountLabel = toShort(
-    data?.paymentAmountBase ?? null,
-    'WCSPR',
-    3,
-  );
-  const bondLabel = toShort(data?.bondBase ?? null, 'csprUSD', 0);
-  const rewardLabel = toShort(data?.challengerRewardBase ?? null, 'csprUSD', 0);
-  const reserveLabel = toShort(data?.reserveCreditBase ?? null, 'csprUSD', 0);
-
+  const display = useMemo(() => data ?? fallbackAnimationData(), [data]);
+  const usingFallback = !data || healthMode !== 'healthy';
   const shouldAnimate = healthMode === 'healthy' && !reducedMotion;
+
+  const stages = useMemo(
+    () => [
+      {
+        key: 'intent',
+        eyebrow: 'INTENT',
+        title: 'Agent asks to move money',
+        metric: 'invoice payout',
+        body: 'The request is priced before the agent can execute.',
+        tone: 'neutral' as const,
+      },
+      {
+        key: 'gate',
+        eyebrow: 'BONDED GATE',
+        title: 'Quote paid, payer bound, bond locked',
+        metric: formatMoney(display.bondBase),
+        body: `Action No. ${display.actionId.padStart(4, '0')} cannot continue without collateral.`,
+        tone: 'accent' as const,
+      },
+      {
+        key: 'execution',
+        eyebrow: 'EXECUTION',
+        title: 'Authorized action runs',
+        metric: formatWcspr(display.paymentAmountBase),
+        body: `Settlement ${shortOrLabel(display.settlementTx, 'recorded on Casper')}.`,
+        tone: 'neutral' as const,
+      },
+      {
+        key: 'evidence',
+        eyebrow: 'EVIDENCE',
+        title: 'Buyer contradiction arrives',
+        metric: shortOrLabel(display.quoteHash, 'signed evidence'),
+        body: 'Delivery failure is objectively verifiable during the window.',
+        tone: 'slash' as const,
+      },
+      {
+        key: 'watchdog',
+        eyebrow: 'WATCHDOG',
+        title: 'Independent challenge',
+        metric: shortOrLabel(display.watchdogChallengeTx, 'challenge filed'),
+        body: 'The watchdog submits the evidence to the controller.',
+        tone: 'slash' as const,
+      },
+      {
+        key: 'consequence',
+        eyebrow: 'BOND CONSEQUENCE',
+        title: 'Bond slashed',
+        metric: `Reward ${formatMoney(display.challengerRewardBase)}`,
+        body: `Reserve credit ${formatMoney(display.reserveCreditBase)}.`,
+        tone: 'slash' as const,
+      },
+      {
+        key: 'receipt',
+        eyebrow: 'RECEIPT',
+        title: 'Signed proof issued',
+        metric: shortOrLabel(display.resolveTx, 'receipt verified'),
+        body: 'Portable evidence preserves the complete outcome.',
+        tone: 'accent' as const,
+      },
+    ],
+    [display],
+  );
+
+  useEffect(() => {
+    if (healthMode === 'healthy' && !reducedMotion) {
+      setStatusText('Live backend connected. Replaying verified mechanism.');
+      return;
+    }
+    if (reducedMotion) {
+      setStatusText('Motion reduced. Showing complete final state.');
+      return;
+    }
+    if (healthMode === 'degraded') {
+      setStatusText(
+        degradedReason
+          ? `Cached Action 27 evidence shown. ${degradedReason}`
+          : 'Cached Action 27 evidence shown while live service recovers.',
+      );
+      return;
+    }
+    setStatusText('Cached Action 27 evidence shown while live service recovers.');
+  }, [degradedReason, healthMode, reducedMotion]);
 
   useGSAP(
     () => {
@@ -108,100 +168,69 @@ export default function BondedExecutionAnimation({
       timelineRef.current?.kill();
       timelineRef.current = null;
 
-      gsap.set(q('[data-anim="node"], [data-anim="line"], [data-anim="packet"]'), {
-        autoAlpha: 0,
-      });
-      gsap.set(q('[data-role="consequence-total"]'), { scale: 0.96 });
-      gsap.set(q('[data-role="state-label"]'), { textContent: 'Preparing bond' });
+      gsap.set(q('[data-step]'), { autoAlpha: 1, y: 0, scale: 1 });
+      gsap.set(q('[data-connector]'), { autoAlpha: 1, scaleX: 1 });
+      gsap.set(q('[data-pulse]'), { autoAlpha: 1, scale: 1 });
 
       if (!shouldAnimate) {
-        gsap.set(q('[data-anim="node"], [data-anim="line"]'), { autoAlpha: 1 });
-        gsap.set(q('[data-role="state-label"]'), { textContent: 'HISTORICAL MECHANISM' });
-        gsap.set(q('[data-role="consequence-total"]'), { scale: 1 });
         setIsRunning(false);
         return;
       }
 
-      setIsRunning(true);
-
       const tl = gsap.timeline({
-        defaults: { duration: 0.42, ease: 'power2.out' },
+        defaults: { duration: 0.36, ease: 'power2.out' },
+        onStart: () => setIsRunning(true),
         onComplete: () => {
+          setStatusText('Receipt verified. Final consequence held on screen.');
           setIsRunning(false);
-          gsap.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
         },
       });
 
       timelineRef.current = tl;
 
-      tl.to(q('[data-stage="intent"]'), { autoAlpha: 1 }, 0);
-      tl.to(q('[data-stage="bond"]'), { autoAlpha: 1 }, '+=0.18');
-      tl.to(q('[data-line="intent-bond"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.fromTo(
-        q('[data-packet="payment"]'),
-        {
-          autoAlpha: 0,
-          motionPath: { path: `#${paymentPathId}`, start: 0, end: 0 },
-        },
-        {
-          autoAlpha: 1,
-          duration: 0.85,
-          ease: 'power1.inOut',
-          motionPath: { path: `#${paymentPathId}`, start: 0, end: 1 },
-        },
-        '<',
-      );
-      tl.to(q('[data-packet="payment"]'), { autoAlpha: 0, duration: 0.12 }, '>');
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Bond locked' });
+      gsap.set(q('[data-step]'), { autoAlpha: 0.38, y: 8 });
+      gsap.set(q('[data-step="gate"]'), { autoAlpha: 0.58, y: 0 });
+      gsap.set(q('[data-connector]'), {
+        autoAlpha: 0,
+        scaleX: 0.18,
+        transformOrigin: 'left center',
+      });
+      gsap.set(q('[data-pulse]'), { autoAlpha: 0, scale: 0.78 });
 
-      tl.to(q('[data-stage="execute"]'), { autoAlpha: 1 }, '+=0.15');
-      tl.to(q('[data-line="bond-execute"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Action executed' });
+      const setState = (text: string) => {
+        tl.call(() => setStatusText(text));
+      };
 
-      tl.to(q('[data-stage="evidence"]'), { autoAlpha: 1 }, '+=0.34');
-      tl.to(q('[data-line="execute-evidence"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.fromTo(
-        q('[data-packet="evidence"]'),
-        {
-          autoAlpha: 0,
-          motionPath: { path: `#${evidencePathId}`, start: 0, end: 0 },
-        },
-        {
-          autoAlpha: 1,
-          duration: 0.95,
-          ease: 'power1.inOut',
-          motionPath: { path: `#${evidencePathId}`, start: 0, end: 1 },
-        },
-        '<',
-      );
-      tl.to(q('[data-packet="evidence"]'), { autoAlpha: 0, duration: 0.14 }, '>');
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Failure proven' });
-
-      tl.to(q('[data-stage="watchdog"]'), { autoAlpha: 1 }, '+=0.06');
-      tl.to(q('[data-line="evidence-watchdog"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Watchdog challenged' });
-
-      tl.to(q('[data-stage="consequence"]'), { autoAlpha: 1 }, '+=0.22');
-      tl.to(q('[data-line="watchdog-consequence"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.to(
-        q('[data-role="consequence-total"]'),
-        { scale: 1, transformOrigin: '50% 50%', duration: 0.28 },
-        '<',
-      );
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Bond slashed' });
-
-      tl.to(q('[data-stage="receipt"]'), { autoAlpha: 1 }, '+=0.2');
-      tl.to(q('[data-line="consequence-receipt"]'), { autoAlpha: 1, duration: 0.25 }, '<');
-      tl.set(q('[data-role="state-label"]'), { textContent: 'Receipt verified' });
+      setState('Intent priced.');
+      tl.to(q('[data-step="intent"]'), { autoAlpha: 1, y: 0 }, 0);
+      tl.to(q('[data-connector="intent-gate"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.1');
+      setState('Bond locked before execution.');
+      tl.to(q('[data-step="gate"]'), { autoAlpha: 1, scale: 1.01 }, '<');
+      tl.to(q('[data-pulse="gate"]'), { autoAlpha: 1, scale: 1 }, '<');
+      tl.to(q('[data-step="gate"]'), { scale: 1, duration: 0.18 }, '>');
+      tl.to(q('[data-connector="gate-execution"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.06');
+      setState('Execution allowed through the bonded gate.');
+      tl.to(q('[data-step="execution"]'), { autoAlpha: 1, y: 0 }, '<');
+      tl.to(q('[data-connector="execution-evidence"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.14');
+      setState('Contradiction evidence received.');
+      tl.to(q('[data-step="evidence"]'), { autoAlpha: 1, y: 0 }, '<');
+      tl.to(q('[data-connector="evidence-watchdog"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.08');
+      setState('Watchdog challenge filed.');
+      tl.to(q('[data-step="watchdog"]'), { autoAlpha: 1, y: 0 }, '<');
+      tl.to(q('[data-connector="watchdog-consequence"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.08');
+      setState('Bond consequence settled.');
+      tl.to(q('[data-step="consequence"]'), { autoAlpha: 1, y: 0, scale: 1.01 }, '<');
+      tl.to(q('[data-step="consequence"]'), { scale: 1, duration: 0.18 }, '>');
+      tl.to(q('[data-connector="consequence-receipt"]'), { autoAlpha: 1, scaleX: 1 }, '+=0.06');
+      setState('Receipt signed.');
+      tl.to(q('[data-step="receipt"]'), { autoAlpha: 1, y: 0 }, '<');
 
       return () => {
         tl.kill();
+        setIsRunning(false);
       };
     },
-    {
-      scope: containerRef,
-      dependencies: [shouldAnimate, runId, paymentPathId, evidencePathId],
-    },
+    { scope: containerRef, dependencies: [shouldAnimate, runId, display] },
   );
 
   useEffect(() => {
@@ -209,7 +238,7 @@ export default function BondedExecutionAnimation({
     const tl = timelineRef.current;
     if (!el || !tl || !shouldAnimate) return;
 
-    let onScreen = false;
+    let onScreen = true;
     let visible = document.visibilityState === 'visible';
 
     const evaluate = () => {
@@ -226,7 +255,7 @@ export default function BondedExecutionAnimation({
         onScreen = entries[0]?.isIntersecting ?? false;
         evaluate();
       },
-      { threshold: 0.15 },
+      { threshold: 0.2 },
     );
     io.observe(el);
 
@@ -242,40 +271,26 @@ export default function BondedExecutionAnimation({
     };
   }, [shouldAnimate, runId]);
 
-  const summary = useMemo(
-    () =>
-      'Bondsman lifecycle animation: intent, bond, execute, evidence, watchdog, consequence and signed receipt.',
-    [],
-  );
-
-  const disabledCause =
-    healthMode === 'unreachable'
-      ? 'Backend unavailable. Showing historical mechanism.'
-      : healthMode === 'degraded'
-        ? degradedReason
-          ? `Historical mechanism. ${degradedReason}`
-          : 'Historical mechanism. Backend health is degraded.'
-        : reducedMotion
-          ? 'Motion reduced. Showing complete final state.'
-          : null;
-
   return (
     <div
       ref={containerRef}
       className="relative overflow-hidden rounded-lg border border-rule bg-surface"
     >
-      <div className="flex items-center justify-between gap-4 border-b border-rule px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-5">
         <div>
-          <p className="serial text-[0.62rem] text-muted">ACTION LOOP</p>
+          <p className="text-[0.68rem] font-medium uppercase text-muted">
+            Action loop
+          </p>
           <p className="mt-1 text-sm font-medium text-bone">
-            Economic consequence before autonomy
+            Intent to consequence, with the bond as the gate.
           </p>
         </div>
         <button
           type="button"
           onClick={() => setRunId((current) => current + 1)}
-          className="min-h-10 rounded-md border border-rule px-3 py-2 text-sm text-bone transition-colors hover:border-accent/60 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-10 rounded-md border border-rule px-4 py-2 text-sm text-bone transition-colors duration-150 ease-out hover:border-accent/60 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!shouldAnimate || isRunning}
+          aria-label="Replay the bonded execution animation"
         >
           Replay
         </button>
@@ -283,369 +298,222 @@ export default function BondedExecutionAnimation({
 
       <div
         role="img"
-        aria-label={`Bondsman bonded execution animation. ${summary}`}
-        className="relative"
+        aria-label="Bondsman mechanism: intent, bonded gate, execution, evidence, watchdog, bond consequence and receipt."
+        className="relative p-4 sm:p-5"
       >
-        <svg
-          viewBox="0 0 720 520"
-          xmlns="http://www.w3.org/2000/svg"
-          className="block h-auto w-full"
-          preserveAspectRatio="xMidYMid meet"
-        >
-          <defs>
-            <path
-              id={paymentPathId}
-              d="M 122 156 C 170 126 236 126 286 156"
-              fill="none"
-            />
-            <path
-              id={evidencePathId}
-              d="M 432 252 C 480 292 508 340 518 386"
-              fill="none"
-            />
-          </defs>
-
-          <rect
-            x={24}
-            y={24}
-            width={672}
-            height={472}
-            rx={12}
-            fill={INK}
-            stroke={RULE}
-          />
-          <path
-            d="M 48 82 H 672 M 48 438 H 672"
-            stroke={RULE}
-            strokeDasharray="4 8"
-            opacity={0.7}
-          />
-
-          <text
-            x={48}
-            y={58}
-            fill={BONE_DIM}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={10}
-            letterSpacing="3"
+        <div className="hidden min-h-[40rem] xl:block">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 880 560"
+            className="pointer-events-none absolute inset-5 h-[calc(100%-2.5rem)] w-[calc(100%-2.5rem)]"
+            preserveAspectRatio="none"
           >
-            BONDED ACTION {data?.actionId ? `NO. ${data.actionId}` : 'NO. 0027'}
-          </text>
-          <text
-            data-role="state-label"
-            x={520}
-            y={58}
-            fill={ACCENT}
-            fontFamily="ui-monospace, Menlo, monospace"
-            fontSize={11}
-            textAnchor="end"
-          >
-            Preparing bond
-          </text>
-
-          <FlowLine
-            name="intent-bond"
-            d="M 158 158 C 196 140 246 140 284 158"
-          />
-          <FlowLine
-            name="bond-execute"
-            d="M 410 158 C 448 140 498 140 536 158"
-          />
-          <FlowLine
-            name="execute-evidence"
-            d="M 592 208 C 560 232 518 246 458 250"
-          />
-          <FlowLine
-            name="evidence-watchdog"
-            d="M 396 306 C 430 344 472 372 518 390"
-            slash
-          />
-          <FlowLine
-            name="watchdog-consequence"
-            d="M 460 412 C 394 426 328 426 262 412"
-            slash
-          />
-          <FlowLine
-            name="consequence-receipt"
-            d="M 244 392 C 298 346 370 330 444 342"
-          />
-
-          <g data-anim="node" data-stage="intent">
-            <LoopNode
-              x={64}
-              y={116}
-              w={96}
-              h={84}
-              title="INTENT"
-              value="agent asks"
-              detail="money move"
-            />
-          </g>
-
-          <g data-anim="node" data-stage="bond">
-            <LoopNode
-              x={284}
-              y={116}
-              w={132}
-              h={84}
-              title="BOND"
-              value={bondLabel}
-              detail="locked first"
-              accent
-            />
-          </g>
-
-          <g data-anim="node" data-stage="execute">
-            <LoopNode
-              x={536}
-              y={116}
-              w={120}
-              h={84}
-              title="EXECUTE"
-              value="authorized"
-              detail={paymentAmountLabel}
-            />
-          </g>
-
-          <g data-anim="node" data-stage="evidence">
-            <LoopNode
-              x={336}
-              y={228}
-              w={126}
-              h={84}
-              title="EVIDENCE"
-              value="failure proof"
-              detail={data?.quoteHash ? shortHash(data.quoteHash) : 'signed buyer'}
-              slash
-            />
-          </g>
-
-          <g data-anim="node" data-stage="watchdog">
-            <LoopNode
-              x={516}
-              y={368}
-              w={130}
-              h={78}
-              title="WATCHDOG"
-              value="challenge"
-              detail={data?.watchdogChallengeTx ? shortHash(data.watchdogChallengeTx) : 'objective rule'}
-              slash
-            />
-          </g>
-
-          <g data-anim="node" data-stage="consequence">
-            <rect
-              x={76}
-              y={356}
-              width={188}
-              height={106}
-              rx={8}
-              fill={RAISED}
-              stroke={SLASH}
-              strokeOpacity={0.64}
-            />
-            <text
-              x={94}
-              y={382}
-              fill={BONE_DIM}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={10}
-              letterSpacing="3"
-            >
-              CONSEQUENCE
-            </text>
-            <text
-              data-role="consequence-total"
-              x={94}
-              y={411}
-              fill={SLASH}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={17}
-              fontWeight={700}
-            >
-              bond slashed
-            </text>
-            <text
-              x={94}
-              y={436}
-              fill={BONE}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={11}
-            >
-              reward {rewardLabel}
-            </text>
-            <text
-              x={94}
-              y={452}
-              fill={BONE_DIM}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={10}
-            >
-              reserve {reserveLabel}
-            </text>
-          </g>
-
-          <g data-anim="node" data-stage="receipt">
-            <rect
-              x={440}
-              y={304}
-              width={180}
-              height={74}
-              rx={8}
-              fill={RAISED}
-              stroke={ACCENT}
-              strokeOpacity={0.55}
-            />
-            <text
-              x={458}
-              y={329}
-              fill={BONE_DIM}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={10}
-              letterSpacing="3"
-            >
-              RECEIPT
-            </text>
-            <text
-              x={458}
-              y={354}
-              fill={ACCENT}
-              fontFamily="ui-monospace, Menlo, monospace"
-              fontSize={14}
-            >
-              signed and verified
-            </text>
-            <circle cx={598} cy={328} r={11} fill={ACCENT} />
             <path
-              d="M592 328 l4 4 l8 -9"
-              stroke={INK}
-              strokeWidth={2.2}
-              fill="none"
+              data-connector="intent-gate"
+              d="M 210 142 H 336"
+              stroke="currentColor"
+              className="text-accent-deep"
+              strokeWidth="2"
               strokeLinecap="round"
-              strokeLinejoin="round"
+              strokeDasharray="5 7"
+              fill="none"
             />
-          </g>
+            <path
+              data-connector="gate-execution"
+              d="M 544 142 H 670"
+              stroke="currentColor"
+              className="text-accent-deep"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="5 7"
+              fill="none"
+            />
+            <path
+              data-connector="execution-evidence"
+              d="M 730 208 C 692 286 606 324 500 324"
+              stroke="currentColor"
+              className="text-slash"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="4 8"
+              fill="none"
+            />
+            <path
+              data-connector="evidence-watchdog"
+              d="M 390 356 C 334 414 270 444 194 444"
+              stroke="currentColor"
+              className="text-slash"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="4 8"
+              fill="none"
+            />
+            <path
+              data-connector="watchdog-consequence"
+              d="M 288 444 H 408"
+              stroke="currentColor"
+              className="text-slash"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="4 8"
+              fill="none"
+            />
+            <path
+              data-connector="consequence-receipt"
+              d="M 568 444 H 692"
+              stroke="currentColor"
+              className="text-accent-deep"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="5 7"
+              fill="none"
+            />
+          </svg>
 
-          <circle
-            data-anim="packet"
-            data-packet="payment"
-            r={5}
-            fill={ACCENT}
-          />
-          <circle
-            data-anim="packet"
-            data-packet="evidence"
-            r={5.5}
-            fill={SLASH}
-          />
-        </svg>
+          <div className="relative grid min-h-[40rem] grid-cols-[1fr_1.28fr_1fr] grid-rows-[12rem_12rem_12rem] gap-6">
+            <MechanismCard stage={stages[0]} className="self-center" />
+            <GateCard stage={stages[1]} />
+            <MechanismCard stage={stages[2]} className="self-center" />
+            <MechanismCard
+              stage={stages[3]}
+              className="col-start-2 row-start-2 self-center"
+            />
+            <MechanismCard stage={stages[4]} className="row-start-3 self-center" />
+            <MechanismCard
+              stage={stages[5]}
+              className="col-start-2 row-start-3 self-center"
+            />
+            <MechanismCard
+              stage={stages[6]}
+              className="col-start-3 row-start-3 self-center"
+            />
+          </div>
+        </div>
+
+        <ol className="space-y-3 xl:hidden">
+          {stages.map((stage, index) => (
+            <li key={stage.key} className="relative pl-6">
+              {index < stages.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-[0.42rem] top-7 h-[calc(100%+0.75rem)] w-px ${
+                    index >= 2 ? 'bg-slash/45' : 'bg-accent-deep/70'
+                  }`}
+                />
+              )}
+              <span
+                aria-hidden="true"
+                className={`absolute left-0 top-5 h-3.5 w-3.5 rounded-full border ${
+                  stage.tone === 'slash'
+                    ? 'border-slash bg-slash/20'
+                    : stage.tone === 'accent'
+                      ? 'border-accent bg-accent/20'
+                      : 'border-rule bg-raised'
+                }`}
+              />
+              {stage.key === 'gate' ? (
+                <GateCard stage={stage} compact />
+              ) : (
+                <MechanismCard stage={stage} />
+              )}
+            </li>
+          ))}
+        </ol>
       </div>
 
-      {disabledCause && (
-        <div className="border-t border-rule bg-ink px-4 py-2 text-xs text-muted">
-          {disabledCause}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule bg-ink px-4 py-3 text-xs sm:px-5">
+        <p aria-live="polite" className="text-muted">
+          {statusText}
+        </p>
+        <span className="rounded border border-rule bg-surface px-2.5 py-1 font-mono text-[0.66rem] uppercase text-muted">
+          {usingFallback ? 'cached verified evidence' : 'live projection'}
+        </span>
+      </div>
     </div>
   );
 }
 
-function FlowLine({
-  name,
-  d,
-  slash = false,
-}: {
-  name: string;
-  d: string;
-  slash?: boolean;
-}) {
-  return (
-    <path
-      data-anim="line"
-      data-line={name}
-      d={d}
-      stroke={slash ? SLASH : ACCENT_DEEP}
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeDasharray={slash ? '5 5' : '4 6'}
-      fill="none"
-      opacity={0.74}
-    />
-  );
-}
-
-function LoopNode({
-  x,
-  y,
-  w,
-  h,
-  title,
-  value,
-  detail,
-  accent = false,
-  slash = false,
-}: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+type StageCard = {
+  key: string;
+  eyebrow: string;
   title: string;
-  value: string;
-  detail?: string | null;
-  accent?: boolean;
-  slash?: boolean;
+  metric: string;
+  body: string;
+  tone: 'neutral' | 'accent' | 'slash';
+};
+
+function MechanismCard({
+  stage,
+  className = '',
+}: {
+  stage: StageCard;
+  className?: string;
 }) {
-  const border = slash ? SLASH : accent ? ACCENT : RULE;
-  const valueColor = slash ? SLASH : accent ? ACCENT : BONE;
+  const border =
+    stage.tone === 'slash'
+      ? 'border-slash/45'
+      : stage.tone === 'accent'
+        ? 'border-accent/45'
+        : 'border-rule';
+  const metric =
+    stage.tone === 'slash'
+      ? 'text-slash'
+      : stage.tone === 'accent'
+        ? 'text-accent'
+        : 'text-bone';
 
   return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={8}
-        fill={RAISED}
-        stroke={border}
-        strokeOpacity={accent || slash ? 0.6 : 0.48}
-      />
-      <text
-        x={x + 14}
-        y={y + 25}
-        fill={BONE_DIM}
-        fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={10}
-        letterSpacing="3"
-      >
-        {title}
-      </text>
-      <text
-        x={x + 14}
-        y={y + 50}
-        fill={valueColor}
-        fontFamily="ui-monospace, Menlo, monospace"
-        fontSize={13}
-      >
-        {value}
-      </text>
-      {detail && (
-        <text
-          x={x + 14}
-          y={y + 68}
-          fill={BONE_DIM}
-          fontFamily="ui-monospace, Menlo, monospace"
-          fontSize={10}
-        >
-          {detail}
-        </text>
-      )}
-    </g>
+    <article
+      data-step={stage.key}
+      className={`min-h-[9.5rem] rounded-md border ${border} bg-raised p-4 ${className}`}
+    >
+      <p className="text-[0.68rem] font-medium uppercase text-muted">
+        {stage.eyebrow}
+      </p>
+      <h3 className="mt-2 text-base font-semibold leading-snug text-bone">
+        {stage.title}
+      </h3>
+      <p className={`mt-3 break-words font-mono text-sm tabular ${metric}`}>
+        {stage.metric}
+      </p>
+      <p className="mt-3 text-sm leading-relaxed text-muted">{stage.body}</p>
+    </article>
   );
 }
 
-function shortHash(h: string): string {
-  const clean = h.replace(/^hash-/, '').replace(/^account-hash-/, '');
-  if (clean.length <= 14) return clean;
-  return `${clean.slice(0, 6)}...${clean.slice(-4)}`;
+function GateCard({
+  stage,
+  compact = false,
+}: {
+  stage: StageCard;
+  compact?: boolean;
+}) {
+  return (
+    <article
+      data-step={stage.key}
+      className={`relative overflow-hidden rounded-md border border-accent/65 bg-ink p-5 ${
+        compact ? 'min-h-[12rem]' : 'min-h-[13rem]'
+      }`}
+    >
+      <div
+        data-pulse="gate"
+        aria-hidden="true"
+        className="absolute right-4 top-4 h-16 w-16 rounded-full border border-accent/40"
+      />
+      <div className="relative">
+        <p className="text-[0.68rem] font-medium uppercase text-accent">
+          {stage.eyebrow}
+        </p>
+        <h3 className="mt-3 text-xl font-semibold leading-tight text-bone sm:text-2xl">
+          {stage.title}
+        </h3>
+        <p className="mt-4 break-words font-mono text-lg font-semibold text-accent tabular">
+          {stage.metric}
+        </p>
+        <p className="mt-4 max-w-[26rem] text-sm leading-relaxed text-muted">
+          {stage.body}
+        </p>
+      </div>
+    </article>
+  );
 }

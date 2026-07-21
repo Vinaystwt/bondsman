@@ -35,7 +35,7 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
       ? 'Live on Casper testnet'
       : healthMode === 'degraded'
         ? 'Live execution temporarily paused'
-        : 'Backend unavailable. Showing cached evidence.';
+        : 'Showing cached Action 27 evidence';
 
   const pillTone =
     healthMode === 'healthy'
@@ -47,7 +47,7 @@ export default function Hero({ healthMode, degradedReason, canonical }: HeroProp
   return (
     <section className="relative overflow-hidden border-b border-rule">
       <Container className="py-14 lg:py-24">
-        <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <div className="grid items-start gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
           <div>
             <div className="flex items-center gap-2.5">
               <BondsmanLogo size={26} variant="mark" />

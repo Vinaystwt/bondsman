@@ -1,5 +1,9 @@
 import Link from 'next/link';
 import { api, safeGet } from '@/lib/api';
+import {
+  CANONICAL_ACTION_27_PROOF,
+  CANONICAL_ACTION_27_RECEIPT_VERIFICATION,
+} from '@/lib/canonical-action-27-fallback';
 import Hero from '@/components/landing/Hero';
 import CanonicalSummary from '@/components/proof/CanonicalSummary';
 import WhatIsReal from '@/components/proof/WhatIsReal';
@@ -45,13 +49,16 @@ export default async function Home() {
   ]);
 
   const { mode: healthMode, reason: degradedReason } = resolveHealth(healthRes);
-  const canonical = canonicalRes.reachable ? canonicalRes.data : null;
+  const liveCanonical = canonicalRes.reachable ? canonicalRes.data : null;
+  const canonical = liveCanonical ?? CANONICAL_ACTION_27_PROOF;
   const canonicalId = canonical?.actionId ?? '27';
 
-  const receiptRes = canonical
+  const receiptRes = liveCanonical
     ? await safeGet(() => api.receiptVerify(canonicalId))
     : ({ reachable: false, data: null } as const);
-  const receiptValid = receiptRes.reachable ? receiptRes.data.valid : null;
+  const receiptValid = receiptRes.reachable
+    ? receiptRes.data.valid
+    : CANONICAL_ACTION_27_RECEIPT_VERIFICATION.valid;
 
   return (
     <>
@@ -186,22 +193,7 @@ export default async function Home() {
               </div>
             </div>
             <div>
-              {canonical ? (
-                <CanonicalSummary proof={canonical} receiptValid={receiptValid} />
-              ) : (
-                <div className="rounded-lg border border-dashed border-rule bg-surface/40 p-8 text-sm leading-relaxed text-muted">
-                  <p className="text-bone">Live canonical proof unavailable</p>
-                  <p className="mt-2">
-                    The backend is not responding right now. Action No. 0027 remains settled on Casper testnet. Try again in a moment.
-                  </p>
-                  <Link
-                    href="/proof/27"
-                    className="mt-4 inline-block text-accent underline decoration-rule underline-offset-4 hover:decoration-accent"
-                  >
-                    Open the Proof Console
-                  </Link>
-                </div>
-              )}
+              <CanonicalSummary proof={canonical} receiptValid={receiptValid} />
             </div>
           </div>
         </Container>

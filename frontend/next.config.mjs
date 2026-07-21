@@ -1,5 +1,16 @@
 /** @type {import('next').NextConfig} */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
+const configuredBackend =
+  process.env.BACKEND_ORIGIN?.trim() ||
+  process.env.NEXT_PUBLIC_API_BASE?.trim();
+const isHostedBuild =
+  process.env.VERCEL === '1' ||
+  Boolean(process.env.VERCEL_ENV);
+
+if (isHostedBuild && !configuredBackend) {
+  throw new Error('BACKEND_ORIGIN is required for hosted production builds.');
+}
+
+const API_BASE = (configuredBackend || 'http://127.0.0.1:3001').replace(/\/+$/, '');
 
 const nextConfig = {
   async rewrites() {

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { api, safeGet } from '@/lib/api';
-import { BackendDown } from '@/components/ui/States';
+import {
+  CANONICAL_ACTION_27_RECEIPT_VERIFICATION,
+  CANONICAL_ACTION_27_REPLAY,
+} from '@/lib/canonical-action-27-fallback';
 import {
   Container,
   Label,
@@ -49,23 +52,19 @@ export default async function ProofConsolePage() {
     safeGet(() => api.canonicalReplay()),
   ]);
 
-  if (!replayRes.reachable) {
-    return (
-      <Container className="py-16">
-        <BackendDown />
-      </Container>
-    );
-  }
-
-  const replay = replayRes.data;
+  const replay = replayRes.reachable
+    ? replayRes.data
+    : CANONICAL_ACTION_27_REPLAY;
+  const usingCommittedFallback =
+    !replayRes.reachable || replay.source === 'committed_bundle';
   const proof = replay.proof;
   const actionId = String(replay.actionId);
   const quoteHash = proof.paidQuote?.quoteHash ?? '';
   const receipt = replay.receipt;
 
-  const [receiptVerifyRes] = await Promise.all([
-    safeGet(() => api.receiptVerify(actionId)),
-  ]);
+  const receiptVerifyRes = usingCommittedFallback
+    ? ({ reachable: true, data: CANONICAL_ACTION_27_RECEIPT_VERIFICATION } as const)
+    : await safeGet(() => api.receiptVerify(actionId));
   const initialVerification = receiptVerifyRes.reachable
     ? receiptVerifyRes.data
     : null;

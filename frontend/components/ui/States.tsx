@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={`skeleton rounded ${className ?? ''}`} aria-hidden="true" />;
@@ -47,13 +48,32 @@ export function BackendDown() {
           <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
         </svg>
       </div>
-      <h3 className="font-display text-xl text-bone">Backend not reachable</h3>
+      <h3 className="font-display text-xl text-bone">
+        Live service temporarily unavailable
+      </h3>
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-        Bondsman reads live testnet state from the local API. Start it from the
-        repository root, then reload this page.
+        Bondsman could not reach its hosted testnet service. Historical proof
+        remains available while the connection recovers.
       </p>
-      <div className="mt-5 inline-flex items-center gap-2 rounded border border-rule bg-ink px-4 py-2 font-mono text-sm text-accent">
-        <span className="text-muted">$</span> npm run api
+      <div className="mt-5 flex flex-wrap gap-3">
+        <a
+          href=""
+          className="rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
+        >
+          Retry
+        </a>
+        <Link
+          href="/proof/27"
+          className="rounded-md border border-rule px-4 py-2.5 text-sm text-bone transition-colors hover:border-accent/50"
+        >
+          Open Action 27 proof
+        </Link>
+        <a
+          href="/api/health"
+          className="rounded-md border border-rule px-4 py-2.5 text-sm text-bone transition-colors hover:border-accent/50"
+        >
+          View service status
+        </a>
       </div>
     </div>
   );

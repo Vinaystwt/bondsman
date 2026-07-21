@@ -20,8 +20,18 @@ import type {
 
 // Server components talk to the backend origin directly.
 // Client components fetch the same paths through the Next proxy ("/api/*").
-const SERVER_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
+const configuredBackend =
+  process.env.BACKEND_ORIGIN?.trim() ||
+  process.env.NEXT_PUBLIC_API_BASE?.trim();
+const isHostedBuild =
+  process.env.VERCEL === '1' ||
+  Boolean(process.env.VERCEL_ENV);
+
+if (isHostedBuild && !configuredBackend) {
+  throw new Error('BACKEND_ORIGIN is required for hosted production builds.');
+}
+
+const SERVER_BASE = (configuredBackend || 'http://127.0.0.1:3001').replace(/\/+$/, '');
 const FETCH_TIMEOUT_MS = 30_000;
 
 export class BackendUnreachable extends Error {

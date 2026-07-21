@@ -25,7 +25,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: `NEXT_PUBLIC_API_BASE=http://127.0.0.1:3999 ./node_modules/.bin/next start -p ${PORT}`,
+      command: `BACKEND_ORIGIN=http://127.0.0.1:3999 NEXT_PUBLIC_API_BASE=http://127.0.0.1:3999 ./node_modules/.bin/next start -p ${PORT}`,
       url: baseURL,
       reuseExistingServer: false,
       timeout: 120_000,

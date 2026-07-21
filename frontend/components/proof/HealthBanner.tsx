@@ -12,19 +12,19 @@ export function resolveProofState(input: {
   publicExperience: HealthPublicExperience | null;
   replaySource: string | null;
 }): ProofConsoleState {
+  if (input.replaySource === 'committed_bundle') {
+    return {
+      kind: 'committed',
+      label: 'Verified committed fallback evidence',
+    };
+  }
   if (input.healthOk === null) {
-    return { kind: 'unreachable', label: 'Backend unavailable' };
+    return { kind: 'unreachable', label: 'Live service not reached' };
   }
   if (input.publicExperience?.proofConsoleReady === false) {
     return {
       kind: 'degraded',
       label: 'Canonical verification temporarily degraded',
-    };
-  }
-  if (input.replaySource === 'committed_bundle') {
-    return {
-      kind: 'committed',
-      label: 'Verified committed fallback evidence',
     };
   }
   return { kind: 'live', label: 'Live on Casper testnet' };
