@@ -1,38 +1,35 @@
 import type {
-  AgentCard,
-  AssuranceAnalysis,
-  AssuranceAnalyzeRequest,
-  AssuranceTemplatesResponse,
-  CanonicalProof,
-  CanonicalReplay,
-  Deployment,
-  Health,
   ActionDetail,
-  PaidQuoteResponse,
-  PaidActionSubmitResponse,
-  PortableReceipt,
-  SubmitAuthorization,
-  PublicCapabilities,
-  QuoteCheckResponse,
-  ReceiptVerification,
-  X402PaymentResponse,
+  ActionSummary,
+  AgentReputation,
+  Deployment,
+  DemoReady,
+  DemoProofs,
+  DemoJob,
+  Health,
+  Invoice,
+  Reserve,
+  TransactionStatus,
+  WalletResolveResult,
+  Watchdog,
 } from './types';
 
 // Server components talk to the backend origin directly.
-// Client components fetch the same paths through the Next proxy ("/api/*").
-const configuredBackend =
-  process.env.BACKEND_ORIGIN?.trim() ||
-  process.env.NEXT_PUBLIC_API_BASE?.trim();
-const isHostedBuild =
-  process.env.VERCEL === '1' ||
-  Boolean(process.env.VERCEL_ENV);
-
-if (isHostedBuild && !configuredBackend) {
-  throw new Error('BACKEND_ORIGIN is required for hosted production builds.');
-}
-
-const SERVER_BASE = (configuredBackend || 'http://127.0.0.1:3001').replace(/\/+$/, '');
+// Client components always go through the Next proxy ("/api/*") so the
+// operator bearer token, which the proxy attaches server-side, is never
+// exposed to the browser.
+const SERVER_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:3001';
 const FETCH_TIMEOUT_MS = 30_000;
+const SUBMIT_PATHS = new Set([
+  '/challenge',
+  '/challenge/wallet-resolve',
+  '/demo/arm',
+  '/demo/arm/async',
+  '/resolve',
+  '/watchdog/demo',
+  '/watchdog/demo/async',
+]);
 
 export class BackendUnreachable extends Error {
   constructor() {
@@ -51,54 +48,61 @@ export class ApiError extends Error {
 }
 
 const FRIENDLY: Record<string, string> = {
+  NOT_OWNER: 'The backend key is not the contract owner. The contract needs to be redeployed or the key updated.',
+  CHALLENGE_WINDOW_CLOSED: "This action's challenge window has closed.",
+  NO_ELIGIBLE_ACTION: 'No eligible action is available right now. Try arming a new one.',
+  NOT_EXECUTABLE: 'This action is not in an executable state.',
+  ALREADY_CHALLENGED: 'This action has already been challenged.',
+  STALE_CONTRACT_VERSION: 'The contract version has changed. Evidence from the previous version cannot be used.',
+  CHALLENGE_NOT_FINAL: 'The challenge transaction has not reached finality yet.',
   NODE_UNREACHABLE: 'The Casper testnet node is not reachable.',
+  ARM_TIMEOUT: 'Arming is still submitting real Casper testnet transactions. Refresh or try again in a moment.',
+  WATCHDOG_DEMO_TIMEOUT: 'The autonomous demo is still submitting real Casper testnet transactions. Refresh or try again in a moment.',
+  OPERATOR_AUTH_REQUIRED: 'This feature is temporarily restricted. Please try again shortly.',
+  OPERATOR_AUTH_INVALID: 'This feature is temporarily restricted. Please try again shortly.',
+  RATE_LIMITED: 'Too many requests right now. Please wait a moment and try again.',
 };
 
 export function friendlyError(code: string, fallback: string): string {
   return FRIENDLY[code] ?? fallback;
 }
 
-async function parseErrorBody(
-  res: Response,
-): Promise<{ code: string; message: string } | null> {
+async function parseErrorBody(res: Response): Promise<{ code: string; message: string } | null> {
   try {
     const body = await res.json();
     if (body && typeof body.code === 'string' && typeof body.message === 'string') {
       return { code: body.code as string, message: body.message as string };
     }
-  } catch {
-    /* not JSON */
-  }
+  } catch { /* not JSON */ }
   return null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+// Only ever called from server components, so it is safe to attach the
+// operator bearer token here directly — this code path never ships to the
+// browser bundle's execution (Next tree-shakes unreferenced client paths,
+// and process.env.OPERATOR_API_TOKEN resolves to undefined outside Node).
+function serverOperatorHeaders(): Record<string, string> {
+  const token = process.env.OPERATOR_API_TOKEN;
+  return token ? { authorization: `Bearer ${token}` } : {};
 }
 
-function assertPaidQuoteResponse(value: unknown): asserts value is PaidQuoteResponse {
-  if (!isRecord(value)) throw new Error('paid quote malformed');
-  const receipt = value.paymentReceipt;
-  if (!/^0x[0-9a-f]{64}$/i.test(String(value.quoteHash ?? ''))) {
-    throw new Error('paid quote malformed: quoteHash');
+async function serverGet<T>(path: string): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(`${SERVER_BASE}${path}`, {
+      cache: 'no-store',
+      headers: { ...serverOperatorHeaders() },
+    });
+  } catch {
+    throw new BackendUnreachable();
   }
-  if (!['duplicate_claim', 'delivery_contradiction'].includes(String(value.faultClass))) {
-    throw new Error('paid quote malformed: faultClass');
+  if (!res.ok) {
+    const err = await parseErrorBody(res);
+    if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
+    if (res.status === 404) throw new Error('not found');
+    throw new Error(`request failed: ${res.status}`);
   }
-  if (
-    typeof value.verifier !== 'string' ||
-    typeof value.requiredBond !== 'string' ||
-    typeof value.quotedMinimumBond !== 'string' ||
-    typeof value.quoteExpiry !== 'string' ||
-    Number.isNaN(Date.parse(value.quoteExpiry)) ||
-    !isRecord(receipt) ||
-    receipt.settled !== true ||
-    typeof receipt.payer !== 'string' ||
-    !/^00[0-9a-f]{64}$/i.test(receipt.payer) ||
-    !/^[0-9a-f]{64}$/i.test(String(receipt.transaction ?? ''))
-  ) {
-    throw new Error('paid quote malformed: paymentReceipt');
-  }
+  return (await res.json()) as T;
 }
 
 async function fetchWithTimeout(
@@ -118,61 +122,39 @@ async function fetchWithTimeout(
   }
 }
 
-async function serverGet<T>(path: string): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(`${SERVER_BASE}${path}`, { cache: 'no-store' });
-  } catch {
-    throw new BackendUnreachable();
-  }
-  if (!res.ok) {
-    const err = await parseErrorBody(res);
-    if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
-    if (res.status === 404) throw new Error('not found');
-    throw new Error(`request failed: ${res.status}`);
-  }
-  return (await res.json()) as T;
-}
-
 export async function safeGet<T>(
   fn: () => Promise<T>,
 ): Promise<{ data: T; reachable: true } | { data: null; reachable: false }> {
   try {
     return { data: await fn(), reachable: true };
   } catch (err) {
-    if (err instanceof BackendUnreachable || err instanceof ApiError) {
+    if (err instanceof BackendUnreachable) {
       return { data: null, reachable: false };
     }
     throw err;
   }
 }
 
-/**
- * Server-side reads. All read only. Only the endpoints the final product
- * actually uses are exposed.
- */
+// Server-side reads.
 export const api = {
   health: () => serverGet<Health>('/api/health'),
-  publicCapabilities: () =>
-    serverGet<PublicCapabilities>('/api/public-capabilities'),
-  deployments: () => serverGet<Deployment>('/api/deployments'),
-  canonicalProof: () => serverGet<CanonicalProof>('/api/proofs/canonical'),
-  canonicalReplay: () => serverGet<CanonicalReplay>('/api/replay/canonical'),
-  receipt: (id: number | string) =>
-    serverGet<PortableReceipt>(`/api/receipt/${id}`),
-  receiptVerify: (id: number | string) =>
-    serverGet<ReceiptVerification>(`/api/receipt/${id}/verify`),
-  actions: () => serverGet<ActionDetail[]>('/api/actions'),
+  invoices: () => serverGet<Invoice[]>('/api/invoices'),
+  actions: () => serverGet<ActionSummary[]>('/api/actions'),
   action: (id: number | string) => serverGet<ActionDetail>(`/api/actions/${id}`),
-  agentCard: () => serverGet<AgentCard>('/.well-known/agent.json'),
-  assuranceTemplates: () =>
-    serverGet<AssuranceTemplatesResponse>('/api/assurance/templates'),
+  demoReady: () => serverGet<DemoReady>('/api/demo/ready'),
+  demoProofs: () => serverGet<DemoProofs>('/api/demo/proofs'),
+  agent: (address: string) =>
+    serverGet<AgentReputation>(`/api/agents/${address}`),
+  reserve: () => serverGet<Reserve>('/api/reserve'),
+  deployments: () => serverGet<Deployment>('/api/deployments'),
+  watchdog: () => serverGet<Watchdog>('/api/watchdog'),
 };
 
-async function clientGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+// Client-side reads, proxied through Next at /api/*.
+async function clientGet<T>(path: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetchWithTimeout(`/api${path}`, { cache: 'no-store', signal });
+    res = await fetchWithTimeout(`/api${path}`, { cache: 'no-store' });
   } catch {
     throw new BackendUnreachable();
   }
@@ -191,16 +173,17 @@ async function clientPost<T>(
 ): Promise<T> {
   let res: Response;
   try {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    // A stable key per submit call lets the backend's idempotency store
+    // collapse a duplicate on-chain submit caused by a resent request.
+    if (SUBMIT_PATHS.has(path)) headers['idempotency-key'] = crypto.randomUUID();
     res = await fetchWithTimeout(
       `/api${path}`,
       {
         method: 'POST',
-        ...(body !== undefined
-          ? {
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(body),
-            }
-          : {}),
+        ...(Object.keys(headers).length ? { headers } : {}),
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       },
       timeoutMs,
     );
@@ -215,123 +198,28 @@ async function clientPost<T>(
   return (await res.json()) as T;
 }
 
-/**
- * Client-side reads and interactions used by the final public product.
- *
- * READ ONLY: health, canonicalReplay, receipt.
- * DESIGN ONLY: assuranceAnalyze, assuranceTemplates.
- * VERIFICATION: receiptVerify, verifyReceiptBody.
- * PAID HTTP probe: liveQuoteProbe (unpaid probe returning HTTP 402).
- * READ ONLY replay helper: quoteConsumptionCheck.
- *
- * Paid HTTP methods require wallet authorization and real x402 settlement.
- * No sponsored operator mutation is exposed from the public frontend.
- */
 export const clientApi = {
   health: () => clientGet<Health>('/health'),
-  publicCapabilities: () =>
-    clientGet<PublicCapabilities>('/public-capabilities'),
-  canonicalReplay: () => clientGet<CanonicalReplay>('/replay/canonical'),
-  receipt: (id: number | string) =>
-    clientGet<PortableReceipt>(`/receipt/${id}`),
-  receiptVerify: (id: number | string) =>
-    clientGet<ReceiptVerification>(`/receipt/${id}/verify`),
-  actions: () => clientGet<ActionDetail[]>('/actions'),
-  action: (id: number | string, signal?: AbortSignal) =>
-    clientGet<ActionDetail>(`/actions/${id}`, signal),
-  assuranceTemplates: () =>
-    clientGet<AssuranceTemplatesResponse>('/assurance/templates'),
-  assuranceAnalyze: (body: AssuranceAnalyzeRequest) =>
-    clientPost<AssuranceAnalysis>('/assurance/analyze', body),
-  quoteConsumptionCheck: (quoteHash: string) =>
-    clientPost<QuoteCheckResponse>('/replay/canonical/quote-check', { quoteHash }),
-  verifyReceiptBody: (id: number | string, body: PortableReceipt) =>
-    clientPost<ReceiptVerification>(`/receipt/${id}/verify`, body),
-  /**
-   * Live x402 probe. Sends an unpaid quote request against /v1/actions/quote.
-   * Expects HTTP 402 with an x402 v2 payment requirement. No transaction is
-   * ever created and no secret is exposed.
-   */
-  async liveQuoteProbe(body: {
-    amount: string;
-    faultClass: string;
-  }): Promise<{
-    status: number;
-    x402?: X402PaymentResponse;
-    other?: unknown;
-    error?: string;
-  }> {
-    try {
-      const res = await fetchWithTimeout('/v1/actions/quote', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const parsed = (await res.json().catch(() => null)) as
-        | X402PaymentResponse
-        | Record<string, unknown>
-        | null;
-      if (res.status === 402 && parsed && typeof parsed === 'object') {
-        return { status: 402, x402: parsed as X402PaymentResponse };
-      }
-      return { status: res.status, other: parsed };
-    } catch {
-      return { status: 0, error: 'network' };
-    }
-  },
-  async paidQuote(
-    body: { amount: string; faultClass: string },
-    paymentSignature: string,
-  ): Promise<PaidQuoteResponse> {
-    let res: Response;
-    try {
-      res = await fetchWithTimeout('/v1/actions/quote', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'payment-signature': paymentSignature,
-        },
-        body: JSON.stringify(body),
-      }, 120_000);
-    } catch {
-      throw new BackendUnreachable();
-    }
-    if (!res.ok) {
-      const err = await parseErrorBody(res);
-      if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
-      throw new Error(`request failed: ${res.status}`);
-    }
-    const parsed = await res.json();
-    assertPaidQuoteResponse(parsed);
-    return parsed;
-  },
-  async submitPaidAction(body: {
-    quoteHash: string;
-    faultClass: 'duplicate_claim' | 'delivery_contradiction';
-    buyerPublicKey?: string;
-    eventType?: 'delivery_rejected' | 'goods_not_received';
-    submitAuthorization: SubmitAuthorization;
-    idempotencyKey?: string;
-  }): Promise<PaidActionSubmitResponse> {
-    const { idempotencyKey, ...payload } = body;
-    let res: Response;
-    try {
-      res = await fetchWithTimeout('/v1/actions/submit', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
-        },
-        body: JSON.stringify(payload),
-      }, 120_000);
-    } catch {
-      throw new BackendUnreachable();
-    }
-    if (!res.ok) {
-      const err = await parseErrorBody(res);
-      if (err) throw new ApiError(err.code, friendlyError(err.code, err.message));
-      throw new Error(`request failed: ${res.status}`);
-    }
-    return (await res.json()) as PaidActionSubmitResponse;
-  },
+  actions: () => clientGet<ActionSummary[]>('/actions'),
+  action: (id: number | string) => clientGet<ActionDetail>(`/actions/${id}`),
+  demoReady: () => clientGet<DemoReady>('/demo/ready'),
+  demoProofs: () => clientGet<DemoProofs>('/demo/proofs'),
+  reserve: () => clientGet<Reserve>('/reserve'),
+  watchdog: () => clientGet<Watchdog>('/watchdog'),
+  arm: () => clientPost<ActionDetail>('/demo/arm'),
+  armAsync: () => clientPost<DemoJob>('/demo/arm/async'),
+  watchdogDemo: () => clientPost<ActionDetail>('/watchdog/demo'),
+  watchdogDemoAsync: () => clientPost<DemoJob>('/watchdog/demo/async'),
+  challenge: (actionId: number) => clientPost<DemoJob>('/challenge', { actionId }),
+  job: (id: string) => clientGet<DemoJob>(`/jobs/${id}`),
+  deployments: () => clientGet<Deployment>('/deployments'),
+  transactionStatus: (hash: string) =>
+    clientGet<TransactionStatus>(`/transactions/${hash}`),
+  walletResolve: (actionId: number, challengeDeployHash: string) =>
+    clientPost<WalletResolveResult>('/challenge/wallet-resolve', {
+      actionId,
+      challengeDeployHash,
+    }),
+  putDeploy: (deploy: unknown, nodeUrl?: string) =>
+    clientPost<{ deploy_hash: string }>('/rpc/put-deploy', { deploy, nodeUrl }),
 };

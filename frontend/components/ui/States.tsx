@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={`skeleton rounded ${className ?? ''}`} aria-hidden="true" />;
@@ -37,8 +36,27 @@ export function EmptyState({
   );
 }
 
-/** Shown whenever the backend cannot be reached. Tells the person exactly what to do. */
-export function BackendDown() {
+const BACKEND_DOWN_COPY: Record<string, { title: string; body: string }> = {
+  OPERATOR_AUTH_REQUIRED: {
+    title: 'Temporarily restricted',
+    body: 'This feature is temporarily restricted. Please try again shortly.',
+  },
+  OPERATOR_AUTH_INVALID: {
+    title: 'Temporarily restricted',
+    body: 'This feature is temporarily restricted. Please try again shortly.',
+  },
+  RATE_LIMITED: {
+    title: 'Slow down',
+    body: 'Too many requests right now. Please wait a moment and try again.',
+  },
+};
+
+/** Shown whenever the backend cannot be reached or a request was rejected. */
+export function BackendDown({ code }: { code?: string }) {
+  const copy = (code ? BACKEND_DOWN_COPY[code] : undefined) ?? {
+    title: 'Service temporarily unavailable',
+    body: 'Bondsman could not reach the backend just now. Please try again shortly.',
+  };
   return (
     <div className="max-w-xl rounded-md border border-slash/30 bg-slash/5 px-6 py-10">
       <div className="mb-4 grid h-12 w-12 place-items-center rounded-full border border-slash/40 text-slash">
@@ -48,33 +66,8 @@ export function BackendDown() {
           <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
         </svg>
       </div>
-      <h3 className="font-display text-xl text-bone">
-        Live service temporarily unavailable
-      </h3>
-      <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-        Bondsman could not reach its hosted testnet service. Historical proof
-        remains available while the connection recovers.
-      </p>
-      <div className="mt-5 flex flex-wrap gap-3">
-        <a
-          href=""
-          className="rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-strong"
-        >
-          Retry
-        </a>
-        <Link
-          href="/proof/27"
-          className="rounded-md border border-rule px-4 py-2.5 text-sm text-bone transition-colors hover:border-accent/50"
-        >
-          Open Action 27 proof
-        </Link>
-        <a
-          href="/api/health"
-          className="rounded-md border border-rule px-4 py-2.5 text-sm text-bone transition-colors hover:border-accent/50"
-        >
-          View service status
-        </a>
-      </div>
+      <h3 className="font-display text-xl text-bone">{copy.title}</h3>
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">{copy.body}</p>
     </div>
   );
 }

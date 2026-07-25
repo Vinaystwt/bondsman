@@ -1,59 +1,56 @@
 import Link from 'next/link';
-import BondsmanLogo from './brand/BondsmanLogo';
+import Seal from './Seal';
 
 export default function Footer() {
   return (
     <footer className="mt-24 border-t border-rule">
-      <div className="mx-auto grid max-w-[1280px] gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-14">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">
-            <BondsmanLogo size={28} variant="mark" />
+            <Seal state="idle" size={28} withText={false} title="Bondsman" />
             <span className="font-display text-lg font-semibold text-bone">
               Bondsman
             </span>
           </div>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
-            Bonded execution on Casper for autonomous finance. Price the action, lock the bond and prove the outcome after it.
+            A notary for money. An autonomous agent stakes capital before it can
+            move your funds, and loses it when it is wrong.
           </p>
         </div>
 
         <FooterCol
           title="Product"
           links={[
-            { href: '/', label: 'Overview' },
-            { href: '/app', label: 'App' },
-            { href: '/app/new', label: 'Create bonded action' },
-            { href: '/proof', label: 'Proof' },
+            { href: '/app', label: 'Overview' },
+            { href: '/app/arena', label: 'Challenge Arena' },
+            { href: '/app/actions', label: 'Action Docket' },
+            { href: '/app/ledger', label: 'My Ledger' },
+            { href: '/app/agents', label: 'Agents' },
           ]}
         />
         <FooterCol
-          title="Build"
+          title="Learn"
           links={[
-            { href: '/build', label: 'Integration guide' },
+            { href: '/how-it-works', label: 'How it works' },
+            { href: '/rwa', label: 'Invoice Pool' },
             { href: '/docs', label: 'Documentation' },
-            { href: '/docs#mcp', label: 'MCP tools' },
-            { href: '/docs#a2a', label: 'A2A agent card' },
+            { href: '/demo', label: 'Try the demo' },
           ]}
         />
         <FooterCol
-          title="Casper"
+          title="Network"
           links={[
-            { href: '/verify', label: 'Receipt verifier' },
             {
               href: 'https://testnet.cspr.live',
-              label: 'Casper testnet explorer',
+              label: 'Casper testnet',
               external: true,
             },
-            { href: '/docs#casper', label: 'Casper impact' },
-            { href: '/docs#security', label: 'Security' },
           ]}
         />
       </div>
       <div className="border-t border-rule">
-        <div className="mx-auto flex max-w-[1280px] flex-col gap-2 px-5 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-14">
-          <span>
-            Casper testnet deployment. Real payment settlement and real bond slashing on chain. Controlled testnet inputs.
-          </span>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>Casper Testnet deployment. Controlled invoice fixtures; bond and slash execution live on chain.</span>
           <span className="serial">No bond, no action.</span>
         </div>
       </div>
@@ -73,7 +70,7 @@ function FooterCol({
       <h3 className="serial text-[0.68rem] text-muted">{title}</h3>
       <ul className="mt-3 space-y-2">
         {links.map((l) => (
-          <li key={l.href + l.label}>
+          <li key={l.href}>
             {l.external ? (
               <a
                 href={l.href}

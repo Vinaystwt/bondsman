@@ -2,56 +2,62 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import BondsmanLogo from './brand/BondsmanLogo';
+import { useState } from 'react';
+import Seal from './Seal';
+import WalletButton from './WalletButton';
 
-const PRIMARY = [
-  { href: '/', label: 'Product' },
-  { href: '/app', label: 'App' },
+const PUBLIC_LINKS = [
   { href: '/proof', label: 'Proof' },
+  { href: '/how-it-works', label: 'How it works' },
+  { href: '/two-agents', label: 'Two agents' },
+  { href: '/rwa', label: 'Invoice pool' },
   { href: '/build', label: 'Build' },
+  { href: '/roadmap', label: 'Roadmap' },
+  { href: '/docs', label: 'Docs' },
 ];
 
-function isActive(pathname: string, href: string): boolean {
-  if (href === '/') return pathname === '/';
+const APP_LINKS = [
+  { href: '/app', label: 'Overview' },
+  { href: '/app/arena', label: 'Arena' },
+  { href: '/proof', label: 'Proof' },
+  { href: '/app/actions', label: 'Docket' },
+  { href: '/app/ledger', label: 'My Ledger' },
+  { href: '/app/agents', label: 'Agents' },
+  { href: '/app/leaderboard', label: 'Leaderboard' },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === '/app') return pathname === '/app';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function Nav() {
   const pathname = usePathname();
+  const inApp = pathname.startsWith('/app');
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-ink/85 backdrop-blur supports-[backdrop-filter]:bg-ink/70">
-      <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:px-8 lg:px-14">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link
           href="/"
           className="flex items-center gap-2.5"
           aria-label="Bondsman home"
         >
-          <BondsmanLogo size={30} variant="mark" />
+          <Seal state="idle" size={30} withText={false} title="Bondsman" />
           <span className="font-display text-lg font-semibold tracking-tight text-bone">
             Bondsman
           </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
-          {PRIMARY.map((link) => (
+          {(inApp ? APP_LINKS : PUBLIC_LINKS).map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              aria-current={mounted && isActive(pathname, link.href) ? 'page' : undefined}
+              aria-current={isActive(pathname, link.href) ? 'page' : undefined}
               className={`rounded px-3 py-2 text-sm transition-colors ${
-                mounted && isActive(pathname, link.href)
+                isActive(pathname, link.href)
                   ? 'text-accent'
                   : 'text-muted hover:text-bone'
               }`}
@@ -62,18 +68,18 @@ export default function Nav() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <WalletButton />
           <Link
-            href="/app/new"
-            className="hidden rounded-md border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
+            href={inApp ? '/' : '/app'}
+            className="hidden rounded border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
           >
-            Create bonded action
+            {inApp ? 'Public site' : 'Launch app'}
           </Link>
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded text-muted hover:text-bone md:hidden"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label="Toggle menu"
             aria-expanded={open}
-            aria-controls="mobile-primary-nav"
             onClick={() => setOpen((v) => !v)}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -89,18 +95,17 @@ export default function Nav() {
 
       {open && (
         <nav
-          id="mobile-primary-nav"
-          className="border-t border-rule bg-ink px-5 py-3 md:hidden"
+          className="border-t border-rule bg-ink px-4 py-3 md:hidden"
           aria-label="Primary mobile"
         >
           <div className="flex flex-col gap-1">
-            {PRIMARY.map((link) => (
+            {[...PUBLIC_LINKS, ...APP_LINKS].map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
                 className={`rounded px-3 py-2.5 text-sm ${
-                  mounted && isActive(pathname, link.href)
+                  isActive(pathname, link.href)
                     ? 'bg-accent/10 text-accent'
                     : 'text-muted hover:text-bone'
                 }`}
@@ -108,13 +113,6 @@ export default function Nav() {
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/app/new"
-              onClick={() => setOpen(false)}
-              className="mt-2 rounded-md border border-accent/50 bg-accent/10 px-3 py-2.5 text-sm font-medium text-accent"
-            >
-              Create bonded action
-            </Link>
           </div>
         </nav>
       )}
