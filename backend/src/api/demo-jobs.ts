@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { DemoArmService } from './arm.js';
 import type { ResolutionService } from './resolution.js';
+import { normalizeApiError } from './errors.js';
 import type { DemoJobKind, DemoJobRecord, Repository } from '../db/repositories.js';
 
 export interface DemoJobService {
@@ -9,8 +10,11 @@ export interface DemoJobService {
   job(id: string): DemoJobRecord | undefined;
 }
 
+// Job errors are read and displayed verbatim by the frontend (no ApiError
+// code lookup happens on this path), so the stored string itself must
+// already be friendly — normalize on the way in, not the raw chain revert.
 function failure(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return normalizeApiError(error).message;
 }
 
 export function createDemoJobService(options: {

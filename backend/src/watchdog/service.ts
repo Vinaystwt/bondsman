@@ -138,7 +138,26 @@ export function createWatchdogService(
               current.actionId,
             );
           }
-          throw error;
+          // One candidate that reverts on chain (e.g. already challenged by
+          // a race with another watchdog instance, or a stale local
+          // projection) must not block every other candidate in this scan.
+          // Only successful catches are excluded via hasWatchdogCatch, so
+          // re-throwing here would retry — and abort on — this exact
+          // candidate forever, starving anything queued after it.
+          console.error({
+            event: 'watchdog_candidate_failed',
+            actionId: current.actionId,
+            faultClass: candidate.faultClass,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          // A revert here often means the local projection is stale, not
+          // that this candidate is unresolvable — e.g. another watchdog
+          // instance sharing this same on-chain account already
+          // challenged it. Reconcile so the next scan sees current chain
+          // state instead of retrying (and re-paying gas for) the same
+          // already-settled action forever.
+          if (options.reconcile) await options.reconcile();
+          continue;
         }
         if (options.reconcile) await options.reconcile();
         const record: WatchdogCatchRecord = {

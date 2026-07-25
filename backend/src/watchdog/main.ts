@@ -91,6 +91,12 @@ const transact = (candidate: {
           : []),
       ],
     });
+    // The challenge is now on chain regardless of what happens next.
+    // Reconcile immediately so a resolve_action failure below (a transient
+    // gas/RPC issue, say) can't leave the local projection believing this
+    // action is still Executed — which would make the next scan retry a
+    // challenge_action that only ever reverts, since it already happened.
+    await reconcile();
     const resolve = await callContract({
       repository: repositoryPath,
       config,
@@ -113,6 +119,7 @@ const service = createWatchdogService({
   delayMs: Number(process.env.WATCHDOG_DELAY_MS ?? 30_000),
   transact,
   reasoning: watchdogReasoning,
+  reconcile,
 });
 
 async function tick(): Promise<void> {

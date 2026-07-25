@@ -196,7 +196,12 @@ describe('watchdog service', () => {
       reasoning: async () => 'delivery contradiction',
     });
 
-    await expect(service.scanOnce()).rejects.toThrow('rpc failed');
+    // A candidate that fails on chain must not abort the scan — otherwise
+    // one permanently-reverting candidate (e.g. already challenged by a
+    // race with another watchdog instance) blocks every other candidate
+    // forever, since only successful catches are ever excluded from
+    // future scans.
+    await expect(service.scanOnce()).resolves.toEqual([]);
     expect(repository.deliveryAttestationForAction(6)?.usedActionId).toBeNull();
     database.close();
   });
