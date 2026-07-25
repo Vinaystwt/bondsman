@@ -59,7 +59,8 @@ export default function HowItWorks() {
         title="The contract proves the fraud"
         body={
           <p>
-            No human judges a payout. The most common fraud, paying the same
+            No human adjudicates a payout — the invoice pool contract checks it
+            deterministically. The most common fraud, paying the same
             invoice twice, is proven directly. Each invoice carries a{' '}
             <Term name="claim hash">claim hash</Term>. When a payout reuses a
             hash that was already paid, the invoice pool sees the collision and

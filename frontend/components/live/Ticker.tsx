@@ -156,7 +156,7 @@ function eventRows(detail: ActionDetail, summary: ActionSummary): Row[] {
 function money(atomic: string): string {
   try {
     const n = BigInt(atomic) / 1_000_000_000n;
-    return `${n.toLocaleString('en-US')} csprUSD`;
+    return `${n.toLocaleString('en-US')} MockCsprUSD`;
   } catch {
     return '';
   }

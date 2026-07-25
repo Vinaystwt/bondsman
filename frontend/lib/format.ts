@@ -21,9 +21,9 @@ export function formatAmount(atomic: string | bigint): string {
   });
 }
 
-/** Amount with the csprUSD suffix. */
+/** Amount with the MockCsprUSD suffix. */
 export function formatMoney(atomic: string | bigint): string {
-  return `${formatAmount(atomic)} csprUSD`;
+  return `${formatAmount(atomic)} MockCsprUSD`;
 }
 
 /** Truncate a hash for display: first 8 and last 6, joined by an ellipsis. */

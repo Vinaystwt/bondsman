@@ -187,13 +187,13 @@ function LedgerRow({ action }: { action: ActionSummary }) {
             <Money atomic={action.amount} />
           </span>
           <span className="mt-0.5 block text-xs text-muted">
-            Bond <Money atomic={action.bondPosted} bare /> csprUSD
+            Bond <Money atomic={action.bondPosted} bare /> MockCsprUSD
           </span>
         </div>
         <div className="text-right">
           {reward ? (
             <span className="font-mono text-sm text-accent">
-              +<Money atomic={reward} bare /> csprUSD
+              +<Money atomic={reward} bare /> MockCsprUSD
             </span>
           ) : (
             <span className="text-xs text-muted">—</span>

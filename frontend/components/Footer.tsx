@@ -49,9 +49,14 @@ export default function Footer() {
         />
       </div>
       <div className="border-t border-rule">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>Casper Testnet deployment. Controlled invoice fixtures; bond and slash execution live on chain.</span>
-          <span className="serial">No bond, no action.</span>
+        <div className="mx-auto max-w-6xl px-6 py-5">
+          <p className="text-xs text-muted">
+            The agent decides. The bond prices the risk. The contract settles it.
+          </p>
+          <div className="mt-2 flex flex-col gap-2 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>Casper Testnet deployment. Controlled invoice fixtures; bond and slash execution live on chain.</span>
+            <span className="serial">No bond, no action.</span>
+          </div>
         </div>
       </div>
     </footer>

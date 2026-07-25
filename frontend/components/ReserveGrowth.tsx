@@ -48,7 +48,7 @@ export default function ReserveGrowth({ reserve }: { reserve: Reserve }) {
               <li
                 key={c.actionId}
                 className="flex-1"
-                title={`Action ${c.actionId}: ${(Number(c.running) / 1e9).toLocaleString()} csprUSD`}
+                title={`Action ${c.actionId}: ${(Number(c.running) / 1e9).toLocaleString()} MockCsprUSD`}
               >
                 <div
                   className="rounded-sm bg-accent/70"

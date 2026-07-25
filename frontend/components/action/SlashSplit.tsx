@@ -49,14 +49,14 @@ export default function SlashSplit({ action }: { action: ActionDetail }) {
           <p className={`mt-1 font-mono text-xl tabular ${resolved ? 'text-slash' : 'text-accent'}`}>
             {challengerAmount ? <Money atomic={challengerAmount} bare /> : '—'}
           </p>
-          <p className="mt-1 text-[0.62rem] text-muted">csprUSD</p>
+          <p className="mt-1 text-[0.62rem] text-muted">MockCsprUSD</p>
         </div>
         <div className="rounded-md border border-rule bg-ink px-4 py-3">
           <Label>To the reserve</Label>
           <p className={`mt-1 font-mono text-xl tabular ${resolved ? 'text-slash' : 'text-accent'}`}>
             {reserveAmount ? <Money atomic={reserveAmount} bare /> : '—'}
           </p>
-          <p className="mt-1 text-[0.62rem] text-muted">csprUSD</p>
+          <p className="mt-1 text-[0.62rem] text-muted">MockCsprUSD</p>
         </div>
       </div>
       {!resolved && (

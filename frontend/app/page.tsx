@@ -135,6 +135,22 @@ export default async function Home() {
               duplicate and slashes the bond. The agent loses its own stake before
               anyone else loses a cent.
             </p>
+            <ul className="mt-5 space-y-2 text-sm text-muted">
+              <li>
+                <span className="text-bone">Agent operators</span> get a real cost
+                for a wrong payout, without adding a human reviewer to the loop.
+              </li>
+              <li>
+                <span className="text-bone">RWA and invoice-financing pools</span>{' '}
+                get a reserve that backstops depositors automatically when a
+                claim turns out to be a duplicate.
+              </li>
+              <li>
+                <span className="text-bone">Auditors</span> get a chain-verifiable
+                record of every bond, challenge, and slash, instead of taking an
+                operator&apos;s word for it.
+              </li>
+            </ul>
           </Appear>
           <Diagram
             name="slash-split"

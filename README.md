@@ -49,7 +49,7 @@ Bondsman runs two agents against each other, with no human in the loop:
 
 ![The two-agent economy](frontend/public/diagrams/agent-economy.svg)
 
-Production public judging is now centered on the canonical proof console and Assurance Studio. Legacy public challenge and wallet challenge modes are disabled in production; fresh demo actions, challenges, resolutions, and watchdog demo writes are operator-only.
+The public site's Challenge Arena is where this plays out for a judge: arm a fresh duplicate-claim action, run a live challenge against it, and watch the same contract slash it end to end on Casper Testnet. The backend also exposes a designated canonical action (see the judge testing playbook below) and an Assurance Studio policy API, but those are API-level surfaces today, not part of the frontend flow.
 
 ---
 
@@ -115,25 +115,20 @@ The canonical, up-to-date set lives in `deployments/testnet.json`, since contrac
 
 ### Judge testing playbook
 
-1. Confirm the backend is healthy at [the health endpoint](https://bondsman-backend-production.up.railway.app/api/health).
-2. Confirm canonical Action 27 at [the canonical proof endpoint](https://bondsman-backend-production.up.railway.app/api/proofs/canonical).
-3. Replay the canonical evidence at [the replay endpoint](https://bondsman-backend-production.up.railway.app/api/replay/canonical).
-4. Verify the receipt at [the receipt verification endpoint](https://bondsman-backend-production.up.railway.app/api/receipt/27/verify).
-5. Probe `/v1/actions/quote` without payment and expect x402 HTTP 402 with no protocol mutation.
-6. Try Assurance Studio through `/api/assurance/templates` and `/api/assurance/analyze`.
+The primary path is the live frontend — this is what a judge sees by clicking through the deployed site, and every transaction it produces is fresh and real:
 
-Recent real duplicate slash proof:
+1. Open the [Challenge Arena](https://bondsman.vercel.app/app/arena). A ready duplicate-claim action loads automatically; press **Run live challenge** to sign, submit, and settle a real transaction on Casper Testnet.
+2. Open [Two agents](https://bondsman.vercel.app/two-agents) to watch the autonomous loop: the approver pays a duplicate, the watchdog independently catches and slashes it, no human in the path.
+3. Open any resolved action's detail page (linked from the Arena or the [Docket](https://bondsman.vercel.app/app/actions)) to see its full transaction set on the explorer.
 
-| Step | Transaction |
-|---|---|
-| Initiate | `f255ae41faa267612373fe22ff827c0f3ac9e60b6e71521a0c53b8203364001b` |
-| Approve bond spend | `ea36e1b5e23e58af10d40f6e217b5523063f5a7518d94bc3d52e804968c0fc07` |
-| Post bond | `e90e29852b2ac41bfc069c883ecea9025112cf76ee065942d280f2464ef67410` |
-| Execute payout | `c1965e592dca5369172550d0b05443d77c112d76e40803f6e96ee0096994fba5` |
-| Challenge | `5ceee10ac13d83e3f0c7d24cc4db82f043959212b1d501fc09021a9035ca1164` |
-| Resolve slash | `084a544a003335df3b6e76c72dc66d265a340ae10946127791bef8b17f835183` |
+A few deeper surfaces exist at the API level only — not wired into the frontend, but real and independently checkable:
 
-The historical transaction set above remains useful context, but canonical production judging should use Action 27 and the replay bundle instead of creating a fresh challenge.
+4. Confirm the backend is healthy at [the health endpoint](https://bondsman-backend-production.up.railway.app/api/health).
+5. The backend keeps one designated reference action (Action 27, fault class `delivery_contradiction`, distinct from the duplicate-claim scenario the Arena demos) permanently available at [the canonical proof endpoint](https://bondsman-backend-production.up.railway.app/api/proofs/canonical), replayable at [the replay endpoint](https://bondsman-backend-production.up.railway.app/api/replay/canonical), and receipt-verifiable at [the receipt verification endpoint](https://bondsman-backend-production.up.railway.app/api/receipt/27/verify).
+6. Probe `/v1/actions/quote` without payment and expect x402 HTTP 402 with no protocol mutation.
+7. Try Assurance Studio through `/api/assurance/templates` and `/api/assurance/analyze`.
+
+There's no separate hardcoded transaction table here — every action's real transaction set is one click away in the app (Arena, Docket, or an action's own detail page), and stays accurate as new actions run instead of drifting out of date like a static list would.
 
 ---
 

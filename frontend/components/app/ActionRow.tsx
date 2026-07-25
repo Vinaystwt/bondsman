@@ -20,7 +20,7 @@ export default function ActionRow({ action }: { action: ActionSummary }) {
             <Money atomic={action.amount} />
           </span>
           <span className="mt-0.5 block text-xs text-muted">
-            Bond <Money atomic={action.bondPosted} bare /> csprUSD
+            Bond <Money atomic={action.bondPosted} bare /> MockCsprUSD
           </span>
         </span>
       </div>

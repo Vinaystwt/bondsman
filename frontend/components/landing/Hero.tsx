@@ -71,6 +71,9 @@ export default function Hero({
               value={watchdogEarned ? <MoneyCountUp atomic={watchdogEarned} /> : '0'}
             />
           </dl>
+          <p className="mt-2 text-[0.65rem] text-muted">
+            Figures in MockCsprUSD, this deployment&apos;s testnet settlement token.
+          </p>
         </div>
 
         {/* Right: a live recent action */}

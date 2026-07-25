@@ -624,7 +624,7 @@ export default function ManualChallenge({
             >
               <p className="text-lg font-medium text-slash">Bond slashed.</p>
               <p className="text-sm text-bone">
-                You claimed <Money atomic={walletResult.rewardAmount} /> csprUSD.
+                You claimed <Money atomic={walletResult.rewardAmount} bare /> MockCsprUSD.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <SplitCard

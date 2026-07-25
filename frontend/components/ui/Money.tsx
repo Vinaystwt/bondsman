@@ -2,7 +2,7 @@ import { formatAmount } from '@/lib/format';
 
 interface MoneyProps {
   atomic: string | bigint;
-  /** Hide the csprUSD suffix (for dense tables). */
+  /** Hide the MockCsprUSD suffix (for dense tables). */
   bare?: boolean;
   className?: string;
 }
@@ -12,7 +12,7 @@ export function Money({ atomic, bare, className }: MoneyProps) {
   return (
     <span className={`font-mono tabular ${className ?? ''}`}>
       {formatAmount(atomic)}
-      {!bare && <span className="ml-1 text-[0.72em] text-muted">csprUSD</span>}
+      {!bare && <span className="ml-1 text-[0.72em] text-muted">MockCsprUSD</span>}
     </span>
   );
 }

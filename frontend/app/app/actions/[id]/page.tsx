@@ -7,6 +7,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Money from '@/components/ui/Money';
 import CopyHash from '@/components/ui/CopyHash';
 import Lifecycle from '@/components/action/Lifecycle';
+import AuthorityTrace from '@/components/action/AuthorityTrace';
 import BondCertificate from '@/components/action/BondCertificate';
 import EventTimeline from '@/components/action/EventTimeline';
 import ReasoningReveal from '@/components/action/ReasoningReveal';
@@ -137,6 +138,13 @@ export default async function ActionPage({
           <Lifecycle status={action.status} />
         </div>
       </section>
+
+      <AuthorityTrace
+        hasReasoning={action.reasoning.trim().length > 0}
+        reasoningHash={action.reasoningHash}
+        bondRequired={action.bondRequired}
+        actionId={action.actionId}
+      />
 
       <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-8">

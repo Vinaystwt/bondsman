@@ -58,7 +58,7 @@ export default async function RWAPage() {
         <Stat
           label="Value at risk"
           value={<Money atomic={totalPool.toString()} bare />}
-          suffix="csprUSD"
+          suffix="MockCsprUSD"
         />
         <Stat label="Duplicates caught" value={String(slashed)} tone="slash" />
       </section>

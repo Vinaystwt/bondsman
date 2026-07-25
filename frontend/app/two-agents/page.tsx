@@ -29,7 +29,7 @@ export default async function TwoAgentsPage() {
       <header className="max-w-3xl space-y-4">
         <Label>The economy</Label>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-          One approver. One watchdog. No human.
+          One approver. One watchdog. No human adjudicator.
         </h1>
         <p className="text-lg leading-relaxed text-muted">
           The approver is model-driven and moves money by posting a bond. The
@@ -51,7 +51,7 @@ export default async function TwoAgentsPage() {
           <Stat
             label="Earned to date"
             value={<Money atomic={watchdog.totalRewardEarned} bare />}
-            suffix="csprUSD"
+            suffix="MockCsprUSD"
           />
           <Stat label="Recent catches" value={String(watchdog.recentCatches.length)} />
         </section>

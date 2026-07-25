@@ -86,7 +86,7 @@ export default async function LeaderboardPage() {
                   <span className="text-xs text-muted">slashes</span>
                 </span>
                 <span className="text-right font-mono text-sm text-accent tabular">
-                  <Money atomic={r.reward.toString()} bare /> csprUSD
+                  <Money atomic={r.reward.toString()} bare /> MockCsprUSD
                 </span>
               </Panel>
             </li>

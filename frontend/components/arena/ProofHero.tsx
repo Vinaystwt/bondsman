@@ -105,7 +105,7 @@ export function ProofCard({
             transition={{ duration: 0.45, delay: 0.5, ease: [0.65, 0, 0.35, 1] }}
           />
         </span>
-        <span className="text-sm text-muted">csprUSD bond slashed</span>
+        <span className="text-sm text-muted">MockCsprUSD bond slashed</span>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
