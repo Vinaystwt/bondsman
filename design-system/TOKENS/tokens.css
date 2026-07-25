@@ -1,0 +1,124 @@
+/*
+ * Bondsman design tokens — Territory A, "Structural Ledger"
+ * (design-system/VISUAL_LANGUAGE.md).
+ *
+ * Ground is a cool near-white paper (light is canonical, not a dark-mode
+ * default); ink is a dense charcoal, not pure black, matching the logo
+ * mark's solid fill (LOGO_READING.md: "filled … not stroked"). Chroma is
+ * rationed to exactly two reserved roles — `consequential` (the
+ * slash-only accent, PRINCIPLES.md Principle 3) and a separately-named
+ * `destructive` (for destructive UI controls) — which must never share a
+ * value. `positive` and `warning` exist as quiet, non-celebratory status
+ * roles; everything else (links, focus, "live") is carried by ink weight,
+ * rules, and motion, not a third colour.
+ *
+ * Border-radius is 0 everywhere: the mark has zero curve commands. Corners
+ * are cut (chamfered), not rounded, at the mark's own two measured angles
+ * (LOGO_READING.md, "Stroke weight and terminal treatment"): ~41.7° for
+ * primary structural containers, 62.68° for base/footing elements. These
+ * are exposed as custom properties for later component tasks (Task 7+) to
+ * consume via clip-path, not as an "extra" grid on top of the contract.
+ *
+ * Type: a hard grotesque/monospace split, no serif anywhere (Principle 1;
+ * VISUAL_LANGUAGE.md "Type pairing direction"). See --font-sans/--font-mono
+ * below for the chosen families and the justification in task-6-report.md.
+ */
+
+:root {
+  /* ---- Color roles ---- */
+
+  /* Cool near-white paper ground — a faint cool grey, not pure #fff, so the
+     black mark sits on its native light field. */
+  --surface: #eef0f2;
+
+  /* Panels/containers that sit "filled" above the paper (Principle 2's
+     filled = real, settled construction) render in a whiter, raised fill. */
+  --surface-raised: #ffffff;
+
+  /* Dense charcoal-black matching the mark's solid fill; not pure #000. */
+  --ink: #15181c;
+
+  /* Reserved technical-accent token — NOT used in components 7-23.
+     VISUAL_LANGUAGE.md's stated direction is that links/focus/live-state
+     are expressed with ink weight, rules, and motion, not a third colour.
+     This token stays in the contract (required name, passes contrast) for a
+     genuine future need only — do not reach for it just because it exists.
+     It must never be used for the two reserved slash/destructive roles or as
+     a stand-in for the Live/Historical activity signal (Principle 2). */
+  --accent: #1f5c8b;
+
+  /* Quiet, non-celebratory positive/confirm role (Principle 3 explicitly
+     rejects a celebratory "success green" on refund — this is an inert
+     instrument-panel green, used for e.g. a passed check, not a fanfare). */
+  --positive: #166b4d;
+
+  /* Reserved EXCLUSIVELY for the slashed portion at ResolvedSlash
+     (Principle 3). A warm, matte, cut-metal/hazard register that "burns"
+     against the cool ground — never a soft "error red," never glowing, and
+     never reused for form errors, destructive buttons, warnings, or hover. */
+  --consequential: #b8420a;
+
+  /* Warning role — distinct hue/value from both consequential and
+     destructive; used for non-fatal caution states only. */
+  --warning: #8a5a00;
+
+  /* Cool-grey neutral ramp for secondary text, captions, disabled states. */
+  --muted: #5b6470;
+
+  /* Hairline drafting-rule colour: divider lines and container edges,
+     never a boxed "card" border. */
+  --boundary: #78828d;
+
+  /* Separately-named destructive-control colour (Principle 3 hard
+     requirement: NEVER equal to --consequential). Used for destructive UI
+     controls (e.g. a "cancel"/"revoke" button fill or icon) — a graphical
+     UI component, which is why it is checked against --surface at the 3:1
+     non-text UI threshold rather than the 4.5:1 text threshold (see
+     contrast.test.mjs). */
+  --destructive: #a3201f;
+
+  /* ---- Corner treatment: chamfered, never rounded (0 border-radius) ---- */
+  --radius: 0;
+  --chamfer-primary: 41.7deg; /* pillars: primary structural containers, panels, the bond block */
+  --chamfer-base: 62.68deg; /* base slabs: resolved-state footers, base bars */
+
+  /* ---- Spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ---- Type ----
+     Prose/UI: IBM Plex Sans — a grotesque with closed apertures and a
+     plain, engineered, "slightly-drawn-annotation" character (IBM's own
+     brief for Plex was a deliberate alternative to reflexive Helvetica/
+     Inter-style neutrality: rectilinear proportions, a mechanical rather
+     than geometric-round skeleton). Chosen against the mark's zero-curve,
+     chamfered posture, not picked by Inter/Geist default.
+     Numbers/hashes/addresses: IBM Plex Mono — the matching monospace cut
+     from the same technical family, tabular figures, pairs with
+     `font-variant-numeric: slashed-zero` (standard CSS; supported by Plex
+     Mono's numeral set) for the slashed zero Principle 1 requires. Prose
+     never borrows this face; this face never carries prose. */
+  --font-sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  --font-size-display: 3rem; /* 48px — the sheet's largest figure/headline */
+  --font-size-headline: 2rem; /* 32px */
+  --font-size-subhead: 1.25rem; /* 20px */
+  --font-size-body: 1rem; /* 16px — supports the 72ch prose measure (RESPONSIVE.md §3) */
+  --font-size-data: 1.125rem; /* 18px — prominent auditable figures (bond amounts, bps) */
+  --font-size-mono: 0.875rem; /* 14px — hash/address identifier monospace */
+
+  /* ---- Motion ---- */
+  --duration-short: 120ms;
+  --duration-medium: 240ms;
+  --duration-long: 480ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0.1, 1);
+}

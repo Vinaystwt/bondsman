@@ -1,0 +1,10 @@
+{
+  "projectId": "6b4bac70-4f33-48d7-a961-1a2cabbb288c",
+  "pkg": "bondsman-design-lab",
+  "globalName": "BondsmanDS",
+  "shape": "package",
+  "srcDir": "components",
+  "cssEntry": ".next/static/css/db54d56321eedc96.css",
+  "tokensGlob": "../TOKENS/*.css",
+  "readmeHeader": ".design-sync/conventions.md"
+}

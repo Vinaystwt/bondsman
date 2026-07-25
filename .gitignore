@@ -31,3 +31,11 @@ dist/
 submission-assets/
 .gstack/
 scratchpad/
+
+# design-sync (Claude Design)
+.ds-sync/
+.ds-react-scratch/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

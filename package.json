@@ -22,6 +22,7 @@
     "example:casper-agent": "tsx examples/casper-agent-assurance/index.ts",
     "test": "npm --workspace backend test",
     "typecheck": "npm --workspace backend run typecheck",
-    "demo": "npm --workspace backend run demo"
+    "demo": "npm --workspace backend run demo",
+    "design-lab": "npm --prefix design-system/lab install && npm --prefix design-system/lab run dev"
   }
 }

@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import '../../TOKENS/tokens.css';
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  color-scheme: light;
+}
+
+/* input[type=range] thumb/track: browsers render a native circular thumb
+   for range inputs (`border-radius: 50%` in the UA stylesheet) which no
+   Tailwind utility class can reach (it lives on the `::-webkit-slider-thumb`
+   / `::-moz-range-thumb` pseudo-elements, not the input itself). This system
+   has zero curve commands anywhere (tokens.css: "the mark has zero curve
+   commands... corners are cut, not rounded"), so a stock round slider thumb
+   would be the one uncut curve in the whole system. `.ds-range` squares it
+   off: `--boundary` track, `--ink` thumb (focus ring is a plain Tailwind
+   `outline` utility on the input itself, which does work on range inputs
+   without any extra CSS). `.ds-range-error` swaps the thumb to `--destructive`
+   for the one forced error demo cell in design-system/lab/app/forms/page.tsx
+   — never `--consequential` (PRINCIPLES.md Principle 3: that token is
+   reserved exclusively for the slash moment, "not on form-validation
+   errors... not on hover states"). */
+input[type='range'].ds-range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--boundary);
+  cursor: pointer;
+}
+input[type='range'].ds-range:disabled {
+  cursor: not-allowed;
+}
+input[type='range'].ds-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--ink);
+  border: none;
+  cursor: pointer;
+}
+input[type='range'].ds-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--ink);
+  border: none;
+  cursor: pointer;
+}
+input[type='range'].ds-range:disabled::-webkit-slider-thumb {
+  background: var(--muted);
+  cursor: not-allowed;
+}
+input[type='range'].ds-range:disabled::-moz-range-thumb {
+  background: var(--muted);
+  cursor: not-allowed;
+}
+input[type='range'].ds-range.ds-range-error::-webkit-slider-thumb {
+  background: var(--destructive);
+}
+input[type='range'].ds-range.ds-range-error::-moz-range-thumb {
+  background: var(--destructive);
+}
