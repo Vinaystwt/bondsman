@@ -195,13 +195,13 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
             <button
               type="button"
               onClick={arm}
-              className="mt-4 rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
+              className="mt-4 rounded-md border border-rule px-4 py-2 text-sm text-bone transition-colors hover:border-accent/50"
             >
               Admin: Prepare Fresh Case
             </button>
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              This submits real Casper testnet transactions and can take
-              around two minutes.
+              Optional — submits a real Casper transaction and can take
+              several minutes. Not required to see the mechanism above.
             </p>
           </div>
         )}

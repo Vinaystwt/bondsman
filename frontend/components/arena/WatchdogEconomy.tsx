@@ -183,14 +183,13 @@ export default function WatchdogEconomy({
             <button
               type="button"
               onClick={run}
-              className="rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
+              className="rounded-md border border-rule px-4 py-2 text-sm text-bone transition-colors hover:border-accent/50"
             >
               Run fresh autonomous case
             </button>
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              This starts a new arm, challenge, and resolve sequence on Casper
-              testnet. It is real and can take several minutes when finality
-              is slow.
+              Optional — this triggers a new live watchdog run and can take
+              several minutes.
             </p>
           </div>
         )}
