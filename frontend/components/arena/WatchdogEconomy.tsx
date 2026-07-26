@@ -158,15 +158,6 @@ export default function WatchdogEconomy({
               </p>
             </div>
           )}
-          {phase === 'idle' && (
-            <button
-              type="button"
-              onClick={refreshProof}
-              className="rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
-            >
-              Refresh latest proof
-            </button>
-          )}
         </div>
 
         {phase === 'idle' && proof && (
@@ -181,30 +172,27 @@ export default function WatchdogEconomy({
           <div className="mt-5 rounded-md border border-rule bg-ink p-4">
             <p className="text-sm text-bone">No recent autonomous slash is loaded yet.</p>
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              The watchdog service runs in the background. Refresh this proof,
-              or use the advanced control below to submit a fresh on-chain case.
+              The watchdog service runs in the background, or submit a fresh
+              on-chain case yourself below.
             </p>
           </div>
         )}
 
         {phase === 'idle' && (
-          <details className="mt-5 rounded-md border border-rule bg-ink px-4 py-3">
-            <summary className="cursor-pointer text-sm text-muted">
-              Advanced: Run fresh autonomous case
-            </summary>
+          <div className="mt-5 rounded-md border border-rule bg-ink px-4 py-3">
             <button
               type="button"
               onClick={run}
-              className="mt-4 rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
+              className="rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
             >
               Run fresh autonomous case
             </button>
             <p className="mt-2 text-xs leading-relaxed text-muted">
               This starts a new arm, challenge, and resolve sequence on Casper
-              testnet. It is real, useful for operators, and can take several
-              minutes when finality is slow.
+              testnet. It is real and can take several minutes when finality
+              is slow.
             </p>
-          </details>
+          </div>
         )}
 
         {phase === 'running' && (

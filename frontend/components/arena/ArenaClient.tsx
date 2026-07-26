@@ -194,28 +194,15 @@ export default function ArenaClient({ heading }: { heading?: boolean }) {
             </p>
             <button
               type="button"
-              onClick={load}
-              className="mt-4 rounded-md border border-rule px-4 py-2 text-sm text-bone hover:border-accent/50"
+              onClick={arm}
+              className="mt-4 rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
             >
-              Refresh ready cases
+              Admin: Prepare Fresh Case
             </button>
-            <details className="mt-5 rounded-md border border-rule bg-ink px-4 py-3">
-              <summary className="cursor-pointer text-sm text-muted">
-                Advanced / Admin demo setup
-              </summary>
-              <button
-                type="button"
-                onClick={arm}
-                className="mt-4 rounded-md border border-accent/40 px-5 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
-              >
-                Admin: Prepare Fresh Case
-              </button>
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                This submits real Casper testnet transactions and can take
-                around two minutes. It is intended for operators, not the
-                primary judge path.
-              </p>
-            </details>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              This submits real Casper testnet transactions and can take
+              around two minutes.
+            </p>
           </div>
         )}
         {status === 'ready' && arming && (
