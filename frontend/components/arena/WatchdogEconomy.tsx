@@ -25,6 +25,7 @@ export default function WatchdogEconomy({
   const [phase, setPhase] = useState<Phase>('idle');
   const [action, setAction] = useState<ActionDetail | null>(null);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(initialWatchdog);
+  const [proof, setProof] = useState<SlashProof | null>(initialProof);
   const [error, setError] = useState('');
   const [job, setJob] = useState<DemoJob | null>(null);
 
@@ -32,6 +33,10 @@ export default function WatchdogEconomy({
   useEffect(() => {
     clientApi.watchdog().then(setWatchdog).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setProof(initialProof);
+  }, [initialProof]);
 
   async function run() {
     setPhase('running');
@@ -80,8 +85,12 @@ export default function WatchdogEconomy({
 
   async function refreshProof() {
     try {
-      const wd = await clientApi.watchdog();
+      const [wd, proofs] = await Promise.all([
+        clientApi.watchdog(),
+        clientApi.demoProofs().catch(() => null),
+      ]);
       setWatchdog(wd);
+      if (proofs) setProof(proofs.latestWatchdogSlash);
       setError('');
     } catch {
       setError('Could not refresh the watchdog proof right now.');
@@ -99,6 +108,7 @@ export default function WatchdogEconomy({
         if (wd) setWatchdog(wd);
         if (fresh.status === 'ResolvedSlash') {
           setPhase('done');
+          await refreshProof();
           onResolved();
           return;
         }
@@ -159,15 +169,15 @@ export default function WatchdogEconomy({
           )}
         </div>
 
-        {phase === 'idle' && initialProof && (
-          <LatestWatchdogProof proof={initialProof} />
+        {phase === 'idle' && proof && (
+          <LatestWatchdogProof proof={proof} />
         )}
 
-        {phase === 'idle' && !initialProof && latestCatch && (
+        {phase === 'idle' && !proof && latestCatch && (
           <LatestWatchdogCatch latestCatch={latestCatch} />
         )}
 
-        {phase === 'idle' && !initialProof && !latestCatch && (
+        {phase === 'idle' && !proof && !latestCatch && (
           <div className="mt-5 rounded-md border border-rule bg-ink p-4">
             <p className="text-sm text-bone">No recent autonomous slash is loaded yet.</p>
             <p className="mt-2 text-xs leading-relaxed text-muted">

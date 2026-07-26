@@ -49,6 +49,38 @@ export function normalizeApiError(error: unknown): ApiError {
     }
   }
 
+  // Operational/resource errors (spend guard, funding, RPC rate limits) carry
+  // account hashes, balances, or thresholds in their raw message: real, but
+  // not something to show a judge. Match first, before the generic fallback
+  // below would otherwise pass the raw text straight through unchanged.
+  if (message.includes('SPENDING_CIRCUIT_TRIPPED')) {
+    return new ApiError(
+      429,
+      'SPENDING_CIRCUIT_TRIPPED',
+      'The demo spending circuit breaker is cooling down. Please try again shortly.',
+      { cause: error },
+    );
+  }
+  if (
+    message.includes('funding unavailable') ||
+    message.includes('balance check failed')
+  ) {
+    return new ApiError(
+      503,
+      'ARM_FAILED',
+      'Backend funding is temporarily low. Please try again shortly.',
+      { cause: error },
+    );
+  }
+  if (message.includes('rate limited at')) {
+    return new ApiError(
+      429,
+      'RATE_LIMITED',
+      'The Casper node is rate-limiting requests right now. Please try again shortly.',
+      { cause: error },
+    );
+  }
+
   // Fallback string matches, kept for any error source that reports the
   // enum variant name directly instead of Casper's numeric revert code.
   if (message.includes('NotOwner')) {

@@ -159,26 +159,53 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [accountHash, setAccountHash] = useState<string | null>(null);
 
   useEffect(() => {
-    const check = () => {
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const check = (): boolean => {
       const provider = getProvider();
-      setAvailable(!!provider);
+      const found = !!provider;
+      setAvailable(found);
       if (provider) {
         try {
           const p = provider as { isConnected: () => boolean; getActivePublicKey: () => Promise<string> };
           if (typeof p.isConnected === 'function' && p.isConnected()) {
             p.getActivePublicKey().then((key) => {
-              setPublicKey(key);
-              setConnected(true);
+              if (!cancelled) {
+                setPublicKey(key);
+                setConnected(true);
+              }
             }).catch(() => {});
           }
         } catch {
           /* not connected */
         }
       }
+      return found;
     };
-    check();
-    const timer = setTimeout(check, 500);
-    return () => clearTimeout(timer);
+
+    // The extension injects its provider asynchronously as a content script,
+    // on its own schedule relative to page load — a single fixed-delay check
+    // is a race that misses it on a slow or later install. Poll for a few
+    // seconds instead of guessing one delay, and stop as soon as it's found.
+    let attempt = 0;
+    const MAX_ATTEMPTS = 20;
+    const poll = () => {
+      attempt += 1;
+      if (check() || cancelled || attempt >= MAX_ATTEMPTS) return;
+      pollTimer = setTimeout(poll, 300);
+    };
+    poll();
+
+    // Covers installing the extension in another tab and returning to this one.
+    const onFocus = () => check();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {
