@@ -5,7 +5,7 @@ version = "0.2.0"
 [dependencies]
 invoice_pool_v2 = { path = "../invoice_pool_v2" }
 odra = { workspace = true }
-ed25519-dalek = { version = "2.2.0", default-features = false }
+ed25519-dalek = { version = "3.0.0", default-features = false }
 [build-dependencies]
 odra-build = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
