@@ -25,7 +25,7 @@
     "@anthropic-ai/sdk": "0.106.0",
     "@make-software/casper-x402": "^1.0.0",
     "@modelcontextprotocol/sdk": "1.29.0",
-    "@noble/hashes": "1.8.0",
+    "@noble/hashes": "2.2.0",
     "better-sqlite3": "12.11.1",
     "casper-js-sdk": "5.0.12",
     "dotenv": "17.4.2",
